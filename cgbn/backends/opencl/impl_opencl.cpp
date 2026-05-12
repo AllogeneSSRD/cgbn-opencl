@@ -1,4 +1,5 @@
 #include "cgbn_opencl.h"
+#include <cstring>
 #include <fstream>
 #include <vector>
 #include <iostream>

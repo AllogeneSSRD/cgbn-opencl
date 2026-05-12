@@ -10,6 +10,22 @@ link_directories("D:/code/vcpkg/installed/x64-windows/lib")
 add_executable(main
     src/main.cpp
     src/cl_probe.cpp
+    src/opencl_low_risk_tests.cpp
+)
+
+add_executable(opencl_addsub
+    src/opencl_addsub_tests.cpp
+)
+
+target_include_directories(opencl_addsub PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(opencl_addsub
+    cgbn_opencl
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    "D:/code/vcpkg/installed/x64-windows/lib/gmp.lib"
 )
 
 target_include_directories(main PRIVATE
