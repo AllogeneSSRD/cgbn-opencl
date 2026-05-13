@@ -112,6 +112,96 @@ __kernel void cgbn_add_wg(
     uint lsize = get_local_size(0);
     uint base = group * limbs;
 
+    __local uint *g_arr = carry_flags;
+    __local uint *p_arr = carry_flags + lsize;
+
+    // Fast path inspired by CUDA resolver: one lane per limb and (G,P)
+    // prefix propagation across lanes. This keeps correctness while
+    // enabling parallel carry handling.
+    if (lsize >= limbs && limbs > 0u) {
+        if (lid < limbs) {
+            ulong av = (ulong)a[base + lid];
+            ulong bv = (ulong)b[base + lid];
+            ulong s = av + bv;
+            local_r[lid] = (uint)s;
+            g_arr[lid] = (uint)(s >> 32);
+            p_arr[lid] = (local_r[lid] == 0xFFFFFFFFu) ? 1u : 0u;
+        }
+        if (lid >= limbs) {
+            g_arr[lid] = 0u;
+            p_arr[lid] = 0u;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        // Inclusive prefix on (G,P):
+        // G' = G | (P & G_left), P' = P & P_left
+        for (uint offset = 1u; offset < limbs; offset <<= 1u) {
+            uint g_old = g_arr[lid];
+            uint p_old = p_arr[lid];
+            uint g_new = g_old;
+            uint p_new = p_old;
+            if (lid < limbs && lid >= offset) {
+                uint gl = g_arr[lid - offset];
+                uint pl = p_arr[lid - offset];
+                g_new = (g_old | (p_old & gl)) & 1u;
+                p_new = (p_old & pl) & 1u;
+            }
+            barrier(CLK_LOCAL_MEM_FENCE);
+            if (lid < limbs) {
+                g_arr[lid] = g_new;
+                p_arr[lid] = p_new;
+            }
+            barrier(CLK_LOCAL_MEM_FENCE);
+        }
+
+        if (lid < limbs) {
+            uint carry_in = (lid == 0u) ? 0u : g_arr[lid - 1u];
+            local_r[lid] = local_r[lid] + carry_in;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        // Second pass: r = r + a, then same carry propagation.
+        if (lid < limbs) {
+            ulong rv = (ulong)local_r[lid];
+            ulong av = (ulong)a[base + lid];
+            ulong s2 = rv + av;
+            local_r[lid] = (uint)s2;
+            g_arr[lid] = (uint)(s2 >> 32);
+            p_arr[lid] = (local_r[lid] == 0xFFFFFFFFu) ? 1u : 0u;
+        }
+        if (lid >= limbs) {
+            g_arr[lid] = 0u;
+            p_arr[lid] = 0u;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        for (uint offset = 1u; offset < limbs; offset <<= 1u) {
+            uint g_old = g_arr[lid];
+            uint p_old = p_arr[lid];
+            uint g_new = g_old;
+            uint p_new = p_old;
+            if (lid < limbs && lid >= offset) {
+                uint gl = g_arr[lid - offset];
+                uint pl = p_arr[lid - offset];
+                g_new = (g_old | (p_old & gl)) & 1u;
+                p_new = (p_old & pl) & 1u;
+            }
+            barrier(CLK_LOCAL_MEM_FENCE);
+            if (lid < limbs) {
+                g_arr[lid] = g_new;
+                p_arr[lid] = p_new;
+            }
+            barrier(CLK_LOCAL_MEM_FENCE);
+        }
+
+        if (lid < limbs) {
+            uint carry_in = (lid == 0u) ? 0u : g_arr[lid - 1u];
+            local_r[lid] = local_r[lid] + carry_in;
+            out[base + lid] = local_r[lid];
+        }
+        return;
+    }
+
     // Each lane copies a contiguous chunk of the instance into local memory
     uint block = (limbs + lsize - 1u) / lsize;
     uint start = lid * block;
@@ -120,12 +210,6 @@ __kernel void cgbn_add_wg(
 
     for (uint i = start; i < end; ++i) {
         local_r[i] = a[base + i];
-    }
-    // B into a separate region of local memory? reuse carry_flags tail region
-    for (uint i = start; i < end; ++i) {
-        // store b in-place by offsetting into carry_flags area if large enough; simpler: overwrite a region after limbs
-        // but we don't have explicit extra local allocation; instead load b on the fly in serial phase.
-        // For now, keep b in global and read during serial.
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
