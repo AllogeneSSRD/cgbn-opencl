@@ -126,25 +126,60 @@ __kernel void cgbn_sub(__global const uint *a, __global const uint *b, __global 
                                    sizeof(uint32_t) * totalWords, nullptr, &err);
     if (err != CL_SUCCESS) { std::cerr << "clCreateBuffer Out failed: " << err << std::endl; return false; }
 
-    // Warm-up and measure OpenCL add
-    cl_kernel kAdd = clCreateKernel(program, "cgbn_add", &err);
-    if (err != CL_SUCCESS) { std::cerr << "Create kernel add failed: " << err << std::endl; return false; }
-    clSetKernelArg(kAdd, 0, sizeof(cl_mem), &bufA);
-    clSetKernelArg(kAdd, 1, sizeof(cl_mem), &bufB);
-    clSetKernelArg(kAdd, 2, sizeof(cl_mem), &bufOut);
+    // Warm-up and measure OpenCL add. Prefer work-group kernel if available.
     cl_uint limbs = (cl_uint)WORDS;
-    clSetKernelArg(kAdd, 3, sizeof(cl_uint), &limbs);
+
+    // Query device max work-group size
+    size_t max_wg = 0;
+    err = clGetDeviceInfo(ctx.device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(size_t), &max_wg, nullptr);
+    if (err != CL_SUCCESS) max_wg = 1;
+
+    // choose work-group size no larger than WORDS
+    size_t wg = (size_t)std::min<size_t>(max_wg, (size_t)WORDS);
 
     size_t global = (size_t)instances;
+    double cl_add_ms = 0.0;
 
-    auto t0 = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < iterations; ++i) {
-        err = clEnqueueNDRangeKernel(queue, kAdd, 1, nullptr, &global, nullptr, 0, nullptr, nullptr);
-        if (err != CL_SUCCESS) { std::cerr << "Enqueue add failed: " << err << std::endl; return false; }
+    // Try work-group kernel
+    cl_kernel kAdd = clCreateKernel(program, "cgbn_add_wg", &err);
+    if (kAdd != nullptr && err == CL_SUCCESS) {
+        // launch with one work-group per instance
+        size_t local = wg;
+        size_t gsize = (size_t)instances * local;
+        clSetKernelArg(kAdd, 0, sizeof(cl_mem), &bufA);
+        clSetKernelArg(kAdd, 1, sizeof(cl_mem), &bufB);
+        clSetKernelArg(kAdd, 2, sizeof(cl_mem), &bufOut);
+        clSetKernelArg(kAdd, 3, sizeof(cl_uint), &limbs);
+        // local buffers: local_r size = WORDS uints, carry_flags stores G/P arrays (2 * local)
+        clSetKernelArg(kAdd, 4, sizeof(uint32_t) * WORDS, nullptr);
+        clSetKernelArg(kAdd, 5, sizeof(uint32_t) * local * 2, nullptr);
+
+        auto t0 = std::chrono::high_resolution_clock::now();
+        for (int i = 0; i < iterations; ++i) {
+            err = clEnqueueNDRangeKernel(queue, kAdd, 1, nullptr, &gsize, &local, 0, nullptr, nullptr);
+            if (err != CL_SUCCESS) { std::cerr << "Enqueue add_wg failed: " << err << std::endl; return false; }
+        }
+        clFinish(queue);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        cl_add_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    } else {
+        // Fallback to per-instance scalar kernel
+        kAdd = clCreateKernel(program, "cgbn_add", &err);
+        if (err != CL_SUCCESS) { std::cerr << "Create kernel add failed: " << err << std::endl; return false; }
+        clSetKernelArg(kAdd, 0, sizeof(cl_mem), &bufA);
+        clSetKernelArg(kAdd, 1, sizeof(cl_mem), &bufB);
+        clSetKernelArg(kAdd, 2, sizeof(cl_mem), &bufOut);
+        clSetKernelArg(kAdd, 3, sizeof(cl_uint), &limbs);
+
+        auto t0 = std::chrono::high_resolution_clock::now();
+        for (int i = 0; i < iterations; ++i) {
+            err = clEnqueueNDRangeKernel(queue, kAdd, 1, nullptr, &global, nullptr, 0, nullptr, nullptr);
+            if (err != CL_SUCCESS) { std::cerr << "Enqueue add failed: " << err << std::endl; return false; }
+        }
+        clFinish(queue);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        cl_add_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
     }
-    clFinish(queue);
-    auto t1 = std::chrono::high_resolution_clock::now();
-    double cl_add_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
     // Read back one result (first instance) and compare with GMP
     err = clEnqueueReadBuffer(queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS, host_out.data(), 0, nullptr, nullptr);
@@ -171,22 +206,44 @@ __kernel void cgbn_sub(__global const uint *a, __global const uint *b, __global 
     std::cout << "Add: OpenCL time (ms)=" << cl_add_ms << ", GMP time (ms)=" << g_add_ms
               << ", equal=" << (match_add ? "YES" : "NO") << std::endl;
 
-    // Now subtraction: run kernel
-    cl_kernel kSub = clCreateKernel(program, "cgbn_sub", &err);
-    if (err != CL_SUCCESS) { std::cerr << "Create kernel sub failed: " << err << std::endl; return false; }
-    clSetKernelArg(kSub, 0, sizeof(cl_mem), &bufA);
-    clSetKernelArg(kSub, 1, sizeof(cl_mem), &bufB);
-    clSetKernelArg(kSub, 2, sizeof(cl_mem), &bufOut);
-    clSetKernelArg(kSub, 3, sizeof(cl_uint), &limbs);
+    // Now subtraction: try work-group kernel then fallback.
+    double cl_sub_ms = 0.0;
+    cl_kernel kSub = clCreateKernel(program, "cgbn_sub_wg", &err);
+    if (kSub != nullptr && err == CL_SUCCESS) {
+        size_t local = wg;
+        size_t gsize = (size_t)instances * local;
+        clSetKernelArg(kSub, 0, sizeof(cl_mem), &bufA);
+        clSetKernelArg(kSub, 1, sizeof(cl_mem), &bufB);
+        clSetKernelArg(kSub, 2, sizeof(cl_mem), &bufOut);
+        clSetKernelArg(kSub, 3, sizeof(cl_uint), &limbs);
+        clSetKernelArg(kSub, 4, sizeof(uint32_t) * WORDS, nullptr);
+        clSetKernelArg(kSub, 5, sizeof(uint32_t) * local, nullptr);
 
-    t0 = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < iterations; ++i) {
-        err = clEnqueueNDRangeKernel(queue, kSub, 1, nullptr, &global, nullptr, 0, nullptr, nullptr);
-        if (err != CL_SUCCESS) { std::cerr << "Enqueue sub failed: " << err << std::endl; return false; }
+        auto t0 = std::chrono::high_resolution_clock::now();
+        for (int i = 0; i < iterations; ++i) {
+            err = clEnqueueNDRangeKernel(queue, kSub, 1, nullptr, &gsize, &local, 0, nullptr, nullptr);
+            if (err != CL_SUCCESS) { std::cerr << "Enqueue sub_wg failed: " << err << std::endl; return false; }
+        }
+        clFinish(queue);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        cl_sub_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    } else {
+        kSub = clCreateKernel(program, "cgbn_sub", &err);
+        if (err != CL_SUCCESS) { std::cerr << "Create kernel sub failed: " << err << std::endl; return false; }
+        clSetKernelArg(kSub, 0, sizeof(cl_mem), &bufA);
+        clSetKernelArg(kSub, 1, sizeof(cl_mem), &bufB);
+        clSetKernelArg(kSub, 2, sizeof(cl_mem), &bufOut);
+        clSetKernelArg(kSub, 3, sizeof(cl_uint), &limbs);
+
+        auto t0 = std::chrono::high_resolution_clock::now();
+        for (int i = 0; i < iterations; ++i) {
+            err = clEnqueueNDRangeKernel(queue, kSub, 1, nullptr, &global, nullptr, 0, nullptr, nullptr);
+            if (err != CL_SUCCESS) { std::cerr << "Enqueue sub failed: " << err << std::endl; return false; }
+        }
+        clFinish(queue);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        cl_sub_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
     }
-    clFinish(queue);
-    t1 = std::chrono::high_resolution_clock::now();
-    double cl_sub_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
     err = clEnqueueReadBuffer(queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS, host_out.data(), 0, nullptr, nullptr);
     if (err != CL_SUCCESS) { std::cerr << "Read buffer out failed: " << err << std::endl; return false; }
