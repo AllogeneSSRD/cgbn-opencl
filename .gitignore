@@ -2,6 +2,7 @@
 .vscode/
 .github/
 .refactor/
-bench
+test/bench
+test\bench
 build/
 

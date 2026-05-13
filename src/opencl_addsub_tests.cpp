@@ -217,7 +217,7 @@ __kernel void cgbn_sub(__global const uint *a, __global const uint *b, __global 
         clSetKernelArg(kSub, 2, sizeof(cl_mem), &bufOut);
         clSetKernelArg(kSub, 3, sizeof(cl_uint), &limbs);
         clSetKernelArg(kSub, 4, sizeof(uint32_t) * WORDS, nullptr);
-        clSetKernelArg(kSub, 5, sizeof(uint32_t) * local, nullptr);
+        clSetKernelArg(kSub, 5, sizeof(uint32_t) * local * 2, nullptr);
 
         auto t0 = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < iterations; ++i) {

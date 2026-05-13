@@ -255,6 +255,94 @@ __kernel void cgbn_sub_wg(
     uint lsize = get_local_size(0);
     uint base = group * limbs;
 
+    __local uint *g_arr = carry_flags;
+    __local uint *p_arr = carry_flags + lsize;
+
+    // Fast path inspired by CUDA resolver: one lane per limb and (G,P)
+    // prefix propagation for borrows across lanes.
+    if (lsize >= limbs && limbs > 0u) {
+        if (lid < limbs) {
+            uint av = a[base + lid];
+            uint bv = b[base + lid];
+            uint d = av - bv;
+            local_r[lid] = d;
+            g_arr[lid] = (av < bv) ? 1u : 0u;         // generate borrow
+            p_arr[lid] = (d == 0u) ? 1u : 0u;         // propagate incoming borrow
+        }
+        if (lid >= limbs) {
+            g_arr[lid] = 0u;
+            p_arr[lid] = 0u;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        // Inclusive prefix on (G,P): G' = G | (P & G_left), P' = P & P_left
+        for (uint offset = 1u; offset < limbs; offset <<= 1u) {
+            uint g_old = g_arr[lid];
+            uint p_old = p_arr[lid];
+            uint g_new = g_old;
+            uint p_new = p_old;
+            if (lid < limbs && lid >= offset) {
+                uint gl = g_arr[lid - offset];
+                uint pl = p_arr[lid - offset];
+                g_new = (g_old | (p_old & gl)) & 1u;
+                p_new = (p_old & pl) & 1u;
+            }
+            barrier(CLK_LOCAL_MEM_FENCE);
+            if (lid < limbs) {
+                g_arr[lid] = g_new;
+                p_arr[lid] = p_new;
+            }
+            barrier(CLK_LOCAL_MEM_FENCE);
+        }
+
+        if (lid < limbs) {
+            uint borrow_in = (lid == 0u) ? 0u : g_arr[lid - 1u];
+            local_r[lid] = local_r[lid] - borrow_in;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        // Second pass: r = r - a, then same borrow propagation.
+        if (lid < limbs) {
+            uint rv = local_r[lid];
+            uint av = a[base + lid];
+            uint d2 = rv - av;
+            local_r[lid] = d2;
+            g_arr[lid] = (rv < av) ? 1u : 0u;
+            p_arr[lid] = (d2 == 0u) ? 1u : 0u;
+        }
+        if (lid >= limbs) {
+            g_arr[lid] = 0u;
+            p_arr[lid] = 0u;
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+
+        for (uint offset = 1u; offset < limbs; offset <<= 1u) {
+            uint g_old = g_arr[lid];
+            uint p_old = p_arr[lid];
+            uint g_new = g_old;
+            uint p_new = p_old;
+            if (lid < limbs && lid >= offset) {
+                uint gl = g_arr[lid - offset];
+                uint pl = p_arr[lid - offset];
+                g_new = (g_old | (p_old & gl)) & 1u;
+                p_new = (p_old & pl) & 1u;
+            }
+            barrier(CLK_LOCAL_MEM_FENCE);
+            if (lid < limbs) {
+                g_arr[lid] = g_new;
+                p_arr[lid] = p_new;
+            }
+            barrier(CLK_LOCAL_MEM_FENCE);
+        }
+
+        if (lid < limbs) {
+            uint borrow_in = (lid == 0u) ? 0u : g_arr[lid - 1u];
+            local_r[lid] = local_r[lid] - borrow_in;
+            out[base + lid] = local_r[lid];
+        }
+        return;
+    }
+
     uint block = (limbs + lsize - 1u) / lsize;
     uint start = lid * block;
     uint end = start + block;
