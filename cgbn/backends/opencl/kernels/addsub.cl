@@ -13,12 +13,23 @@ __kernel void cgbn_add(
     uint base = idx * limbs;
 
     ulong carry = 0UL;
+    // r = a + b
     for (uint i = 0; i < limbs; ++i) {
         ulong av = (ulong)a[base + i];
         ulong bv = (ulong)b[base + i];
         ulong sum = av + bv + carry;
         out[base + i] = (uint)sum;
         carry = sum >> 32;
+    }
+
+    // r = r + a  (prevent optimization; propagate carry)
+    carry = 0UL;
+    for (uint i = 0; i < limbs; ++i) {
+        ulong rv = (ulong)out[base + i];
+        ulong av = (ulong)a[base + i];
+        ulong sum2 = rv + av + carry;
+        out[base + i] = (uint)sum2;
+        carry = sum2 >> 32;
     }
 }
 
@@ -32,11 +43,22 @@ __kernel void cgbn_sub(
     uint base = idx * limbs;
 
     ulong borrow = 0UL;
+    // r = a - b
     for (uint i = 0; i < limbs; ++i) {
         ulong av = (ulong)a[base + i];
         ulong bv = (ulong)b[base + i];
         ulong wide = av - bv - borrow;
         out[base + i] = (uint)wide;
         borrow = ((av < bv + borrow) ? 1UL : 0UL);
+    }
+
+    // r = r - a  (prevent optimization; propagate borrow)
+    borrow = 0UL;
+    for (uint i = 0; i < limbs; ++i) {
+        ulong rv = (ulong)out[base + i];
+        ulong av = (ulong)a[base + i];
+        ulong wide2 = rv - av - borrow;
+        out[base + i] = (uint)wide2;
+        borrow = ((rv < av + borrow) ? 1UL : 0UL);
     }
 }

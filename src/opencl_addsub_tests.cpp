@@ -12,11 +12,27 @@
 #include <vector>
 
 static void fill_from_gmp(mpz_t v, uint32_t *out_words, size_t words) {
-    // export little-endian 32-bit words
+    // export little-endian 32-bit words; if v is negative, convert to
+    // its unsigned representation modulo 2^(words*32) so the limb array
+    // matches the OpenCL unsigned arithmetic results.
+    mpz_t tmp;
+    if (mpz_sgn(v) >= 0) {
+        size_t count = 0;
+        mpz_export(out_words, &count, -1, sizeof(uint32_t), 0, 0, v);
+        for (size_t i = count; i < words; ++i) out_words[i] = 0u;
+        return;
+    }
+
+    mpz_init(tmp);
+    mpz_t mod;
+    mpz_init(mod);
+    mpz_ui_pow_ui(mod, 2, (unsigned long)(words * 32));
+    mpz_add(tmp, v, mod); // tmp = v + 2^(words*32)
     size_t count = 0;
-    mpz_export(out_words, &count, -1, sizeof(uint32_t), 0, 0, v);
-    // Ensure remaining words are zero
+    mpz_export(out_words, &count, -1, sizeof(uint32_t), 0, 0, tmp);
     for (size_t i = count; i < words; ++i) out_words[i] = 0u;
+    mpz_clear(tmp);
+    mpz_clear(mod);
 }
 
 bool runOpenClAddSubBenchmark(int iterations, int instances) {
@@ -134,10 +150,11 @@ __kernel void cgbn_sub(__global const uint *a, __global const uint *b, __global 
     err = clEnqueueReadBuffer(queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS, host_out.data(), 0, nullptr, nullptr);
     if (err != CL_SUCCESS) { std::cerr << "Read buffer out failed: " << err << std::endl; return false; }
 
-    // Compute GMP add for reference (single instance) and measure
+    // Compute GMP add reference with same operations: r = a + b; r = r + a
     auto g0 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < iterations; ++i) {
         mpz_add(res_gmp, a_gmp, b_gmp);
+        mpz_add(res_gmp, res_gmp, a_gmp);
     }
     auto g1 = std::chrono::high_resolution_clock::now();
     double g_add_ms = std::chrono::duration<double, std::milli>(g1 - g0).count();
@@ -174,10 +191,11 @@ __kernel void cgbn_sub(__global const uint *a, __global const uint *b, __global 
     err = clEnqueueReadBuffer(queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS, host_out.data(), 0, nullptr, nullptr);
     if (err != CL_SUCCESS) { std::cerr << "Read buffer out failed: " << err << std::endl; return false; }
 
-    // GMP subtraction
+    // GMP subtraction reference with same ops: r = a - b; r = r - a
     g0 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < iterations; ++i) {
         mpz_sub(res_gmp, a_gmp, b_gmp);
+        mpz_sub(res_gmp, res_gmp, a_gmp);
     }
     g1 = std::chrono::high_resolution_clock::now();
     double g_sub_ms = std::chrono::duration<double, std::milli>(g1 - g0).count();

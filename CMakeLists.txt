@@ -17,6 +17,18 @@ add_executable(opencl_addsub
     src/opencl_addsub_tests.cpp
 )
 
+add_executable(cuda_addsub_cpu
+    src/cuda_addsub_tests.cpp
+)
+
+target_include_directories(cuda_addsub_cpu PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(cuda_addsub_cpu
+    "D:/code/vcpkg/installed/x64-windows/lib/gmp.lib"
+)
+
 target_include_directories(opencl_addsub PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
