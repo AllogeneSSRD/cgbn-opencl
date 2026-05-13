@@ -28,6 +28,8 @@ target_link_libraries(opencl_addsub
     "D:/code/vcpkg/installed/x64-windows/lib/gmp.lib"
 )
 
+target_compile_definitions(opencl_addsub PRIVATE BUILD_OPENCL_ADDSUB_MAIN=1)
+
 target_include_directories(main PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
