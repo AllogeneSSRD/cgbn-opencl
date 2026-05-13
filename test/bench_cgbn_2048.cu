@@ -85,12 +85,21 @@ void bench_cgbn_2048_wapper(
     memset(h_a, 0, sizeof(mem_t) * instances);
     memset(h_b, 0, sizeof(mem_t) * instances);
 
-    // Initialize a = 2^991, b = 8218291649 using GMP
+    // Initialize a = floor(2^991 / 8218291649), b = 8218291649 using GMP
     mpz_t a_gmp, b_gmp;
     mpz_init(a_gmp);
     mpz_init(b_gmp);
-    mpz_ui_pow_ui(a_gmp, 2, 991);
-    mpz_set_ui(b_gmp, 8218291649u);
+    mpz_t temp_mod;
+    mpz_t temp_div;
+    mpz_init(temp_mod);
+    mpz_init_set_str(temp_div, "6721885469050382920298612421830968178768028093133627640714502537112053019071272802490029644416444090606146146238871876925423959", 10);
+    // 8218291649
+    // 6721885469050382920298612421830968178768028093133627640714502537112053019071272802490029644416444090606146146238871876925423959
+    mpz_ui_pow_ui(temp_mod, 2, 991);
+    mpz_tdiv_q(a_gmp, temp_mod, temp_div);
+    mpz_set(b_gmp, temp_div);
+    mpz_clear(temp_mod);
+    mpz_clear(temp_div);
 
     // Fill all instances with same a and b
     uint32_t *a_words = (uint32_t*)h_a;
@@ -161,43 +170,48 @@ void bench_cgbn_2048_wapper(
     cudaMemcpy(h_out_add, d_out_add, sizeof(mem_t) * instances, cudaMemcpyDeviceToHost);
     cudaMemcpy(h_out_sub, d_out_sub, sizeof(mem_t) * instances, cudaMemcpyDeviceToHost);
 
-    // Compute GMP reference
-    mpz_t res_add, res_sub;
+    // Compute GMP reference (chained iterations)
+    mpz_t res_add, res_sub, add_state, sub_state;
     mpz_init(res_add);
     mpz_init(res_sub);
+    mpz_init(add_state);
+    mpz_init(sub_state);
+    mpz_set(add_state, a_gmp);
+    mpz_set(sub_state, a_gmp);
     
-    // Double operations to prevent compiler optimization: r = a+b; r = r+a (same as OpenCL)
-    mpz_add(res_add, a_gmp, b_gmp);
-    mpz_add(res_add, res_add, a_gmp);
-    
-    mpz_sub(res_sub, a_gmp, b_gmp);
-    mpz_sub(res_sub, res_sub, a_gmp);
+    // Chained iterations:
+    // add: r = a + b; r = r + a; a = r
+    // sub: r = a - b; r = r - a; a = r
+    for (int i = 0; i < iterations; ++i) {
+        mpz_add(res_add, add_state, b_gmp);
+        // mpz_add(res_add, res_add, add_state);
+        mpz_set(add_state, res_add);
 
-    // Convert GMP results to words
+        mpz_sub(res_sub, sub_state, b_gmp);
+        // mpz_sub(res_sub, res_sub, sub_state);
+        mpz_set(sub_state, res_sub);
+    }
+
+    // Convert GMP results to words (mod 2^BITS to match fixed-size limb arrays)
     std::vector<uint32_t> expected_add(WORDS), expected_sub(WORDS);
+    mpz_t mod_ref, tmp_ref;
+    mpz_init(mod_ref);
+    mpz_init(tmp_ref);
+    mpz_ui_pow_ui(mod_ref, 2, BITS);
     
     // Handle add result
     memset(expected_add.data(), 0, sizeof(uint32_t) * WORDS);
+    mpz_mod(tmp_ref, res_add, mod_ref);
     size_t count = 0;
-    mpz_export(expected_add.data(), &count, -1, sizeof(uint32_t), 0, 0, res_add);
+    mpz_export(expected_add.data(), &count, -1, sizeof(uint32_t), 0, 0, tmp_ref);
     
-    // Handle sub result (may be negative, convert to unsigned mod 2^BITS)
-    if (mpz_sgn(res_sub) >= 0) {
-        memset(expected_sub.data(), 0, sizeof(uint32_t) * WORDS);
-        count = 0;
-        mpz_export(expected_sub.data(), &count, -1, sizeof(uint32_t), 0, 0, res_sub);
-    } else {
-        mpz_t mod, tmp;
-        mpz_init(mod);
-        mpz_init(tmp);
-        mpz_ui_pow_ui(mod, 2, BITS);
-        mpz_add(tmp, res_sub, mod);
-        memset(expected_sub.data(), 0, sizeof(uint32_t) * WORDS);
-        count = 0;
-        mpz_export(expected_sub.data(), &count, -1, sizeof(uint32_t), 0, 0, tmp);
-        mpz_clear(mod);
-        mpz_clear(tmp);
-    }
+    // Handle sub result (convert to unsigned mod 2^BITS)
+    memset(expected_sub.data(), 0, sizeof(uint32_t) * WORDS);
+    mpz_mod(tmp_ref, res_sub, mod_ref);
+    count = 0;
+    mpz_export(expected_sub.data(), &count, -1, sizeof(uint32_t), 0, 0, tmp_ref);
+    mpz_clear(mod_ref);
+    mpz_clear(tmp_ref);
 
     // Compare and print results
     bool match_add = true, match_sub = true;
@@ -253,6 +267,8 @@ void bench_cgbn_2048_wapper(
     mpz_clear(b_gmp);
     mpz_clear(res_add);
     mpz_clear(res_sub);
+    mpz_clear(add_state);
+    mpz_clear(sub_state);
 }
 
 
@@ -270,24 +286,27 @@ __global__ void bench_add_sub(
     context_t context(cgbn_report_monitor, report, instance);
     env_t env(context);
 
-    bn_t a, b, r_add, r_sub;
+    bn_t a_add, a_sub, b, r_add, r_sub;
 
     // Load a and b
-    cgbn_load(env, a, &a_data[instance]);
+    cgbn_load(env, a_add, &a_data[instance]);
+    cgbn_set(env, a_sub, a_add);
     cgbn_load(env, b, &b_data[instance]);
 
-    // Add benchmark: r = a + b; r = r + a (double op to prevent optimization)
+    // Add benchmark (chained): r = a + b; r = r + a; a = r
     #pragma unroll 1
     for (int i = 0; i < iterations; i++) {
-        cgbn_add(env, r_add, a, b);
-        cgbn_add(env, r_add, r_add, a);
+        cgbn_add(env, r_add, a_add, b);
+        // cgbn_add(env, r_add, r_add, a_add);
+        cgbn_set(env, a_add, r_add);
     }
 
-    // Sub benchmark: r = a - b; r = r - a (double op to prevent optimization)
+    // Sub benchmark (chained): r = a - b; r = r - a; a = r
     #pragma unroll 1
     for (int i = 0; i < iterations; i++) {
-        cgbn_sub(env, r_sub, a, b);
-        cgbn_sub(env, r_sub, r_sub, a);
+        cgbn_sub(env, r_sub, a_sub, b);
+        // cgbn_sub(env, r_sub, r_sub, a_sub);
+        cgbn_set(env, a_sub, r_sub);
     }
 
     // Store results

@@ -2,7 +2,7 @@
 #include "bench_cgbn_2048.h"
 
 int main() {
-    const int iterations = 100000;
+    const int iterations = 1e6;
     const int blocks = 24;
     const int threads = 128;
 
