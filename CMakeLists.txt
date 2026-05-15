@@ -17,6 +17,10 @@ add_executable(opencl_addsub
     src/opencl_addsub_tests.cpp
 )
 
+add_executable(opencl_mont
+    src/opencl_mont_tests.cpp
+)
+
 add_executable(cuda_addsub_cpu
     src/cuda_addsub_tests.cpp
 )
@@ -33,6 +37,10 @@ target_include_directories(opencl_addsub PRIVATE
     ${CMAKE_SOURCE_DIR}/include
 )
 
+target_include_directories(opencl_mont PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+
 target_link_libraries(opencl_addsub
     cgbn_opencl
     OpenSSL::SSL
@@ -40,7 +48,15 @@ target_link_libraries(opencl_addsub
     "D:/code/vcpkg/installed/x64-windows/lib/gmp.lib"
 )
 
+target_link_libraries(opencl_mont
+    cgbn_opencl
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    "D:/code/vcpkg/installed/x64-windows/lib/gmp.lib"
+)
+
 target_compile_definitions(opencl_addsub PRIVATE BUILD_OPENCL_ADDSUB_MAIN=1)
+target_compile_definitions(opencl_mont PRIVATE BUILD_OPENCL_MONT_MAIN=1)
 
 target_include_directories(main PRIVATE
     ${CMAKE_SOURCE_DIR}/include
