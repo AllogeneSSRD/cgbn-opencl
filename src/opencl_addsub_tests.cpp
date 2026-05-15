@@ -70,6 +70,19 @@ bool runOpenClAddSubBenchmark(int iterations, int instances) {
         return false;
     }
 
+    // Print device / thread info
+    {
+        char devName[256] = {0};
+        clGetDeviceInfo(ctx.device, CL_DEVICE_NAME, sizeof(devName) - 1, devName, nullptr);
+        cl_uint computeUnits = 0;
+        clGetDeviceInfo(ctx.device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(computeUnits), &computeUnits, nullptr);
+        size_t maxWorkGroup = 0;
+        clGetDeviceInfo(ctx.device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(maxWorkGroup), &maxWorkGroup, nullptr);
+        std::cout << "Device: " << devName << ", compute_units=" << computeUnits
+                  << ", max_work_group_size=" << maxWorkGroup << std::endl;
+        std::cout << "work-group/CU=" << instances / computeUnits << std::endl;
+    }
+
     // load kernels (try file then fallback)
     std::string src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/addsub.cl");
     if (src.empty()) {
@@ -265,6 +278,21 @@ __kernel void cgbn_sub(__global const uint *a, __global const uint *b, __global 
 
     std::cout << "Sub: OpenCL time (ms)=" << cl_sub_ms << ", GMP time (ms)=" << g_sub_ms
               << ", equal=" << (match_sub ? "YES" : "NO") << std::endl;
+
+    // throughput: bits * iterations * instances / time(sec)
+    double bits = (double)BITS;
+    double ops = (double)iterations * (double)instances;
+    double add_throughput_bps = bits * ops / (cl_add_ms / 1000.0);
+    double sub_throughput_bps = bits * ops / (cl_sub_ms / 1000.0);
+    double cpu_add_throughput_bps = bits * ops / (g_add_ms / 1000.0);
+    double cpu_sub_throughput_bps = bits * ops / (g_sub_ms / 1000.0);
+
+    auto show_gbps = [](double bps) { return bps / 1e9; };
+
+    std::cout << "Throughput (OpenCL Add): " << add_throughput_bps << " bits/s (" << show_gbps(add_throughput_bps) << " Gbit/s)" << std::endl;
+    std::cout << "Throughput (OpenCL Sub): " << sub_throughput_bps << " bits/s (" << show_gbps(sub_throughput_bps) << " Gbit/s)" << std::endl;
+    std::cout << "Throughput (CPU Add GMP): " << cpu_add_throughput_bps << " bits/s (" << show_gbps(cpu_add_throughput_bps) << " Gbit/s)" << std::endl;
+    std::cout << "Throughput (CPU Sub GMP): " << cpu_sub_throughput_bps << " bits/s (" << show_gbps(cpu_sub_throughput_bps) << " Gbit/s)" << std::endl;
 
     // Cleanup
     clReleaseKernel(kAdd);
