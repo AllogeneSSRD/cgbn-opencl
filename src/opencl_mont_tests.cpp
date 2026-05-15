@@ -91,6 +91,7 @@ bool runOpenClMontgomeryBenchmark(int iterations, int instances) {
         }
     }
 
+    // np0 is -(N^-1 mod 2**32), used for montgomery representation
     if ((n_words[0] & 1u) == 0u) {
         std::cerr << "n must be odd for Montgomery" << std::endl;
         mpz_clears(n_gmp, a_gmp, b_gmp, r_mul_gmp, r_sqr_gmp, R, Rinv, tmp, nullptr);
@@ -98,6 +99,22 @@ bool runOpenClMontgomeryBenchmark(int iterations, int instances) {
     }
     uint32_t inv = inv32_odd(n_words[0]);
     uint32_t np0 = 0u - inv; // np0 * n0 == 0xFFFFFFFF (mod 2^32)
+
+    {
+    // 假设已准备 mpz_t N 和 n_words[0]
+    uint32_t inv_newton = inv32_odd(n_words[0]);
+    uint32_t np0_newton = 0u - inv_newton;
+
+    // GMP method
+    mpz_t tmp; mpz_init(tmp);
+    mpz_ui_pow_ui(tmp, 2, 32);
+    if(!mpz_invert(tmp, n_gmp, tmp)) /* error */;
+    uint32_t np0_mpz = (uint32_t)(-mpz_get_ui(tmp));
+    mpz_clear(tmp);
+
+    // compare
+    printf("np0_newton=0x%08x np0_mpz=0x%08x\n", np0_newton, np0_mpz);
+    }
 
     cgbn::opencl::context_t ctx;
     cl_int err = cgbn::opencl::create_context(ctx);

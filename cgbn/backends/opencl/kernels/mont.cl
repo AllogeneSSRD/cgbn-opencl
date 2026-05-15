@@ -1,7 +1,9 @@
 // OpenCL kernels for Montgomery multiplication/squaring (CIOS style).
 // One work-item handles one instance.
 
+#ifndef MAX_LIMBS
 #define MAX_LIMBS 64
+#endif
 
 __kernel void cgbn_mont_mul(
     __global const uint *a,
