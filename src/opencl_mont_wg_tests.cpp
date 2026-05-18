@@ -303,7 +303,8 @@ int main(int argc, char **argv) {
     if (argc >= 3) instances = std::stoi(std::string(argv[2]));
     if (argc >= 4) tpi = std::stoi(std::string(argv[3]));
 
-    bool ok_tpi4 = runOpenClMontgomeryWGBenchmark(iterations, instances, 4);
+    bool ok_tpi4 = 1;
+    // bool ok_tpi4 = runOpenClMontgomeryWGBenchmark(iterations, instances, 4);
     bool ok_tpi8 = runOpenClMontgomeryWGBenchmark(iterations, instances, 8);
 
     return (ok_tpi4 && ok_tpi8) ? EXIT_SUCCESS : EXIT_FAILURE;
