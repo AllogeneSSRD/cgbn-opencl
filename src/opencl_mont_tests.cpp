@@ -41,8 +41,8 @@ uint32_t inv32_odd(uint32_t x) {
 }
 
 bool runOpenClMontgomeryBenchmark(int iterations, int instances) {
-    constexpr int BITS = 128;
-    const size_t WORDS = BITS / 32; // 4
+    constexpr int BITS = 4096;
+    const size_t WORDS = BITS / 32;
 
     std::cout << "OpenCL mont benchmark: " << BITS << "-bit, iterations=" << iterations
               << ", instances=" << instances << std::endl;
@@ -51,9 +51,12 @@ bool runOpenClMontgomeryBenchmark(int iterations, int instances) {
     mpz_t n_gmp, a_gmp, b_gmp, r_mul_gmp, r_sqr_gmp, R, Rinv, tmp;
     mpz_inits(n_gmp, a_gmp, b_gmp, r_mul_gmp, r_sqr_gmp, R, Rinv, tmp, nullptr);
 
-    mpz_set_str(n_gmp, "340282366920938463463374607431768211283", 10); // 2^128 - 173, odd
-    mpz_set_str(a_gmp, "123456789012345678901234567890123456", 10);
-    mpz_set_str(b_gmp, "98765432109876543210987654321098765", 10);
+    // choose modulus n = 2^BITS - 189 (odd)
+    mpz_ui_pow_ui(n_gmp, 2, BITS);
+    mpz_sub_ui(n_gmp, n_gmp, 189u);
+    // choose small seeds for a and b then reduce modulo n
+    mpz_set_str(a_gmp, "1234567890123456789012345678901234567890", 10);
+    mpz_set_str(b_gmp, "987654321098765432109876543210987654321", 10);
     mpz_mod(a_gmp, a_gmp, n_gmp);
     mpz_mod(b_gmp, b_gmp, n_gmp);
 
@@ -113,7 +116,7 @@ bool runOpenClMontgomeryBenchmark(int iterations, int instances) {
     mpz_clear(tmp);
 
     // compare
-    printf("np0_newton=0x%08x np0_mpz=0x%08x\n", np0_newton, np0_mpz);
+    // printf("np0_newton=0x%08x np0_mpz=0x%08x\n", np0_newton, np0_mpz);
     }
 
     cgbn::opencl::context_t ctx;
@@ -168,45 +171,8 @@ bool runOpenClMontgomeryBenchmark(int iterations, int instances) {
         clGetDeviceInfo(ctx.device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(maxWorkGroup), &maxWorkGroup, nullptr);
         std::cout << "Device: " << devName << ", compute_units=" << computeUnits
                   << ", max_work_group_size=" << maxWorkGroup << std::endl;
-        std::cout << "work-group/CU=" << instances / computeUnits << std::endl;
+        // std::cout << "work-group/CU=" << instances / computeUnits << std::endl;
     }
-
-    // CPU (GMP) baseline timings for comparison
-    double cpu_mul_ms = 0.0;
-    double cpu_sqr_ms = 0.0;
-    {
-        mpz_t tmp_cpu;
-        mpz_init(tmp_cpu);
-
-        auto t0_cpu = std::chrono::high_resolution_clock::now();
-        for (int it = 0; it < iterations; ++it) {
-            for (int ins = 0; ins < instances; ++ins) {
-                // perform montgomery mul reference: (a*b*Rinv) % n
-                mpz_mul(tmp_cpu, a_gmp, b_gmp);
-                mpz_mul(tmp_cpu, tmp_cpu, Rinv);
-                mpz_mod(tmp_cpu, tmp_cpu, n_gmp);
-            }
-        }
-        auto t1_cpu = std::chrono::high_resolution_clock::now();
-        cpu_mul_ms = std::chrono::duration<double, std::milli>(t1_cpu - t0_cpu).count();
-
-        auto t0_cpu2 = std::chrono::high_resolution_clock::now();
-        for (int it = 0; it < iterations; ++it) {
-            for (int ins = 0; ins < instances; ++ins) {
-                // perform montgomery sqr reference: (a*a*Rinv) % n
-                mpz_mul(tmp_cpu, a_gmp, a_gmp);
-                mpz_mul(tmp_cpu, tmp_cpu, Rinv);
-                mpz_mod(tmp_cpu, tmp_cpu, n_gmp);
-            }
-        }
-        auto t1_cpu2 = std::chrono::high_resolution_clock::now();
-        cpu_sqr_ms = std::chrono::duration<double, std::milli>(t1_cpu2 - t0_cpu2).count();
-
-        mpz_clear(tmp_cpu);
-    }
-
-    // print CPU baseline
-    std::cout << "CPU(GMP) Mul time (ms)=" << cpu_mul_ms << ", Sqr time (ms)=" << cpu_sqr_ms << std::endl;
 
     // mont_mul
     cl_kernel kMul = clCreateKernel(program, "cgbn_mont_mul", &err);
@@ -276,22 +242,73 @@ bool runOpenClMontgomeryBenchmark(int iterations, int instances) {
     std::cout << "MontMul: OpenCL time (ms)=" << mul_ms << ", equal=" << (okMul ? "YES" : "NO") << std::endl;
     std::cout << "MontSqr: OpenCL time (ms)=" << sqr_ms << ", equal=" << (okSqr ? "YES" : "NO") << std::endl;
 
+    // CPU (GMP) baseline timings for comparison
+    double cpu_mul_ms = 0.0;
+    double cpu_sqr_ms = 0.0;
+    {
+        mpz_t tmp_cpu;
+        mpz_init(tmp_cpu);
+
+        auto t0_cpu = std::chrono::high_resolution_clock::now();
+        for (int it = 0; it < iterations; ++it) {
+            for (int ins = 0; ins < instances; ++ins) {
+                // perform montgomery mul reference: (a*b*Rinv) % n
+                mpz_mul(tmp_cpu, a_gmp, b_gmp);
+                mpz_mul(tmp_cpu, tmp_cpu, Rinv);
+                mpz_mod(tmp_cpu, tmp_cpu, n_gmp);
+            }
+        }
+        auto t1_cpu = std::chrono::high_resolution_clock::now();
+        cpu_mul_ms = std::chrono::duration<double, std::milli>(t1_cpu - t0_cpu).count();
+
+        auto t0_cpu2 = std::chrono::high_resolution_clock::now();
+        for (int it = 0; it < iterations; ++it) {
+            for (int ins = 0; ins < instances; ++ins) {
+                // perform montgomery sqr reference: (a*a*Rinv) % n
+                mpz_mul(tmp_cpu, a_gmp, a_gmp);
+                mpz_mul(tmp_cpu, tmp_cpu, Rinv);
+                mpz_mod(tmp_cpu, tmp_cpu, n_gmp);
+            }
+        }
+        auto t1_cpu2 = std::chrono::high_resolution_clock::now();
+        cpu_sqr_ms = std::chrono::duration<double, std::milli>(t1_cpu2 - t0_cpu2).count();
+
+        mpz_clear(tmp_cpu);
+    }
+
+    // print CPU baseline
+    std::cout << "CPU(GMP) Mul time (ms)=" << cpu_mul_ms << ", Sqr time (ms)=" << cpu_sqr_ms << std::endl;
+
     // throughput: bits * iterations * instances / time(sec)
     double bits = (double)BITS;
     double ops = (double)iterations * (double)instances;
-    double mul_throughput_bps = bits * ops / (mul_ms / 1000.0);
-    double sqr_throughput_bps = bits * ops / (sqr_ms / 1000.0);
-    double cpu_mul_throughput_bps = bits * ops / (cpu_mul_ms / 1000.0);
-    double cpu_sqr_throughput_bps = bits * ops / (cpu_sqr_ms / 1000.0);
+    double mul_throughput = ops / (mul_ms / 1000.0);
+    double sqr_throughput = ops / (sqr_ms / 1000.0);
+    double cpu_mul_throughput = ops / (cpu_mul_ms / 1000.0);
+    double cpu_sqr_throughput = ops / (cpu_sqr_ms / 1000.0);
+
+    // double mul_throughput_bps = bits * ops / (mul_ms / 1000.0);
+    // double sqr_throughput_bps = bits * ops / (sqr_ms / 1000.0);
+    // double cpu_mul_throughput_bps = bits * ops / (cpu_mul_ms / 1000.0);
+    // double cpu_sqr_throughput_bps = bits * ops / (cpu_sqr_ms / 1000.0);
 
     auto show_gbps = [](double bps) {
         return bps / 1e9;
     };
 
-    std::cout << "Throughput (OpenCL Mul): " << mul_throughput_bps << " bits/s (" << show_gbps(mul_throughput_bps) << " Gbit/s)" << std::endl;
-    std::cout << "Throughput (OpenCL Sqr): " << sqr_throughput_bps << " bits/s (" << show_gbps(sqr_throughput_bps) << " Gbit/s)" << std::endl;
-    std::cout << "Throughput (CPU Mul GMP): " << cpu_mul_throughput_bps << " bits/s (" << show_gbps(cpu_mul_throughput_bps) << " Gbit/s)" << std::endl;
-    std::cout << "Throughput (CPU Sqr GMP): " << cpu_sqr_throughput_bps << " bits/s (" << show_gbps(cpu_sqr_throughput_bps) << " Gbit/s)" << std::endl;
+    auto show_kbps = [](double bps) {
+        return bps / 1e3;
+    };
+
+    std::cout << "Throughput (OpenCL Mul):  " << mul_throughput << " ops/s (" << show_kbps(mul_throughput) << " kops/s)" << std::endl;
+    std::cout << "Throughput (OpenCL Sqr):  " << sqr_throughput << " ops/s (" << show_kbps(sqr_throughput) << " kops/s)" << std::endl;
+    std::cout << "Throughput (CPU Mul GMP): " << cpu_mul_throughput << " ops/s (" << show_kbps(cpu_mul_throughput) << " kops/s)" << std::endl;
+    std::cout << "Throughput (CPU Sqr GMP): " << cpu_sqr_throughput << " ops/s (" << show_kbps(cpu_sqr_throughput) << " kops/s)" << std::endl;
+
+    // std::cout << "Throughput (OpenCL Mul):  " << mul_throughput_bps << " bits/s (" << show_gbps(mul_throughput_bps) << " Gbit/s)" << std::endl;
+    // std::cout << "Throughput (OpenCL Sqr):  " << sqr_throughput_bps << " bits/s (" << show_gbps(sqr_throughput_bps) << " Gbit/s)" << std::endl;
+    // std::cout << "Throughput (CPU Mul GMP): " << cpu_mul_throughput_bps << " bits/s (" << show_gbps(cpu_mul_throughput_bps) << " Gbit/s)" << std::endl;
+    // std::cout << "Throughput (CPU Sqr GMP): " << cpu_sqr_throughput_bps << " bits/s (" << show_gbps(cpu_sqr_throughput_bps) << " Gbit/s)" << std::endl;
 
     clReleaseKernel(kMul);
     clReleaseKernel(kSqr);
