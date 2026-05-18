@@ -26,13 +26,22 @@ __kernel void cgbn_mont_mul(
     }
     uint t_hi = 0u;
 
+    // Cache b and n into private arrays to reduce global memory traffic
+    uint B[MAX_LIMBS];
+    uint N[MAX_LIMBS];
+    for (uint j = 0u; j < limbs; ++j) {
+        B[j] = b[base + j];
+        N[j] = n[base + j];
+    }
+
     for (uint i = 0u; i < limbs; ++i) {
         uint ai = a[base + i];
 
-        // t += ai * b
+        // t += ai * b (use cached B)
         ulong carry = 0ul;
+        #pragma unroll
         for (uint j = 0u; j < limbs; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)b[base + j] + carry;
+            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
             t[j] = (uint)uv;
             carry = uv >> 32;
         }
@@ -42,10 +51,11 @@ __kernel void cgbn_mont_mul(
 
         uint m = (uint)((ulong)t[0] * (ulong)np0);
 
-        // t = (t + m*n) / 2^32
+        // t = (t + m*n) / 2^32 (use cached N)
         carry = 0ul;
+        #pragma unroll
         for (uint j = 0u; j < limbs; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)m * (ulong)n[base + j] + carry;
+            ulong uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
             if (j > 0u) {
                 t[j - 1u] = (uint)uv;
             }
@@ -112,13 +122,22 @@ __kernel void cgbn_mont_sqr(
     }
     uint t_hi = 0u;
 
-    for (uint i = 0u; i < limbs; ++i) {
-        uint ai = a[base + i];
+    // Cache a and n into private arrays to reduce global memory traffic (sqr uses a twice)
+    uint A[MAX_LIMBS];
+    uint N[MAX_LIMBS];
+    for (uint j = 0u; j < limbs; ++j) {
+        A[j] = a[base + j];
+        N[j] = n[base + j];
+    }
 
-        // t += ai * a
+    for (uint i = 0u; i < limbs; ++i) {
+        uint ai = A[i];
+
+        // t += ai * a (use cached A)
         ulong carry = 0ul;
+        #pragma unroll
         for (uint j = 0u; j < limbs; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)a[base + j] + carry;
+            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)A[j] + carry;
             t[j] = (uint)uv;
             carry = uv >> 32;
         }
@@ -128,10 +147,11 @@ __kernel void cgbn_mont_sqr(
 
         uint m = (uint)((ulong)t[0] * (ulong)np0);
 
-        // t = (t + m*n) / 2^32
+        // t = (t + m*n) / 2^32 (use cached N)
         carry = 0ul;
+        #pragma unroll
         for (uint j = 0u; j < limbs; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)m * (ulong)n[base + j] + carry;
+            ulong uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
             if (j > 0u) {
                 t[j - 1u] = (uint)uv;
             }
