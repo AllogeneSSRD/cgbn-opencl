@@ -116,9 +116,9 @@ bool runOpenClMontgomeryWGBenchmark(int iterations, int instances, int tpi) {
         return false;
     }
 
-    // Load both mont.cl and mont_wg.cl
-    std::string src_standard = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont.cl");
-    std::string src_wg = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg.cl");
+    // Load operator helpers and benchmark wrappers from separate OpenCL source files
+    std::string src_standard = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg.cl");
+    std::string src_wg = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg_bench.cl");
     
     if (src_standard.empty() || src_wg.empty()) {
         std::cerr << "Failed to load kernel files" << std::endl;
@@ -178,9 +178,9 @@ bool runOpenClMontgomeryWGBenchmark(int iterations, int instances, int tpi) {
     size_t local_mem_size = ((128u + 1u) * 3u + 128u * 2u + tpi) * sizeof(uint32_t);
 
     // Test cgbn_mont_mul_wg
-    cl_kernel kMulWG = clCreateKernel(program, "cgbn_mont_mul_wg", &err);
+    cl_kernel kMulWG = clCreateKernel(program, "cgbn_mont_mul_wg_bench", &err);
     if (err != CL_SUCCESS) {
-        std::cerr << "Failed to create cgbn_mont_mul_wg kernel: " << err << std::endl;
+        std::cerr << "Failed to create cgbn_mont_mul_wg_bench kernel: " << err << std::endl;
         return false;
     }
 
@@ -190,15 +190,14 @@ bool runOpenClMontgomeryWGBenchmark(int iterations, int instances, int tpi) {
     clSetKernelArg(kMulWG, 3, sizeof(cl_mem), &bufOut);
     clSetKernelArg(kMulWG, 4, sizeof(cl_uint), &np0);
     clSetKernelArg(kMulWG, 5, sizeof(cl_uint), &limbs);
-    clSetKernelArg(kMulWG, 6, local_mem_size, nullptr);
+    clSetKernelArg(kMulWG, 6, sizeof(cl_uint), &iterations);
+    clSetKernelArg(kMulWG, 7, local_mem_size, nullptr);
 
     auto t0 = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < iterations; ++i) {
-        err = clEnqueueNDRangeKernel(ctx.queue, kMulWG, 1, nullptr, &global_size_wg, &local_size_wg, 0, nullptr, nullptr);
-        if (err != CL_SUCCESS) {
-            std::cerr << "Failed to enqueue cgbn_mont_mul_wg: " << err << std::endl;
-            return false;
-        }
+    err = clEnqueueNDRangeKernel(ctx.queue, kMulWG, 1, nullptr, &global_size_wg, &local_size_wg, 0, nullptr, nullptr);
+    if (err != CL_SUCCESS) {
+        std::cerr << "Failed to enqueue cgbn_mont_mul_wg_bench: " << err << std::endl;
+        return false;
     }
     clFinish(ctx.queue);
     auto t1 = std::chrono::high_resolution_clock::now();
@@ -221,9 +220,9 @@ bool runOpenClMontgomeryWGBenchmark(int iterations, int instances, int tpi) {
     }
 
     // Test cgbn_mont_sqr_wg
-    cl_kernel kSqrWG = clCreateKernel(program, "cgbn_mont_sqr_wg", &err);
+    cl_kernel kSqrWG = clCreateKernel(program, "cgbn_mont_sqr_wg_bench", &err);
     if (err != CL_SUCCESS) {
-        std::cerr << "Failed to create cgbn_mont_sqr_wg kernel: " << err << std::endl;
+        std::cerr << "Failed to create cgbn_mont_sqr_wg_bench kernel: " << err << std::endl;
         return false;
     }
 
@@ -232,15 +231,14 @@ bool runOpenClMontgomeryWGBenchmark(int iterations, int instances, int tpi) {
     clSetKernelArg(kSqrWG, 2, sizeof(cl_mem), &bufOut);
     clSetKernelArg(kSqrWG, 3, sizeof(cl_uint), &np0);
     clSetKernelArg(kSqrWG, 4, sizeof(cl_uint), &limbs);
-    clSetKernelArg(kSqrWG, 5, local_mem_size, nullptr);
+    clSetKernelArg(kSqrWG, 5, sizeof(cl_uint), &iterations);
+    clSetKernelArg(kSqrWG, 6, local_mem_size, nullptr);
 
     t0 = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < iterations; ++i) {
-        err = clEnqueueNDRangeKernel(ctx.queue, kSqrWG, 1, nullptr, &global_size_wg, &local_size_wg, 0, nullptr, nullptr);
-        if (err != CL_SUCCESS) {
-            std::cerr << "Failed to enqueue cgbn_mont_sqr_wg: " << err << std::endl;
-            return false;
-        }
+    err = clEnqueueNDRangeKernel(ctx.queue, kSqrWG, 1, nullptr, &global_size_wg, &local_size_wg, 0, nullptr, nullptr);
+    if (err != CL_SUCCESS) {
+        std::cerr << "Failed to enqueue cgbn_mont_sqr_wg_bench: " << err << std::endl;
+        return false;
     }
     clFinish(ctx.queue);
     t1 = std::chrono::high_resolution_clock::now();
