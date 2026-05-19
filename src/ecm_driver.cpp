@@ -4,6 +4,7 @@
 #include <vector>
 #include <cmath>
 #include <cstdlib>
+#include <cctype>
 
 #ifdef _WIN32
 #include <io.h>
@@ -19,60 +20,180 @@ static void trim(std::string &s){
     while(!s.empty() && isspace((unsigned char)s.front())) s.erase(s.begin());
 }
 
-// Minimal parser to handle inputs like (2^991-1) or decimal/hex strings
-static bool parse_N_string(const std::string &in, mpz_t out){
-    std::string s = in;
-    trim(s);
-    if(s.empty()) return false;
-    // remove surrounding parentheses
-    if(s.size() >= 2 && s.front() == '(' && s.back() == ')'){
-        s = s.substr(1, s.size()-2);
-        trim(s);
+class ExprParser {
+public:
+    explicit ExprParser(const std::string &input) : text(input), pos(0), error(false) {}
+
+    bool parse(mpz_t out) {
+        skip_ws();
+        parse_expr(out);
+        skip_ws();
+        if (!error && pos != text.size()) {
+            set_error("unexpected trailing characters");
+        }
+        return !error;
     }
-    // Look for pattern base ^ exp [+- offset]
-    size_t pos_pow = s.find('^');
-    if(pos_pow != std::string::npos){
-        // get base left of ^ (possibly number)
-        std::string base_s = s.substr(0, pos_pow);
-        trim(base_s);
-        // find + or - after exponent
-        size_t pos_sign = s.find_first_of("+-", pos_pow+1);
-        std::string exp_s, tail;
-        if(pos_sign != std::string::npos){
-            exp_s = s.substr(pos_pow+1, pos_sign - (pos_pow+1));
-            tail = s.substr(pos_sign);
-        } else {
-            exp_s = s.substr(pos_pow+1);
+
+    const std::string &message() const { return message_text; }
+
+private:
+    const std::string &text;
+    size_t pos;
+    bool error;
+    std::string message_text;
+
+    void set_error(const std::string &msg) {
+        if (!error) {
+            error = true;
+            message_text = msg;
         }
-        trim(exp_s); trim(tail);
-        unsigned long base = 0;
-        if(base_s == "2") base = 2;
-        else {
-            // try parse base decimal
-            base = std::stoul(base_s);
-        }
-        unsigned long exp = std::stoul(exp_s);
-        mpz_t tmp;
-        mpz_init(tmp);
-        mpz_ui_pow_ui(tmp, base, exp);
-        if(!tail.empty()){
-            char sign = tail[0];
-            mpz_t offs; mpz_init(offs);
-            std::string offs_s = tail.substr(1);
-            trim(offs_s);
-            mpz_set_str(offs, offs_s.c_str(), 10);
-            if(sign == '+') mpz_add(tmp, tmp, offs);
-            else mpz_sub(tmp, tmp, offs);
-            mpz_clear(offs);
-        }
-        mpz_set(out, tmp);
-        mpz_clear(tmp);
-        return true;
     }
-    // else fallback to mpz_set_str base 0 (supports 0x, decimals)
-    if(mpz_set_str(out, s.c_str(), 0) == 0) return true;
-    return false;
-}
+
+    void skip_ws() {
+        while (pos < text.size() && std::isspace(static_cast<unsigned char>(text[pos]))) {
+            ++pos;
+        }
+    }
+
+    bool match(char ch) {
+        skip_ws();
+        if (pos < text.size() && text[pos] == ch) {
+            ++pos;
+            return true;
+        }
+        return false;
+    }
+
+    bool peek(char ch) {
+        skip_ws();
+        return pos < text.size() && text[pos] == ch;
+    }
+
+    void parse_expr(mpz_t out) {
+        mpz_t lhs;
+        mpz_init(lhs);
+        parse_term(lhs);
+        while (!error) {
+            if (match('+')) {
+                mpz_t rhs;
+                mpz_init(rhs);
+                parse_term(rhs);
+                mpz_add(lhs, lhs, rhs);
+                mpz_clear(rhs);
+            } else if (match('-')) {
+                mpz_t rhs;
+                mpz_init(rhs);
+                parse_term(rhs);
+                mpz_sub(lhs, lhs, rhs);
+                mpz_clear(rhs);
+            } else {
+                break;
+            }
+        }
+        mpz_set(out, lhs);
+        mpz_clear(lhs);
+    }
+
+    void parse_term(mpz_t out) {
+        mpz_t lhs;
+        mpz_init(lhs);
+        parse_power(lhs);
+        while (!error) {
+            if (match('*')) {
+                mpz_t rhs;
+                mpz_init(rhs);
+                parse_power(rhs);
+                mpz_mul(lhs, lhs, rhs);
+                mpz_clear(rhs);
+            } else {
+                break;
+            }
+        }
+        mpz_set(out, lhs);
+        mpz_clear(lhs);
+    }
+
+    void parse_power(mpz_t out) {
+        mpz_t base;
+        mpz_init(base);
+        parse_unary(base);
+        if (error) {
+            mpz_clear(base);
+            return;
+        }
+
+        if (match('^')) {
+            mpz_t exponent;
+            mpz_init(exponent);
+            parse_power(exponent);
+            if (error) {
+                mpz_clear(base);
+                mpz_clear(exponent);
+                return;
+            }
+            if (mpz_sgn(exponent) < 0 || !mpz_fits_ulong_p(exponent)) {
+                set_error("exponent must be a non-negative integer that fits in unsigned long");
+                mpz_clear(base);
+                mpz_clear(exponent);
+                return;
+            }
+            unsigned long exp = mpz_get_ui(exponent);
+            mpz_pow_ui(out, base, exp);
+            mpz_clear(base);
+            mpz_clear(exponent);
+            return;
+        }
+
+        mpz_set(out, base);
+        mpz_clear(base);
+    }
+
+    void parse_unary(mpz_t out) {
+        skip_ws();
+        if (match('+')) {
+            parse_unary(out);
+            return;
+        }
+        if (match('-')) {
+            parse_unary(out);
+            mpz_neg(out, out);
+            return;
+        }
+        parse_primary(out);
+    }
+
+    void parse_primary(mpz_t out) {
+        skip_ws();
+        if (match('(')) {
+            parse_expr(out);
+            if (!match(')')) {
+                set_error("missing closing parenthesis");
+            }
+            return;
+        }
+
+        size_t start = pos;
+        bool saw_digit = false;
+        while (pos < text.size()) {
+            unsigned char ch = static_cast<unsigned char>(text[pos]);
+            if (std::isalnum(ch) || ch == 'x' || ch == 'X') {
+                saw_digit = true;
+                ++pos;
+            } else {
+                break;
+            }
+        }
+        if (!saw_digit) {
+            set_error("expected number or parenthesized expression");
+            return;
+        }
+
+        std::string token = text.substr(start, pos - start);
+        if (mpz_set_str(out, token.c_str(), 0) != 0) {
+            set_error(std::string("invalid integer token: ") + token);
+        }
+    }
+};
 
 // Compute batch product s = prod_{p<=B1} p^{floor(log_p(B1))}
 static bool compute_batch_s(mpz_t s, double B1){
@@ -163,9 +284,18 @@ int main(int argc, char **argv){
     }
 
     mpz_t N; mpz_init(N);
-    if(!parse_N_string(nline, N)){
-        std::cerr << "Failed to parse N: '"<< nline <<"'"<<std::endl;
+    ExprParser parser(nline);
+    if(!parser.parse(N)){
+        std::cerr << "Failed to parse N: '"<< nline <<"'" << std::endl;
+        std::cerr << "Parse error: " << parser.message() << std::endl;
         return 1;
+    }
+
+    std::cout << "Parsed N bit-size: " << mpz_sizeinbase(N, 2) << std::endl;
+    if (verbose) {
+        std::cout << "Parsed N = ";
+        mpz_out_str(stdout, 10, N);
+        std::cout << std::endl;
     }
 
     // set up ecm params
