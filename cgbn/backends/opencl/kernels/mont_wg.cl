@@ -2,6 +2,7 @@
 // Work-group parallel versions: multiple work-items cooperatively handle one instance
 // TPI = Threads Per Instance (must divide limbs evenly, typically 4 or 8)
 // ============================================================================
+#pragma once
 
 #ifndef TPI
 #define TPI 4  // Default: 4 threads per instance

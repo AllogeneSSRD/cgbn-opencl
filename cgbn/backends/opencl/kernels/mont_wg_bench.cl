@@ -1,7 +1,7 @@
 // Benchmark wrappers for Montgomery work-group kernels.
 // The heavy implementation lives in mont_wg.cl and is reused here.
 
-// #include "mont_wg.cl"
+#include "mont_wg.cl"
 
 #ifndef TPI
 #define TPI 4

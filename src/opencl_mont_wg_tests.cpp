@@ -9,8 +9,50 @@
 #include <string>
 #include <vector>
 #include <cmath>
+#include <fstream>
+#include <sstream>
 
 namespace {
+
+// Simple runtime #include preprocessor to resolve #include directives in OpenCL source
+// Searches relative to base_dir and replaces #include "file" with its contents
+std::string preprocess_includes(const std::string &source, const std::string &base_dir) {
+    std::string result;
+    std::istringstream iss(source);
+    std::string line;
+    
+    while (std::getline(iss, line)) {
+        // Check if line starts with #include "..."
+        size_t include_pos = line.find("#include");
+        if (include_pos != std::string::npos) {
+            size_t quote_start = line.find('"', include_pos);
+            size_t quote_end = line.find('"', quote_start + 1);
+            
+            if (quote_start != std::string::npos && quote_end != std::string::npos) {
+                std::string include_file = line.substr(quote_start + 1, quote_end - quote_start - 1);
+                std::string include_path = base_dir + "/" + include_file;
+                
+                // Try to load the included file
+                std::ifstream inc_stream(include_path);
+                if (inc_stream.is_open()) {
+                    std::string inc_contents((std::istreambuf_iterator<char>(inc_stream)),
+                                            std::istreambuf_iterator<char>());
+                    // Recursively preprocess the included file
+                    inc_contents = preprocess_includes(inc_contents, base_dir);
+                    result += "// >>> Include: " + include_file + "\n";
+                    result += inc_contents;
+                    result += "\n// <<< End include: " + include_file + "\n";
+                    continue;
+                } else {
+                    std::cerr << "Warning: Could not open included file: " << include_path << std::endl;
+                }
+            }
+        }
+        result += line + "\n";
+    }
+    
+    return result;
+}
 
 void fill_from_gmp(mpz_t v, uint32_t *out_words, size_t words) {
     mpz_t tmp, mod;
@@ -116,24 +158,32 @@ bool runOpenClMontgomeryWGBenchmark(int iterations, int instances, int tpi) {
         return false;
     }
 
-    // Load operator helpers and benchmark wrappers from separate OpenCL source files
-    std::string src_standard = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg.cl");
-    std::string src_wg = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg_bench.cl");
+    std::string kernels_dir = "cgbn/backends/opencl/kernels";
     
-    if (src_standard.empty() || src_wg.empty()) {
-        std::cerr << "Failed to load kernel files" << std::endl;
+    // Load wrapper which includes mont_wg.cl and mont_wg_bench.cl
+    std::string wrapper_src = cgbn::opencl::load_text_file((kernels_dir + "/mont_wg_bench.cl").c_str());
+    
+    // If not found, try relative from exe directory (build/Debug)
+    if (wrapper_src.empty()) {
+        kernels_dir = "../../../cgbn/backends/opencl/kernels";
+        wrapper_src = cgbn::opencl::load_text_file((kernels_dir + "/mont_wg_bench.cl").c_str());
+    }
+    
+    if (wrapper_src.empty()) {
+        std::cerr << "Failed to load wrapper file. Tried: cgbn/backends/opencl/kernels/mont_wg_wrapper.cl and ../../../cgbn/backends/opencl/kernels/mont_wg_wrapper.cl" << std::endl;
         cgbn::opencl::destroy_context(ctx);
         mpz_clears(n_gmp, a_gmp, b_gmp, r_mul_gmp, r_sqr_gmp, R, Rinv, tmp, nullptr);
         return false;
     }
+    
+    // Preprocess #include directives at runtime
+    std::string preprocessed_src = preprocess_includes(wrapper_src, kernels_dir);
 
-    // Combine both sources
-    std::string combined_src = src_standard + "\n" + src_wg;
-
-    // Build with TPI definition
+    // Build with TPI definition (no -I needed since includes are resolved)
     std::string build_opts = std::string("-DTPI=") + std::to_string(tpi) + " -DMAX_LIMBS=128";
+
     cl_int buildErr = CL_SUCCESS;
-    cl_program program = cgbn::opencl::build_program_from_source(ctx, combined_src.c_str(), 
+    cl_program program = cgbn::opencl::build_program_from_source(ctx, preprocessed_src.c_str(), 
                                                                     build_opts.c_str(), buildErr);
     if (program == nullptr || buildErr != CL_SUCCESS) {
         std::cerr << "Failed to build mont WG program: " << buildErr << std::endl;
@@ -301,10 +351,7 @@ int main(int argc, char **argv) {
     if (argc >= 3) instances = std::stoi(std::string(argv[2]));
     if (argc >= 4) tpi = std::stoi(std::string(argv[3]));
 
-    bool ok_tpi4 = 1;
-    // bool ok_tpi4 = runOpenClMontgomeryWGBenchmark(iterations, instances, 4);
-    bool ok_tpi8 = runOpenClMontgomeryWGBenchmark(iterations, instances, 8);
-
-    return (ok_tpi4 && ok_tpi8) ? EXIT_SUCCESS : EXIT_FAILURE;
+    bool result = runOpenClMontgomeryWGBenchmark(iterations, instances, tpi);
+    return result ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 #endif

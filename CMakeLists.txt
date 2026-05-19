@@ -8,9 +8,36 @@ find_package(OpenSSL REQUIRED)
 link_directories("D:/code/vcpkg/installed/x64-windows/lib")
 
 add_executable(main
-    src/main.cpp
+    src/main.c
     src/cl_probe.cpp
     src/opencl_low_risk_tests.cpp
+)
+
+add_library(opencl_ecm_entry STATIC
+    src/opencl_ecm_entry.cpp
+)
+
+add_executable(ecm
+    src/ecm_driver.cpp
+    src/cgbn_stage1_stub.cpp
+)
+target_sources(ecm PRIVATE
+    src/ecm_params_init.cpp
+)
+target_sources(ecm PRIVATE
+)
+
+target_include_directories(ecm PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    # ${CMAKE_SOURCE_DIR}/ecm
+)
+
+target_link_libraries(ecm
+    opencl_ecm_entry
+    cgbn_opencl
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    "D:/code/vcpkg/installed/x64-windows/lib/gmp.lib"
 )
 
 add_executable(opencl_addsub
@@ -43,6 +70,11 @@ target_link_libraries(cuda_addsub_cpu
 
 target_include_directories(opencl_addsub PRIVATE
     ${CMAKE_SOURCE_DIR}/include
+)
+
+target_include_directories(opencl_ecm_entry PUBLIC
+    ${CMAKE_SOURCE_DIR}/src
+    # ${CMAKE_SOURCE_DIR}/ecm
 )
 
 target_include_directories(opencl_mont PRIVATE
