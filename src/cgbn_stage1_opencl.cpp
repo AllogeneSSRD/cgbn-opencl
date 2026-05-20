@@ -431,7 +431,7 @@ static int findfactor(mpz_t factor, const mpz_t N, const mpz_t x_final, const mp
 
 static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
                            const uint32_t *data, uint32_t cgbn_bits, int curves,
-                           uint32_t sigma, int verbose, mpz_t *stage1_x_residues) {
+                           uint32_t sigma, int verbose) {
     mpz_t modulo, x_std, z_std;
     mpz_init(modulo);
     mpz_init(x_std);
@@ -460,10 +460,6 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
 
         mpz_clear(x_mont);
         mpz_clear(z_mont);
-
-        if (stage1_x_residues) {
-            mpz_set(stage1_x_residues[i], x_std);
-        }
 
         if (mpz_cmp_ui(x_std, 2) == 0 && mpz_cmp_ui(z_std, 1) == 0) {
             errors++;
@@ -582,7 +578,6 @@ extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose) {
 
 extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, const mpz_t s,
                     uint32_t curves, uint32_t *sigma_ptr,
-                    mpz_t *stage1_x_residues,
                     unsigned long checkpoint_interval_ms, float *gputime, int verbose) {
     (void)checkpoint_interval_ms;
 
@@ -761,8 +756,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
 
     int youpi = ECM_NO_FACTOR_FOUND;
     if (err == CL_SUCCESS) {
-        youpi = process_results(factors, array_found, N, data, BITS, (int)curves, sigma, verbose,
-                                stage1_x_residues);
+        youpi = process_results(factors, array_found, N, data, BITS, (int)curves, sigma, verbose);
     } else {
         youpi = ECM_ERROR;
     }

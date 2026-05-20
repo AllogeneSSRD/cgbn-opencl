@@ -2,6 +2,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cctype>
@@ -353,8 +354,62 @@ static bool check_save_file_writable(const std::string &savefilename, bool savea
     return true;
 }
 
+static std::string mpz_to_dec_string(const mpz_t v) {
+    char *s = mpz_get_str(nullptr, 10, v);
+    std::string out = s ? s : "";
+    free(s);
+    return out;
+}
+
+static std::string build_saved_n_expr(const std::string &original_expr, const mpz_t N,
+                                      uint32_t curves, mpz_t *factors, int *array_found) {
+    std::string expr = original_expr.empty() ? mpz_to_dec_string(N) : original_expr;
+    mpz_t remaining;
+    mpz_init_set(remaining, N);
+
+    std::vector<std::string> uniq_factors_dec;
+    uniq_factors_dec.reserve(curves);
+    for (uint32_t i = 0; i < curves; ++i) {
+        if (array_found[i] == ECM_NO_FACTOR_FOUND) {
+            continue;
+        }
+        if (mpz_cmp_ui(factors[i], 1) <= 0 || mpz_cmp(factors[i], N) >= 0) {
+            continue;
+        }
+        std::string dec = mpz_to_dec_string(factors[i]);
+        if (std::find(uniq_factors_dec.begin(), uniq_factors_dec.end(), dec) == uniq_factors_dec.end()) {
+            uniq_factors_dec.push_back(dec);
+        }
+    }
+
+    std::sort(uniq_factors_dec.begin(), uniq_factors_dec.end(),
+              [](const std::string &a, const std::string &b) {
+                  if (a.size() != b.size()) {
+                      return a.size() < b.size();
+                  }
+                  return a < b;
+              });
+
+    mpz_t f;
+    mpz_init(f);
+    for (const std::string &dec : uniq_factors_dec) {
+        if (mpz_set_str(f, dec.c_str(), 10) != 0) {
+            continue;
+        }
+        if (!mpz_divisible_p(remaining, f)) {
+            continue;
+        }
+        expr = "(" + expr + ")/" + dec;
+        mpz_divexact(remaining, remaining, f);
+    }
+    mpz_clear(f);
+    mpz_clear(remaining);
+    return expr;
+}
+
 static bool append_opencl_save_lines(const std::string &savefilename, const mpz_t N, double B1,
-                                     uint32_t firstsigma, uint32_t curves, mpz_t *stage1_x) {
+                                     uint32_t firstsigma, uint32_t curves, mpz_t *factors,
+                                     const std::string &n_expr_save) {
     std::ofstream out(savefilename, std::ios::out | std::ios::app);
     if (!out.is_open()) {
         std::cerr << "Could not open file " << savefilename << " for appending" << std::endl;
@@ -377,26 +432,25 @@ static bool append_opencl_save_lines(const std::string &savefilename, const mpz_
         mpz_set_d(checksum, B1);
         mpz_mul_ui(checksum, checksum, mpz_fdiv_ui(sigma_mpz, CHKSUMMOD));
         mpz_mul_ui(checksum, checksum, mpz_fdiv_ui(N, CHKSUMMOD));
-        mpz_mul_ui(checksum, checksum, mpz_fdiv_ui(stage1_x[i], CHKSUMMOD));
+        mpz_mul_ui(checksum, checksum, mpz_fdiv_ui(factors[i], CHKSUMMOD));
         mpz_mul_ui(checksum, checksum, (ECM_PARAM_BATCH_32BITS_D + 1) % CHKSUMMOD);
         const unsigned long csum = mpz_fdiv_ui(checksum, CHKSUMMOD);
 
-        char *sigma_hex = mpz_get_str(nullptr, 16, sigma_mpz);
-        char *n_dec = mpz_get_str(nullptr, 10, N);
-        char *x_hex = mpz_get_str(nullptr, 16, stage1_x[i]);
+        char *sigma_dec = mpz_get_str(nullptr, 10, sigma_mpz);
+        char *x_hex = mpz_get_str(nullptr, 16, factors[i]);
 
         out << "METHOD=ECM; PARAM=" << ECM_PARAM_BATCH_32BITS_D
-            << "; SIGMA=0x" << sigma_hex
+            << "; SIGMA=" << sigma_dec
             << "; B1=" << std::llround(B1)
-            << "; N=" << n_dec
+            << "; N=" << n_expr_save
             << "; X=0x" << x_hex
             << "; CHECKSUM=" << csum
-            << "; PROGRAM=MPA-OpenCl;"
+            << "; PROGRAM=GMP-ECM 7.0.6;"
+            << " X0=0x0; Y0=0x0;"
             << " TIME=" << timebuf << ";"
             << "\n";
 
-        free(sigma_hex);
-        free(n_dec);
+        free(sigma_dec);
         free(x_hex);
     }
 
@@ -577,14 +631,8 @@ int main(int argc, char **argv){
 
     float gputime = 0.0f;
 
-    mpz_t *stage1_x = (mpz_t*) malloc(sizeof(mpz_t) * curves);
-    for (uint32_t i = 0; i < curves; i++) {
-        mpz_init(stage1_x[i]);
-    }
-
     int ret = opencl_ecm_stage1(factors, array_found, N, params->batch_s, curves, &firstsigma,
-                                stage1_x, params->gpu_checkpoint_interval_ms, &gputime,
-                                params->verbose);
+                                params->gpu_checkpoint_interval_ms, &gputime, params->verbose);
 
     std::cout << "opencl_ecm_stage1 returned: "<< ret <<" gputime="<< gputime <<" ms\n";
     for(uint32_t i=0;i<curves;i++){
@@ -594,15 +642,14 @@ int main(int argc, char **argv){
             free(s);
         }
     }
+    std::string n_expr_save = build_saved_n_expr(nline, N, curves, factors, array_found);
+
     if (ret != ECM_ERROR && !savefilename.empty()) {
-        if (!append_opencl_save_lines(savefilename, N, B1, firstsigma, curves, stage1_x)) {
+        if (!append_opencl_save_lines(savefilename, N, B1, firstsigma, curves, factors, n_expr_save)) {
             std::cerr << "Failed to append OpenCL save lines into " << savefilename << std::endl;
             return 1;
         }
     }
-
-    for (uint32_t i = 0; i < curves; i++) mpz_clear(stage1_x[i]);
-    free(stage1_x);
     for(uint32_t i=0;i<curves;i++) mpz_clear(factors[i]);
     free(factors); free(array_found);
     mpz_clear(batch_d);
