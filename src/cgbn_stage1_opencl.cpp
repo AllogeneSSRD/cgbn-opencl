@@ -58,6 +58,73 @@ static const char *env_string_or_default(const char *name, const char *fallback)
     return (v && *v) ? v : fallback;
 }
 
+struct ecm_ops_profile_counts_t {
+    uint64_t kernel_bits_processed = 0;   // bits processed by kernel loop only
+    uint64_t double_add_calls = 0;        // per curve, per processed bit
+    uint64_t mp_add_mod = 0;
+    uint64_t mp_sub_mod = 0;
+    uint64_t mont_mul_priv = 0;
+    uint64_t mont_sqr_priv = 0;
+    uint64_t mont_normalize = 0;
+    uint64_t special_mult_ui32 = 0;
+    uint64_t mp_shift_left_1_mod = 0;
+};
+
+static ecm_ops_profile_counts_t compute_ops_profile_counts(uint64_t kernel_bits_processed,
+                                                           uint32_t curves) {
+    const uint64_t calls = kernel_bits_processed * (uint64_t)curves;
+    ecm_ops_profile_counts_t c;
+    c.kernel_bits_processed = kernel_bits_processed;
+    c.double_add_calls = calls;
+    c.mp_add_mod = calls * 4ull;
+    c.mp_sub_mod = calls * 4ull;
+    c.mont_mul_priv = calls * 4ull;
+    c.mont_sqr_priv = calls * 4ull;
+    c.mont_normalize = calls * 8ull;
+    c.special_mult_ui32 = calls;
+    c.mp_shift_left_1_mod = calls;
+    return c;
+}
+
+static void emit_ops_profile(const ecm_ops_profile_counts_t &c, uint32_t curves, uint64_t s_num_bits,
+                             int batches_complete, float gputime_ms, int verbose) {
+    (void)verbose;
+    fprintf(stdout,
+            "ECM_PROFILE_OPS: curves=%u s_bits=%llu kernel_bits=%llu batches=%d gputime_ms=%.3f\n",
+            curves, (unsigned long long)s_num_bits, (unsigned long long)c.kernel_bits_processed,
+            batches_complete, gputime_ms);
+    fprintf(stdout,
+            "ECM_PROFILE_OPS: double_add_v2=%llu, mp_add_mod=%llu, mp_sub_mod=%llu, "
+            "mont_mul_priv=%llu, mont_sqr_priv=%llu, mont_normalize=%llu, "
+            "special_mult_ui32=%llu, mp_shift_left_1_mod=%llu\n",
+            (unsigned long long)c.double_add_calls, (unsigned long long)c.mp_add_mod,
+            (unsigned long long)c.mp_sub_mod, (unsigned long long)c.mont_mul_priv,
+            (unsigned long long)c.mont_sqr_priv, (unsigned long long)c.mont_normalize,
+            (unsigned long long)c.special_mult_ui32,
+            (unsigned long long)c.mp_shift_left_1_mod);
+    fflush(stdout);
+
+    if (!env_flag_enabled("ECM_PROFILE_OPS")) {
+        return;
+    }
+    const char *csv_path = env_string_or_default("ECM_PROFILE_OPS_FILE", "ecm_ops_profile.csv");
+    std::ofstream out(csv_path, std::ios::out | std::ios::app);
+    if (!out.is_open()) {
+        fprintf(stderr, "ECM_PROFILE_OPS: failed to open %s for append\n", csv_path);
+        return;
+    }
+    if (out.tellp() == std::streampos(0)) {
+        out << "curves,s_num_bits,kernel_bits_processed,batches,gputime_ms,double_add_calls,"
+               "mp_add_mod,mp_sub_mod,mont_mul_priv,mont_sqr_priv,mont_normalize,"
+               "special_mult_ui32,mp_shift_left_1_mod\n";
+    }
+    out << curves << "," << s_num_bits << "," << c.kernel_bits_processed << "," << batches_complete
+        << "," << gputime_ms << "," << c.double_add_calls << "," << c.mp_add_mod << ","
+        << c.mp_sub_mod << "," << c.mont_mul_priv << "," << c.mont_sqr_priv << ","
+        << c.mont_normalize << "," << c.special_mult_ui32 << "," << c.mp_shift_left_1_mod
+        << "\n";
+}
+
 static void dump_opencl_state_rows(const char *stage, int batch_index, uint64_t s_partial,
                                    uint64_t batch_size, uint32_t sigma, uint32_t curves,
                                    uint32_t BITS, uint32_t TPI, const uint32_t *data,
@@ -752,6 +819,13 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     if (gputime) {
         *gputime = (float)std::chrono::duration<double, std::milli>(t_global_end - t_global_start)
                        .count();
+    }
+    const uint64_t kernel_bits_processed = (s_partial > 0u) ? (s_partial - 1u) : 0u;
+    if (env_flag_enabled("ECM_PROFILE_OPS")) {
+        const float gputime_local = gputime ? *gputime : 0.0f;
+        const ecm_ops_profile_counts_t counts =
+            compute_ops_profile_counts(kernel_bits_processed, curves);
+        emit_ops_profile(counts, curves, s_num_bits, batches_complete, gputime_local, verbose);
     }
 
     int youpi = ECM_NO_FACTOR_FOUND;

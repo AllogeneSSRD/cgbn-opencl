@@ -6,6 +6,15 @@
 
 // ---------------------------------------------------------------------------
 // Private multi-limb helpers (one curve per work-item)
+//
+// Naming convention:
+//   `mp_*` means "multi-precision integer primitive". These are the low-level
+//   bignum building blocks used by higher-level curve operations.
+//
+// Why keep the `mp_` prefix:
+// 1) Distinguish bignum operators from point/curve operators (double_add_v2, etc.).
+// 2) Make call-sites read like arithmetic formulas over Z and Z/NZ.
+// 3) Avoid ambiguity with OpenCL scalar/vector add/sub intrinsics.
 // ---------------------------------------------------------------------------
 
 inline void mp_copy(uint *dst, const uint *src, uint limbs) {
@@ -49,6 +58,13 @@ inline uint mp_add_n(uint *r, const uint *a, const uint *b, uint limbs) {
     return (uint)carry;
 }
 
+// Modular add over Z/NZ:
+//   r = a + b (mod N)
+//
+// Implementation idea:
+//   1) Compute raw limb sum S = a + b in base 2^32.
+//   2) If S overflowed (carry != 0) OR S >= N, subtract N once.
+// This is valid because a,b are already reduced, so S is in [0, 2N-2].
 inline void mp_add_mod(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
     ulong carry = 0ul;
     for (uint i = 0u; i < limbs; ++i) {
@@ -151,6 +167,15 @@ void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
 }
 
 // Simultaneous double-and-add (CUDA curve_t::double_add_v2)
+//
+// Note: each call executes a fixed "operator mix" and is the performance hotspot:
+//   - mp_add_mod:      4 calls
+//   - mp_sub_mod:      4 calls
+//   - mont_mul_priv:   4 calls
+//   - mont_sqr_priv:   4 calls
+//   - mont_normalize:  8 calls
+//   - special_mult_ui32: 1 call
+//   - mp_shift_left_1_mod: 1 call
 void double_add_v2(
     uint *q, uint *u, uint *w, uint *v,
     uint d, const uint *N, uint np0, uint limbs)
