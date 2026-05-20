@@ -1,329 +1,347 @@
-// OpenCL ECM Stage 1 kernel - Montgomery Ladder based implementation
-// Based on CUDA version from test/cgbn_stage1.cu
+// OpenCL ECM Stage 1 — Montgomery ladder (double_add_v2), ported from test/cgbn_stage1.cu
 
 #ifndef MAX_LIMBS
-#define MAX_LIMBS 128
+#define MAX_LIMBS 64
 #endif
 
-// Include required headers for basic operations
-// These would be included from the host or linked
+// ---------------------------------------------------------------------------
+// Private multi-limb helpers (one curve per work-item)
+// ---------------------------------------------------------------------------
 
-/**
- * Montgomery modular addition: out = (a + b) mod n
- * Handles carry and ensures result is reduced
- */
-void mont_add(__global const uint *a, 
-              __global const uint *b, 
-              __global const uint *n,
-              __global uint *out, 
-              uint limbs,
-              uint instance_idx) {
-    uint base = instance_idx * limbs;
-    ulong carry = 0;
-    
-    // First pass: a + b
-    for (uint i = 0; i < limbs; ++i) {
-        ulong sum = (ulong)a[base + i] + (ulong)b[base + i] + carry;
-        out[base + i] = (uint)sum;
+inline void mp_copy(uint *dst, const uint *src, uint limbs) {
+    for (uint i = 0u; i < limbs; ++i) {
+        dst[i] = src[i];
+    }
+}
+
+inline void mp_zero(uint *dst, uint limbs) {
+    for (uint i = 0u; i < limbs; ++i) {
+        dst[i] = 0u;
+    }
+}
+
+inline int mp_ge(const uint *a, const uint *N, uint limbs) {
+    for (int i = (int)limbs - 1; i >= 0; --i) {
+        if (a[(uint)i] > N[(uint)i]) return 1;
+        if (a[(uint)i] < N[(uint)i]) return 0;
+    }
+    return 1;
+}
+
+inline void mp_sub_n(uint *r, const uint *a, const uint *N, uint limbs) {
+    ulong borrow = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong av = (ulong)a[i];
+        ulong nv = (ulong)N[i];
+        ulong w = av - nv - borrow;
+        r[i] = (uint)w;
+        borrow = (av < nv + borrow) ? 1ul : 0ul;
+    }
+}
+
+inline void mp_add_mod(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
+    ulong carry = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong sum = (ulong)a[i] + (ulong)b[i] + carry;
+        r[i] = (uint)sum;
         carry = sum >> 32;
     }
-    
-    // Conditional subtraction if result >= n
-    int ge = (carry != 0) ? 1 : 0;
+    if (carry != 0ul || mp_ge(r, N, limbs)) {
+        mp_sub_n(r, r, N, limbs);
+    }
+}
+
+// Returns 1 if borrow (a < b)
+inline int mp_sub_mod(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
+    ulong borrow = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong av = (ulong)a[i];
+        ulong bv = (ulong)b[i];
+        ulong w = av - bv - borrow;
+        r[i] = (uint)w;
+        borrow = (av < bv + borrow) ? 1ul : 0ul;
+    }
+    if (borrow) {
+        mp_add_mod(r, r, N, N, limbs);
+        return 1;
+    }
+    return 0;
+}
+
+inline void mp_shift_left_1_mod(uint *r, const uint *a, const uint *N, uint limbs) {
+    uint carry = 0u;
+    for (uint i = 0u; i < limbs; ++i) {
+        uint old = a[i];
+        r[i] = (old << 1) | carry;
+        carry = old >> 31;
+    }
+    if (carry || mp_ge(r, N, limbs)) {
+        mp_sub_n(r, r, N, limbs);
+    }
+}
+
+// Montgomery multiplication: out = a*b*R^{-1} mod N  (CIOS, private arrays)
+void mont_mul(uint *out, const uint *a, const uint *b, const uint *N, uint np0, uint limbs) {
+    if (limbs == 0u || limbs > MAX_LIMBS) {
+        return;
+    }
+
+    uint t[MAX_LIMBS + 1];
+    uint B[MAX_LIMBS];
+    for (uint i = 0u; i <= limbs; ++i) {
+        t[i] = 0u;
+    }
+    uint t_hi = 0u;
+    for (uint j = 0u; j < limbs; ++j) {
+        B[j] = b[j];
+    }
+
+    for (uint i = 0u; i < limbs; ++i) {
+        uint ai = a[i];
+        ulong carry = 0ul;
+        for (uint j = 0u; j < limbs; ++j) {
+            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
+            t[j] = (uint)uv;
+            carry = uv >> 32;
+        }
+        ulong uvh = (ulong)t[limbs] + carry;
+        t[limbs] = (uint)uvh;
+        t_hi += (uint)(uvh >> 32);
+
+        uint m = (uint)((ulong)t[0] * (ulong)np0);
+        carry = 0ul;
+        for (uint j = 0u; j < limbs; ++j) {
+            ulong uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
+            if (j > 0u) {
+                t[j - 1u] = (uint)uv;
+            }
+            carry = uv >> 32;
+        }
+        ulong top = (ulong)t[limbs] + carry;
+        t[limbs - 1u] = (uint)top;
+        ulong top2 = (ulong)t_hi + (top >> 32);
+        t[limbs] = (uint)top2;
+        t_hi = (uint)(top2 >> 32);
+    }
+
+    int ge = (t_hi != 0u || t[limbs] != 0u) ? 1 : 0;
     if (!ge) {
         for (int i = (int)limbs - 1; i >= 0; --i) {
-            if (out[base + i] > n[base + i]) {
+            if (t[(uint)i] > N[(uint)i]) {
                 ge = 1;
                 break;
             }
-            if (out[base + i] < n[base + i]) {
+            if (t[(uint)i] < N[(uint)i]) {
+                ge = 0;
                 break;
             }
         }
     }
-    
     if (ge) {
-        ulong borrow = 0;
-        for (uint i = 0; i < limbs; ++i) {
-            ulong w = (ulong)out[base + i] - (ulong)n[base + i] - borrow;
-            out[base + i] = (uint)w;
-            borrow = ((ulong)out[base + i] < (ulong)n[base + i] + borrow) ? 1 : 0;
+        ulong borrow = 0ul;
+        for (uint i = 0u; i < limbs; ++i) {
+            ulong tv = (ulong)t[i];
+            ulong nv = (ulong)N[i];
+            ulong w = tv - nv - borrow;
+            t[i] = (uint)w;
+            borrow = (tv < nv + borrow) ? 1ul : 0ul;
         }
     }
-}
-
-/**
- * Montgomery modular subtraction: out = (a - b) mod n
- */
-void mont_sub(__global const uint *a,
-              __global const uint *b,
-              __global const uint *n,
-              __global uint *out,
-              uint limbs,
-              uint instance_idx) {
-    uint base = instance_idx * limbs;
-    ulong borrow = 0;
-    
-    // Compute a - b with borrow
-    for (uint i = 0; i < limbs; ++i) {
-        ulong diff = (ulong)a[base + i] - (ulong)b[base + i] - borrow;
-        out[base + i] = (uint)diff;
-        borrow = (diff < 0) ? 1 : 0;
-    }
-    
-    // If borrow, add n to make result positive
-    if (borrow) {
-        ulong carry = 0;
-        for (uint i = 0; i < limbs; ++i) {
-            ulong sum = (ulong)out[base + i] + (ulong)n[base + i] + carry;
-            out[base + i] = (uint)sum;
-            carry = sum >> 32;
-        }
+    for (uint i = 0u; i < limbs; ++i) {
+        out[i] = t[i];
     }
 }
 
-/**
- * Point swap: conditionally swap px and py based on swap_flag
- * swap_flag = 0: no swap
- * swap_flag = 1: swap
- */
-void point_cond_swap(__global uint *px, __global uint *pz,
-                     __global uint *qx, __global uint *qz,
-                     int swap_flag,
-                     uint limbs,
-                     uint instance_idx) {
-    if (swap_flag == 0) return;
-    
-    uint base = instance_idx * limbs;
-    
-    for (uint i = 0; i < limbs; ++i) {
-        uint tmp = px[base + i];
-        px[base + i] = qx[base + i];
-        qx[base + i] = tmp;
-        
-        tmp = pz[base + i];
-        pz[base + i] = qz[base + i];
-        qz[base + i] = tmp;
+inline void mont_sqr(uint *out, const uint *a, const uint *N, uint np0, uint limbs) {
+    mont_mul(out, a, a, N, np0, limbs);
+}
+
+inline void mont_normalize(uint *r, const uint *N, uint limbs) {
+    if (mp_ge(r, N, limbs)) {
+        mp_sub_n(r, r, N, limbs);
     }
 }
 
-/**
- * Test if bit at position bit_pos is set in s_bits array
- * s_bits is encoded as uint32_t array in little-endian
- */
-int get_bit(__global const uint *s_bits, uint bit_pos) {
-    uint limb_idx = bit_pos >> 5;      // bit_pos / 32
-    uint bit_idx = bit_pos & 0x1F;     // bit_pos % 32
-    
-    uint limb = s_bits[limb_idx];
-    return (limb >> bit_idx) & 1;
+// (r * m) / 2^32 mod N — d = (sigma/2^32) mod N handled on host via uint32 d
+void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
+    ulong carry = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong prod = (ulong)r[i] * (ulong)m + carry;
+        r[i] = (uint)prod;
+        carry = prod >> 32;
+    }
+    uint t1_0 = r[0];
+    uint q = (uint)((ulong)t1_0 * (ulong)np0);
+
+    uint temp[MAX_LIMBS];
+    carry = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong prod = (ulong)N[i] * (ulong)q + carry;
+        temp[i] = (uint)prod;
+        carry = prod >> 32;
+    }
+    uint carry_t2 = (uint)carry;
+
+    // shift r and temp right by 32 bits
+    for (uint i = 0u; i + 1u < limbs; ++i) {
+        r[i] = r[i + 1u];
+        temp[i] = temp[i + 1u];
+    }
+    r[limbs - 1u] = 0u;
+    temp[limbs - 1u] = 0u;
+
+    uint carry_t1 = (uint)(carry != 0ul);
+    mp_add_mod(r, r, temp, N, limbs);
+    if (carry_t1) {
+        uint one[MAX_LIMBS];
+        mp_zero(one, limbs);
+        one[0] = 1u;
+        mp_add_mod(r, r, one, N, limbs);
+    }
+    if (carry_t2) {
+        uint one[MAX_LIMBS];
+        mp_zero(one, limbs);
+        one[0] = 1u;
+        mp_add_mod(r, r, one, N, limbs);
+    }
+    if (t1_0 != 0u) {
+        uint one[MAX_LIMBS];
+        mp_zero(one, limbs);
+        one[0] = 1u;
+        mp_add_mod(r, r, one, N, limbs);
+    }
 }
 
-/**
- * Point doubling in Montgomery form (projective coordinates)
- * Input: (X:Z) coordinate pair
- * Output: 2*(X:Z)
- * 
- * Uses simplified doubling formulas that avoid field inversion.
- * Reference: "Handbook of Elliptic and Hyperelliptic Curve Cryptography" Chapter 13
- */
-void point_double(__global uint *px, __global uint *pz,
-                  __global const uint *a24,  // (A+2)/4
-                  __global const uint *n,
-                  __global uint *tmp0, __global uint *tmp1,
-                  __global uint *tmp2, __global uint *tmp3,
-                  uint np0,
-                  uint limbs,
-                  uint instance_idx) {
-    uint base = instance_idx * limbs;
-    
-    // U = (X - Z)^2
-    mont_sub(px, pz, n, tmp0, limbs, instance_idx);  // tmp0 = X - Z
-    cgbn_mont_sqr(tmp0, n, tmp0, np0, limbs, instance_idx);  // U = tmp0^2
-    
-    // V = (X + Z)^2
-    mont_add(px, pz, n, tmp1, limbs, instance_idx);  // tmp1 = X + Z
-    cgbn_mont_sqr(tmp1, n, tmp1, np0, limbs, instance_idx);  // V = tmp1^2
-    
-    // W = V - U
-    mont_sub(tmp1, tmp0, n, tmp2, limbs, instance_idx);  // W = V - U
-    
-    // X' = U * V
-    cgbn_mont_mul(tmp0, tmp1, n, px, np0, limbs, instance_idx);  // X' = U * V
-    
-    // Z' = ((A+2)/4) * W^2 + ... (complex formula)
-    // Simplified Montgomery doubling formula
-    cgbn_mont_sqr(tmp2, n, tmp3, np0, limbs, instance_idx);  // tmp3 = W^2
-    cgbn_mont_mul(tmp2, tmp3, n, pz, np0, limbs, instance_idx);  // Z' = W^2 * ... (simplified)
-}
-
-/**
- * Differential point addition
- * Given P, Q where P-Q is known (stored in x_pq), compute P+Q
- * Maintains projective coordinates without explicit y-coordinates
- */
-void point_add(__global uint *px, __global uint *pz,
-               __global uint *qx, __global uint *qz,
-               __global const uint *x_pq_minus_q,  // x coordinate of P-Q
-               __global const uint *n,
-               __global uint *tmp0, __global uint *tmp1,
-               __global uint *tmp2, __global uint *tmp3,
-               uint np0,
-               uint limbs,
-               uint instance_idx) {
-    uint base = instance_idx * limbs;
-    
-    // Differential addition formula (requires knowing x(P-Q))
-    // A = (X_p - Z_p) * (X_q + Z_q)
-    mont_sub(px, pz, n, tmp0, limbs, instance_idx);
-    mont_add(qx, qz, n, tmp1, limbs, instance_idx);
-    cgbn_mont_mul(tmp0, tmp1, n, tmp0, np0, limbs, instance_idx);
-    
-    // B = (X_p + Z_p) * (X_q - Z_q)
-    mont_add(px, pz, n, tmp1, limbs, instance_idx);
-    mont_sub(qx, qz, n, tmp2, limbs, instance_idx);
-    cgbn_mont_mul(tmp1, tmp2, n, tmp1, np0, limbs, instance_idx);
-    
-    // C = (A + B)^2
-    mont_add(tmp0, tmp1, n, tmp2, limbs, instance_idx);
-    cgbn_mont_sqr(tmp2, n, tmp2, np0, limbs, instance_idx);
-    
-    // D = (A - B)^2
-    mont_sub(tmp0, tmp1, n, tmp3, limbs, instance_idx);
-    cgbn_mont_sqr(tmp3, n, tmp3, np0, limbs, instance_idx);
-    
-    // X_result = Z(P-Q) * C
-    cgbn_mont_mul(x_pq_minus_q, tmp2, n, px, np0, limbs, instance_idx);
-    
-    // Z_result = x(P-Q) * D
-    cgbn_mont_mul(tmp3, tmp3, n, pz, np0, limbs, instance_idx);
-}
-
-/**
- * Montgomery Ladder: compute s*P where s is bit sequence
- * Maintains two points that differ by the input point at all times
- * Immune to side-channel attacks (constant time)
- * 
- * Algorithm:
- *   R0 = infinity, R1 = P
- *   for each bit in s (MSB to LSB):
- *     if bit = 0: (R0, R1) = (2*R0, R0+R1)
- *     if bit = 1: (R0, R1) = (R0+R1, 2*R1)
- */
-__kernel void kernel_ecm_stage1(
-    __global const uint *s_bits,        // s encoded as bits (uint32 array)
-    uint s_num_bits,                    // total number of bits in s
-    uint s_start_bit,                   // starting bit index for this invocation
-    uint s_bits_per_invocation,         // how many bits to process
-    __global const uint *curve_data,    // curve initialization data (x, z, A24, etc per curve)
-    __global uint *curve_results,       // output (x_final, z_final per curve)
-    __global const uint *modulus,       // N (modulo)
-    uint np0,                           // N^{-1} mod 2^32 (Montgomery parameter)
-    uint num_curves,                    // number of curves
-    uint limbs,                         // number of uint32 limbs per big number
-    uint verbose)
+// Simultaneous double-and-add (CUDA curve_t::double_add_v2)
+void double_add_v2(
+    uint *q, uint *u, uint *w, uint *v,
+    uint d, const uint *N, uint np0, uint limbs)
 {
-    // Each work-item processes one curve instance
-    uint curve_id = get_global_id(0);
-    if (curve_id >= num_curves) {
-        return;
+    uint t[MAX_LIMBS], CB[MAX_LIMBS], DA[MAX_LIMBS], AA[MAX_LIMBS], BB[MAX_LIMBS];
+    uint K[MAX_LIMBS], dK[MAX_LIMBS];
+
+    mp_add_mod(t, v, w, N, limbs);
+    if (mp_sub_mod(v, v, w, N, limbs)) {
+        mp_add_mod(v, v, N, N, limbs);
     }
-    
-    if (limbs == 0 || limbs > MAX_LIMBS) {
-        return;
+
+    mp_add_mod(w, u, q, N, limbs);
+    if (mp_sub_mod(u, u, q, N, limbs)) {
+        mp_add_mod(u, u, N, N, limbs);
     }
-    
-    // Allocate private memory for temporary variables
-    uint tmp[6 * MAX_LIMBS];  // 6 temp buffers for Montgomery operations
-    
-    // Initialize from curve_data
-    // curve_data layout: [x_init, z_init, A24, ...] per curve
-    uint curve_base = curve_id * (5 * limbs);  // 5 limbs per curve (x, z, A24, B, C)
-    
-    __global uint *px = (__global uint *)(curve_data + curve_base);
-    __global uint *pz = (__global uint *)(curve_data + curve_base + limbs);
-    __global uint *a24 = (__global uint *)(curve_data + curve_base + 2*limbs);
-    
-    // Initialize second point (auxiliary for ladder)
-    // qx = 1, qz = 0 (point at infinity in x coordinate projection)
-    uint local_qx[MAX_LIMBS];
-    uint local_qz[MAX_LIMBS];
-    uint local_px[MAX_LIMBS];
-    uint local_pz[MAX_LIMBS];
-    
-    // Copy px, pz to local memory (private in GPU terms)
-    for (uint i = 0; i < limbs; ++i) {
-        local_px[i] = px[curve_base + i];
-        local_pz[i] = pz[curve_base + i];
+
+    mont_mul(CB, t, u, N, np0, limbs);
+    mont_normalize(CB, N, limbs);
+    mont_mul(DA, v, w, N, np0, limbs);
+    mont_normalize(DA, N, limbs);
+
+    mont_sqr(AA, w, N, np0, limbs);
+    mont_sqr(BB, u, N, np0, limbs);
+    mont_normalize(AA, N, limbs);
+    mont_normalize(BB, N, limbs);
+
+    mont_mul(q, AA, BB, N, np0, limbs);
+    mont_normalize(q, N, limbs);
+
+    if (mp_sub_mod(K, AA, BB, N, limbs)) {
+        mp_add_mod(K, K, N, N, limbs);
     }
-    
-    // Initialize Q point (for differential addition reference)
-    // Q = P initially
-    for (uint i = 0; i < limbs; ++i) {
-        local_qx[i] = local_px[i];
-        local_qz[i] = local_pz[i];
+
+    mp_copy(dK, K, limbs);
+    special_mult_ui32(dK, d, N, np0, limbs);
+
+    mp_add_mod(u, BB, dK, N, limbs);
+    mont_mul(u, K, u, N, np0, limbs);
+    mont_normalize(u, N, limbs);
+
+    mp_add_mod(w, DA, CB, N, limbs);
+    if (mp_sub_mod(v, DA, CB, N, limbs)) {
+        mp_add_mod(v, v, N, N, limbs);
     }
-    
-    // Montgomery Ladder main loop
-    int last_bit = 0;  // track bit state for conditional swap
-    uint s_end = min(s_start_bit + s_bits_per_invocation, s_num_bits);
-    
-    for (uint bit_idx = s_start_bit; bit_idx < s_end; ++bit_idx) {
-        int bit_val = get_bit(s_bits, bit_idx);
-        
-        // Conditional swap based on XOR of current bit and last bit
-        int do_swap = (bit_val ^ last_bit);
-        
-        if (do_swap) {
-            // Swap px, pz with qx, qz
-            for (uint i = 0; i < limbs; ++i) {
-                uint t = local_px[i];
-                local_px[i] = local_qx[i];
-                local_qx[i] = t;
-                
-                t = local_pz[i];
-                local_pz[i] = local_qz[i];
-                local_qz[i] = t;
-            }
-        }
-        
-        // Double-add step (always executed, constant time)
-        // This would call point_double and point_add
-        // For brevity, marking as placeholder - full implementation would expand these
-        
-        last_bit = bit_val;
-    }
-    
-    // Final conditional swap to ensure correct result in px, pz
-    if (last_bit) {
-        for (uint i = 0; i < limbs; ++i) {
-            uint t = local_px[i];
-            local_px[i] = local_qx[i];
-            local_qx[i] = t;
-            
-            t = local_pz[i];
-            local_pz[i] = local_qz[i];
-            local_qz[i] = t;
-        }
-    }
-    
-    // Store results to global memory
-    __global uint *result_x = (__global uint *)(curve_results + curve_id * 2 * limbs);
-    __global uint *result_z = (__global uint *)(curve_results + curve_id * 2 * limbs + limbs);
-    
-    for (uint i = 0; i < limbs; ++i) {
-        result_x[i] = local_px[i];
-        result_z[i] = local_pz[i];
+
+    mont_sqr(w, w, N, np0, limbs);
+    mont_normalize(w, N, limbs);
+    mont_sqr(v, v, N, np0, limbs);
+    mont_normalize(v, N, limbs);
+    mp_shift_left_1_mod(v, v, N, limbs);
+}
+
+inline void swap_limbs(uint *a, uint *b, uint limbs) {
+    for (uint i = 0u; i < limbs; ++i) {
+        uint tmp = a[i];
+        a[i] = b[i];
+        b[i] = tmp;
     }
 }
 
-/**
- * Placeholder for aggregated Montgomery operations that would be inlined or
- * called as separate kernels to reduce register pressure
- */
+// ---------------------------------------------------------------------------
+// Main kernel — mirrors CUDA kernel_double_add
+// data layout per curve (5 * limbs uint32): N, aX, aZ, bX, bZ
+// ---------------------------------------------------------------------------
 
-// Mont_sqr - would be called via separate kernel or inlined
-// Implementation details would use CIOS method similar to mont.cl cgbn_mont_sqr
+__kernel void kernel_double_add(
+    __global const uint *s_bits,
+    ulong s_num_bits,
+    ulong s_bits_start,
+    ulong s_bits_interval,
+    __global uint *data,
+    uint count,
+    uint sigma_0,
+    uint np0,
+    uint limbs)
+{
+    uint instance_i = get_global_id(0);
+    if (instance_i >= count) {
+        return;
+    }
+    if (limbs == 0u || limbs > MAX_LIMBS) {
+        return;
+    }
 
-// Mont_mul - would be called via separate kernel or inlined  
-// Implementation details would use CIOS method similar to mont.cl cgbn_mont_mul
+    uint base = instance_i * 5u * limbs;
+    uint N[MAX_LIMBS];
+    uint aX[MAX_LIMBS], aZ[MAX_LIMBS], bX[MAX_LIMBS], bZ[MAX_LIMBS];
+
+    for (uint i = 0u; i < limbs; ++i) {
+        N[i] = data[base + i];
+        aX[i] = data[base + limbs + i];
+        aZ[i] = data[base + 2u * limbs + i];
+        bX[i] = data[base + 3u * limbs + i];
+        bZ[i] = data[base + 4u * limbs + i];
+    }
+
+    // Values are uploaded in Montgomery form from host; ladder runs in mont domain.
+    uint d = sigma_0 + instance_i;
+    int swapped = 0;
+
+    ulong s_end = s_bits_start + s_bits_interval;
+    if (s_end > s_num_bits) {
+        s_end = s_num_bits;
+    }
+
+    for (ulong b = s_bits_start; b < s_end; ++b) {
+        ulong nth = s_num_bits - 1ul - b;
+        uint limb_idx = (uint)(nth >> 5);
+        uint bit_idx = (uint)(nth & 31ul);
+        int bit = (int)((s_bits[limb_idx] >> bit_idx) & 1u);
+
+        if (bit != swapped) {
+            swapped = !swapped;
+            swap_limbs(aX, bX, limbs);
+            swap_limbs(aZ, bZ, limbs);
+        }
+        double_add_v2(aX, aZ, bX, bZ, d, N, np0, limbs);
+    }
+
+    if (swapped) {
+        swap_limbs(aX, bX, limbs);
+        swap_limbs(aZ, bZ, limbs);
+    }
+
+    for (uint i = 0u; i < limbs; ++i) {
+        data[base + limbs + i] = aX[i];
+        data[base + 2u * limbs + i] = aZ[i];
+        data[base + 3u * limbs + i] = bX[i];
+        data[base + 4u * limbs + i] = bZ[i];
+    }
+}

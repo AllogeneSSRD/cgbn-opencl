@@ -19,7 +19,7 @@ add_library(opencl_ecm_entry STATIC
 
 add_executable(ecm
     src/ecm_driver.cpp
-    src/cgbn_stage1_stub.cpp
+    src/cgbn_stage1_opencl.cpp
 )
 target_sources(ecm PRIVATE
     src/ecm_params_init.cpp
@@ -35,9 +35,14 @@ target_include_directories(ecm PRIVATE
 target_link_libraries(ecm
     opencl_ecm_entry
     cgbn_opencl
+    OpenCL::OpenCL
     OpenSSL::SSL
     OpenSSL::Crypto
     "D:/code/vcpkg/installed/x64-windows/lib/gmp.lib"
+)
+
+target_include_directories(ecm PRIVATE
+    ${CMAKE_SOURCE_DIR}/cgbn/backends/opencl
 )
 
 add_executable(opencl_addsub
