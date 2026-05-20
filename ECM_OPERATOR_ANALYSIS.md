@@ -330,3 +330,25 @@ Rationale:
 - current measured throughput favors WG kernels for montgomery multiplication.
 - private path remains available for regression checks and edge-case fallback.
 
+## 15) WG Optimization Round-2 (Local Memory Footprint Reduction)
+
+Change:
+
+- simplified WG local memory provisioning from oversized scratch layout to minimal needed layout:
+  - `t[(limbs+1)] + operand_cache_1[limbs] + operand_cache_2[limbs]`
+- removed dependence on extra scratch slots no longer used after serial conditional-sub path.
+
+Observed effects:
+
+- local memory per WG kernel reduced:
+  - 2048-bit: from ~1328 B to ~800 B
+  - 1024-bit: from ~688 B to ~416 B
+- throughput remained strong with WG still ahead on `mont_mul`:
+  - 2048-bit `mont_mul_wg`: ~545k ops/s (vs private ~250k in same run)
+  - 1024-bit `mont_mul_wg`: ~1.874M ops/s (vs private ~1.489M in same run)
+
+Interpretation:
+
+- reducing local footprint did not compromise throughput and improves occupancy headroom.
+- WG path remains the preferred direction for multiplication acceleration.
+

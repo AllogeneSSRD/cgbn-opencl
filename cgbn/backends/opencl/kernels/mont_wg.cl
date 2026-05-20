@@ -53,7 +53,8 @@ __kernel void cgbn_mont_mul_wg(
     }
     barrier(CLK_LOCAL_MEM_FENCE);
     
-    // Thread 0 executes the full CIOS, other threads help with subtraction
+    // Thread 0 executes the full CIOS + conditional subtraction.
+    // Other threads are used for data movement and final writeback.
     if (tid == 0u) {
         uint t_hi = 0u;
         
@@ -92,15 +93,6 @@ __kernel void cgbn_mont_mul_wg(
             t_hi = (uint)(top2 >> 32);
         }
         
-        // Store t_hi for conditional subtraction
-        local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2] = t_hi;
-    }
-    barrier(CLK_LOCAL_MEM_FENCE);
-    
-    // Conditional subtraction: keep serial in tid0 to reduce synchronization
-    // overhead. Main CIOS path is already tid0-dominated.
-    if (tid == 0u) {
-        uint t_hi = local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2];
         int ge = (t_hi != 0u || t[limbs] != 0u) ? 1 : 0;
         if (!ge) {
             for (int i = (int)limbs - 1; i >= 0; --i) {
@@ -173,7 +165,8 @@ __kernel void cgbn_mont_sqr_wg(
     }
     barrier(CLK_LOCAL_MEM_FENCE);
     
-    // Thread 0 executes the full CIOS, other threads help with subtraction
+    // Thread 0 executes the full CIOS + conditional subtraction.
+    // Other threads are used for data movement and final writeback.
     if (tid == 0u) {
         uint t_hi = 0u;
         
@@ -212,15 +205,6 @@ __kernel void cgbn_mont_sqr_wg(
             t_hi = (uint)(top2 >> 32);
         }
         
-        // Store t_hi for conditional subtraction
-        local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2] = t_hi;
-    }
-    barrier(CLK_LOCAL_MEM_FENCE);
-    
-    // Conditional subtraction: keep serial in tid0 to reduce synchronization
-    // overhead. Main CIOS path is already tid0-dominated.
-    if (tid == 0u) {
-        uint t_hi = local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2];
         int ge = (t_hi != 0u || t[limbs] != 0u) ? 1 : 0;
         if (!ge) {
             for (int i = (int)limbs - 1; i >= 0; --i) {

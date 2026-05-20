@@ -251,7 +251,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
             clSetKernelArg(k, 5, sizeof(cl_uint), &iters);
         }
-        size_t local_mem_size = ((WORDS + 1u) * 3u + WORDS * 2u + (uint32_t)tpi) * sizeof(uint32_t);
+        size_t local_mem_size = ((WORDS + 1u) + WORDS + WORDS) * sizeof(uint32_t);
         clSetKernelArg(k, is_mul ? 7 : 6, local_mem_size, nullptr);
 
         size_t local = (size_t)tpi;
