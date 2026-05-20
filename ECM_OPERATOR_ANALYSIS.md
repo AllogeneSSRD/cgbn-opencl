@@ -317,3 +317,16 @@ Note:
 - to keep comparisons fair, always compare with identical `bits/instances/iterations/repeats`.
 - keep WG as optional mode while validating correctness and full stage-1 integration behavior.
 
+## 14) Tooling Default Policy
+
+`opencl_ecm_addsub` now defaults to WG mode for multiplication path exploration.
+
+- default mode: WG (`--use-wg`)
+- fallback mode: private (`--no-wg`)
+- TPI configurable: `--tpi <N>`
+
+Rationale:
+
+- current measured throughput favors WG kernels for montgomery multiplication.
+- private path remains available for regression checks and edge-case fallback.
+

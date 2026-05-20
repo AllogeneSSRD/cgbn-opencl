@@ -345,6 +345,19 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                   << " ops/s" << std::endl;
         std::cout << "mont_sqr_wg:   " << t_sqr_wg << " ms, " << (op_count / (t_sqr_wg / 1000.0))
                   << " ops/s" << std::endl;
+        if (csv_enabled) {
+            csv << "summary_selected_mont_mul_wg," << t_mul_wg << ","
+                << (op_count / (t_mul_wg / 1000.0)) << ",0,0,0,0\n";
+            csv << "summary_selected_mont_sqr_wg," << t_sqr_wg << ","
+                << (op_count / (t_sqr_wg / 1000.0)) << ",0,0,0,0\n";
+        }
+    } else {
+        if (csv_enabled) {
+            csv << "summary_selected_mont_mul_priv," << t_mul_priv << ","
+                << (op_count / (t_mul_priv / 1000.0)) << ",0,0,0,0\n";
+            csv << "summary_selected_mont_sqr_priv," << t_sqr_priv << ","
+                << (op_count / (t_sqr_priv / 1000.0)) << ",0,0,0,0\n";
+        }
     }
 
     clReleaseMemObject(bufA);
@@ -367,7 +380,7 @@ int main(int argc, char **argv) {
     int kernel_iterations = 1000;
     int instances = 256;
     int launch_repeats = 50;
-    bool use_wg = false;
+    bool use_wg = true;
     int tpi = 4;
     std::vector<std::string> pos;
     for (int i = 1; i < argc; ++i) {
@@ -378,6 +391,10 @@ int main(int argc, char **argv) {
         }
         if (a == "--use-wg") {
             use_wg = true;
+            continue;
+        }
+        if (a == "--no-wg") {
+            use_wg = false;
             continue;
         }
         if (a == "--tpi" && i + 1 < argc) {
