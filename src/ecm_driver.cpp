@@ -304,11 +304,31 @@ static bool compute_batch_s(mpz_t s, double B1){
     return true;
 }
 
+static bool parse_sigma_arg(const std::string &arg, uint32_t *sigma_out) {
+    std::string s = arg;
+    size_t colon = s.find(':');
+    if (colon != std::string::npos) {
+        s = s.substr(colon + 1);
+    }
+    try {
+        unsigned long long v = std::stoull(s);
+        if (v == 0 || v > 0xFFFFFFFFull) {
+            return false;
+        }
+        *sigma_out = (uint32_t)v;
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 int main(int argc, char **argv){
     bool verbose = false;
     bool use_gpu = false;
     uint32_t gpucurves = 0;
     unsigned long gpuckpt_ms = ECM_DEFAULT_GPU_CHECKPOINT_INTERVAL_MS;
+    bool sigma_fixed = false;
+    uint32_t fixed_sigma = 0;
     // parse args simple
     std::vector<std::string> pos;
     for(int i=1;i<argc;i++){
@@ -317,6 +337,14 @@ int main(int argc, char **argv){
         if(a == "-gpu") { use_gpu = true; continue; }
         if(a == "-gpucurves" && i+1<argc){ gpucurves = (uint32_t)std::stoul(argv[++i]); continue; }
         if(a == "-gpuckpt" && i+1<argc){ gpuckpt_ms = (unsigned long) std::stoul(argv[++i]); continue; }
+        if(a == "-sigma" && i+1<argc){
+            if(!parse_sigma_arg(argv[++i], &fixed_sigma)){
+                std::cerr << "Invalid -sigma value (need 1..2^32-1, optional param:3: prefix)" << std::endl;
+                return 1;
+            }
+            sigma_fixed = true;
+            continue;
+        }
         pos.push_back(a);
     }
 
@@ -421,7 +449,11 @@ int main(int argc, char **argv){
     int *array_found = (int*) malloc(sizeof(int)*curves);
     for(uint32_t i=0;i<curves;i++){ mpz_init(factors[i]); array_found[i]=ECM_NO_FACTOR_FOUND; }
 
-    uint32_t firstsigma = gpu_pick_random_sigma(curves);
+    uint32_t firstsigma = sigma_fixed ? fixed_sigma : gpu_pick_random_sigma(curves);
+    if ((uint64_t)firstsigma + curves > 0x100000000ull) {
+        std::cerr << "sigma range overflows uint32 (sigma + curves > 2^32)" << std::endl;
+        return 1;
+    }
     uint32_t lastsigma = firstsigma + curves - 1;
 
     mpz_t batch_d;

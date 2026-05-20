@@ -39,6 +39,16 @@ inline void mp_sub_n(uint *r, const uint *a, const uint *N, uint limbs) {
     }
 }
 
+inline uint mp_add_n(uint *r, const uint *a, const uint *b, uint limbs) {
+    ulong carry = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong sum = (ulong)a[i] + (ulong)b[i] + carry;
+        r[i] = (uint)sum;
+        carry = sum >> 32;
+    }
+    return (uint)carry;
+}
+
 inline void mp_add_mod(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
     ulong carry = 0ul;
     for (uint i = 0u; i < limbs; ++i) {
@@ -62,7 +72,8 @@ inline int mp_sub_mod(uint *r, const uint *a, const uint *b, const uint *N, uint
         borrow = (av < bv + borrow) ? 1ul : 0ul;
     }
     if (borrow) {
-        mp_add_mod(r, r, N, N, limbs);
+        // For subtraction underflow, add modulus without modular reduction.
+        (void)mp_add_n(r, r, N, limbs);
         return 1;
     }
     return 0;
@@ -80,135 +91,62 @@ inline void mp_shift_left_1_mod(uint *r, const uint *a, const uint *N, uint limb
     }
 }
 
-// Montgomery multiplication: out = a*b*R^{-1} mod N  (CIOS, private arrays)
-void mont_mul(uint *out, const uint *a, const uint *b, const uint *N, uint np0, uint limbs) {
-    if (limbs == 0u || limbs > MAX_LIMBS) {
-        return;
-    }
-
-    uint t[MAX_LIMBS + 1];
-    uint B[MAX_LIMBS];
-    for (uint i = 0u; i <= limbs; ++i) {
-        t[i] = 0u;
-    }
-    uint t_hi = 0u;
-    for (uint j = 0u; j < limbs; ++j) {
-        B[j] = b[j];
-    }
-
-    for (uint i = 0u; i < limbs; ++i) {
-        uint ai = a[i];
-        ulong carry = 0ul;
-        for (uint j = 0u; j < limbs; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
-            t[j] = (uint)uv;
-            carry = uv >> 32;
-        }
-        ulong uvh = (ulong)t[limbs] + carry;
-        t[limbs] = (uint)uvh;
-        t_hi += (uint)(uvh >> 32);
-
-        uint m = (uint)((ulong)t[0] * (ulong)np0);
-        carry = 0ul;
-        for (uint j = 0u; j < limbs; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
-            if (j > 0u) {
-                t[j - 1u] = (uint)uv;
-            }
-            carry = uv >> 32;
-        }
-        ulong top = (ulong)t[limbs] + carry;
-        t[limbs - 1u] = (uint)top;
-        ulong top2 = (ulong)t_hi + (top >> 32);
-        t[limbs] = (uint)top2;
-        t_hi = (uint)(top2 >> 32);
-    }
-
-    int ge = (t_hi != 0u || t[limbs] != 0u) ? 1 : 0;
-    if (!ge) {
-        for (int i = (int)limbs - 1; i >= 0; --i) {
-            if (t[(uint)i] > N[(uint)i]) {
-                ge = 1;
-                break;
-            }
-            if (t[(uint)i] < N[(uint)i]) {
-                ge = 0;
-                break;
-            }
-        }
-    }
-    if (ge) {
-        ulong borrow = 0ul;
-        for (uint i = 0u; i < limbs; ++i) {
-            ulong tv = (ulong)t[i];
-            ulong nv = (ulong)N[i];
-            ulong w = tv - nv - borrow;
-            t[i] = (uint)w;
-            borrow = (tv < nv + borrow) ? 1ul : 0ul;
-        }
-    }
-    for (uint i = 0u; i < limbs; ++i) {
-        out[i] = t[i];
-    }
-}
-
-inline void mont_sqr(uint *out, const uint *a, const uint *N, uint np0, uint limbs) {
-    mont_mul(out, a, a, N, np0, limbs);
-}
-
 inline void mont_normalize(uint *r, const uint *N, uint limbs) {
     if (mp_ge(r, N, limbs)) {
         mp_sub_n(r, r, N, limbs);
     }
 }
 
-// (r * m) / 2^32 mod N — d = (sigma/2^32) mod N handled on host via uint32 d
-void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
+// r <- low limbs of (r * m); returns overflow limb above r
+inline uint mul_ui32_limbs(uint *r, uint m, uint limbs) {
     ulong carry = 0ul;
     for (uint i = 0u; i < limbs; ++i) {
         ulong prod = (ulong)r[i] * (ulong)m + carry;
         r[i] = (uint)prod;
         carry = prod >> 32;
     }
+    return (uint)carry;
+}
+
+inline void shift_right_32_limbs(uint *r, uint limbs) {
+    for (uint i = 0u; i + 1u < limbs; ++i) {
+        r[i] = r[i + 1u];
+    }
+    r[limbs - 1u] = 0u;
+}
+
+// (r * m) / 2^32 mod N — ported from CUDA curve_t::special_mult_ui32
+void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
+    uint carry_t1 = mul_ui32_limbs(r, m, limbs);
     uint t1_0 = r[0];
     uint q = (uint)((ulong)t1_0 * (ulong)np0);
 
     uint temp[MAX_LIMBS];
-    carry = 0ul;
-    for (uint i = 0u; i < limbs; ++i) {
-        ulong prod = (ulong)N[i] * (ulong)q + carry;
-        temp[i] = (uint)prod;
-        carry = prod >> 32;
-    }
-    uint carry_t2 = (uint)carry;
+    mp_copy(temp, N, limbs);
+    uint carry_t2 = mul_ui32_limbs(temp, q, limbs);
 
-    // shift r and temp right by 32 bits
-    for (uint i = 0u; i + 1u < limbs; ++i) {
-        r[i] = r[i + 1u];
-        temp[i] = temp[i + 1u];
-    }
-    r[limbs - 1u] = 0u;
-    temp[limbs - 1u] = 0u;
+    shift_right_32_limbs(r, limbs);
+    shift_right_32_limbs(temp, limbs);
+    r[limbs - 1u] = carry_t1;
+    temp[limbs - 1u] = carry_t2;
 
-    uint carry_t1 = (uint)(carry != 0ul);
-    mp_add_mod(r, r, temp, N, limbs);
-    if (carry_t1) {
-        uint one[MAX_LIMBS];
-        mp_zero(one, limbs);
-        one[0] = 1u;
-        mp_add_mod(r, r, one, N, limbs);
-    }
-    if (carry_t2) {
-        uint one[MAX_LIMBS];
-        mp_zero(one, limbs);
-        one[0] = 1u;
-        mp_add_mod(r, r, one, N, limbs);
-    }
-    if (t1_0 != 0u) {
-        uint one[MAX_LIMBS];
-        mp_zero(one, limbs);
-        one[0] = 1u;
-        mp_add_mod(r, r, one, N, limbs);
+    {
+        int carry_q = (int)mp_add_n(r, r, temp, limbs);
+        if (t1_0 != 0u) {
+            uint carry1 = 1u;
+            for (uint i = 0u; i < limbs && carry1 != 0u; ++i) {
+                ulong sum = (ulong)r[i] + (ulong)carry1;
+                r[i] = (uint)sum;
+                carry1 = (uint)(sum >> 32);
+            }
+            carry_q += (int)carry1;
+        }
+        if (carry_q > 0) {
+            mp_sub_n(r, r, N, limbs);
+        }
+        if (mp_ge(r, N, limbs)) {
+            mp_sub_n(r, r, N, limbs);
+        }
     }
 }
 
@@ -221,47 +159,39 @@ void double_add_v2(
     uint K[MAX_LIMBS], dK[MAX_LIMBS];
 
     mp_add_mod(t, v, w, N, limbs);
-    if (mp_sub_mod(v, v, w, N, limbs)) {
-        mp_add_mod(v, v, N, N, limbs);
-    }
+    (void)mp_sub_mod(v, v, w, N, limbs);
 
     mp_add_mod(w, u, q, N, limbs);
-    if (mp_sub_mod(u, u, q, N, limbs)) {
-        mp_add_mod(u, u, N, N, limbs);
-    }
+    (void)mp_sub_mod(u, u, q, N, limbs);
 
-    mont_mul(CB, t, u, N, np0, limbs);
+    mont_mul_priv(CB, t, u, N, np0, limbs);
     mont_normalize(CB, N, limbs);
-    mont_mul(DA, v, w, N, np0, limbs);
+    mont_mul_priv(DA, v, w, N, np0, limbs);
     mont_normalize(DA, N, limbs);
 
-    mont_sqr(AA, w, N, np0, limbs);
-    mont_sqr(BB, u, N, np0, limbs);
+    mont_sqr_priv(AA, w, N, np0, limbs);
+    mont_sqr_priv(BB, u, N, np0, limbs);
     mont_normalize(AA, N, limbs);
     mont_normalize(BB, N, limbs);
 
-    mont_mul(q, AA, BB, N, np0, limbs);
+    mont_mul_priv(q, AA, BB, N, np0, limbs);
     mont_normalize(q, N, limbs);
 
-    if (mp_sub_mod(K, AA, BB, N, limbs)) {
-        mp_add_mod(K, K, N, N, limbs);
-    }
+    (void)mp_sub_mod(K, AA, BB, N, limbs);
 
     mp_copy(dK, K, limbs);
     special_mult_ui32(dK, d, N, np0, limbs);
 
     mp_add_mod(u, BB, dK, N, limbs);
-    mont_mul(u, K, u, N, np0, limbs);
+    mont_mul_priv(u, K, u, N, np0, limbs);
     mont_normalize(u, N, limbs);
 
     mp_add_mod(w, DA, CB, N, limbs);
-    if (mp_sub_mod(v, DA, CB, N, limbs)) {
-        mp_add_mod(v, v, N, N, limbs);
-    }
+    (void)mp_sub_mod(v, DA, CB, N, limbs);
 
-    mont_sqr(w, w, N, np0, limbs);
+    mont_sqr_priv(w, w, N, np0, limbs);
     mont_normalize(w, N, limbs);
-    mont_sqr(v, v, N, np0, limbs);
+    mont_sqr_priv(v, v, N, np0, limbs);
     mont_normalize(v, N, limbs);
     mp_shift_left_1_mod(v, v, N, limbs);
 }
@@ -310,7 +240,7 @@ __kernel void kernel_double_add(
         bZ[i] = data[base + 4u * limbs + i];
     }
 
-    // Values are uploaded in Montgomery form from host; ladder runs in mont domain.
+    // Curve coordinates are stored in Montgomery form (host set_p_2p).
     uint d = sigma_0 + instance_i;
     int swapped = 0;
 
