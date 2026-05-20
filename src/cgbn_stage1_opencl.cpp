@@ -17,6 +17,16 @@
 #include <string>
 #include <vector>
 
+#ifdef _WIN32
+#include <process.h>
+#ifndef getpid
+#define getpid _getpid
+#endif
+#else
+#include <unistd.h>
+#endif
+#include <ctime>
+
 #define CARRY_BITS 6
 
 static cgbn::opencl::context_t g_ctx;
@@ -24,6 +34,7 @@ static bool g_ctx_ready = false;
 static cl_program g_ecm_program = nullptr;
 static cl_kernel g_ecm_kernel = nullptr;
 static uint32_t g_kernel_limbs = 0;
+static bool g_device_info_printed = false;
 
 static void ocl_log_verbose(int verbose, const char *fmt, ...) {
     if (verbose < 1) {
@@ -33,6 +44,89 @@ static void ocl_log_verbose(int verbose, const char *fmt, ...) {
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
     va_end(ap);
+}
+
+static int print_nth_batch(int n) {
+    return ((n < 3) || (n < 30 && n % 10 == 0) || (n < 500 && n % 100 == 0) ||
+            (n < 5000 && n % 1000 == 0) || (n % 10000 == 0));
+}
+
+static void print_opencl_device_info(int device_index, double init_ms) {
+    if (!g_ctx_ready) {
+        return;
+    }
+
+    char dev_name[512] = {0};
+    char dev_version[256] = {0};
+    char driver_version[256] = {0};
+    cl_uint compute_units = 0;
+    cl_ulong local_mem = 0;
+    size_t max_wg = 0;
+    cl_ulong max_mem_alloc = 0;
+
+    clGetDeviceInfo(g_ctx.device, CL_DEVICE_NAME, sizeof(dev_name) - 1, dev_name, nullptr);
+    clGetDeviceInfo(g_ctx.device, CL_DEVICE_VERSION, sizeof(dev_version) - 1, dev_version,
+                    nullptr);
+    clGetDeviceInfo(g_ctx.device, CL_DRIVER_VERSION, sizeof(driver_version) - 1,
+                    driver_version, nullptr);
+    clGetDeviceInfo(g_ctx.device, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(compute_units),
+                    &compute_units, nullptr);
+    clGetDeviceInfo(g_ctx.device, CL_DEVICE_LOCAL_MEM_SIZE, sizeof(local_mem), &local_mem,
+                    nullptr);
+    clGetDeviceInfo(g_ctx.device, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(max_wg), &max_wg,
+                    nullptr);
+    clGetDeviceInfo(g_ctx.device, CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(max_mem_alloc),
+                    &max_mem_alloc, nullptr);
+
+    fprintf(stdout, "GPU: will use device %d: %s, %s, %u compute units.\n", device_index,
+            dev_name, dev_version, compute_units);
+    fprintf(stdout, "GPU: driver %s\n", driver_version);
+    fprintf(stdout,
+            "GPU: maxSharedPerBlock = %lu maxThreadsPerBlock = %zu maxMemAllocPerBuffer = %lu\n",
+            (unsigned long)local_mem, max_wg, (unsigned long)max_mem_alloc);
+    fprintf(stdout, "GPU: Selection and initialization of the device took %.0fms\n", init_ms);
+    fflush(stdout);
+}
+
+// Uniform sigma in [1, UINT32_MAX - curves] for ECM_PARAM_BATCH_32BITS_D.
+extern "C" uint32_t gpu_pick_random_sigma(uint32_t curves) {
+    if (curves == 0 || (uint64_t)curves >= (uint64_t)UINT32_MAX) {
+        return 2u;
+    }
+
+    gmp_randstate_t rng;
+    gmp_randinit_default(rng);
+    unsigned long seed = (unsigned long)time(nullptr);
+    seed ^= (unsigned long)getpid() * 0x9e3779b9ul;
+    seed ^= (unsigned long)std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    gmp_randseed_ui(rng, seed);
+
+    mpz_t range, r;
+    mpz_init(range);
+    mpz_init(r);
+    mpz_set_ui(range, 0);
+    mpz_setbit(range, 32);
+    mpz_sub_ui(range, range, (unsigned long)curves);
+    mpz_urandomm(r, rng, range);
+    uint32_t sigma = (uint32_t)mpz_get_ui(r) + 1u;
+
+    mpz_clear(range);
+    mpz_clear(r);
+    gmp_randclear(rng);
+    return sigma;
+}
+
+extern "C" void gpu_compute_batch_d(mpz_t d_out, uint32_t sigma, const mpz_t N) {
+    mpz_t pow2_32, inv;
+    mpz_init(pow2_32);
+    mpz_init(inv);
+    mpz_ui_pow_ui(pow2_32, 2, 32);
+    mpz_invert(inv, pow2_32, N);
+    mpz_set_ui(d_out, sigma);
+    mpz_mul(d_out, d_out, inv);
+    mpz_mod(d_out, d_out, N);
+    mpz_clear(pow2_32);
+    mpz_clear(inv);
 }
 
 static void from_mpz(const mpz_t s, uint32_t *x, uint32_t count) {
@@ -223,10 +317,15 @@ static uint32_t select_bits(size_t n_log2) {
     return 0;
 }
 
-static int ensure_ecm_kernel(uint32_t limbs, int verbose) {
+static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms) {
     if (g_ecm_kernel && g_kernel_limbs == limbs) {
+        if (device_init_ms) {
+            *device_init_ms = 0.0;
+        }
         return 0;
     }
+
+    auto t_init0 = std::chrono::high_resolution_clock::now();
     if (g_ecm_kernel) {
         clReleaseKernel(g_ecm_kernel);
         g_ecm_kernel = nullptr;
@@ -268,11 +367,30 @@ static int ensure_ecm_kernel(uint32_t limbs, int verbose) {
         return -1;
     }
     g_kernel_limbs = limbs;
-    ocl_log_verbose(verbose, "OpenCL: built kernel MAX_LIMBS=%u\n", limbs);
+    auto t_init1 = std::chrono::high_resolution_clock::now();
+    double init_ms =
+        std::chrono::duration<double, std::milli>(t_init1 - t_init0).count();
+    if (device_init_ms) {
+        *device_init_ms = init_ms;
+    }
+    if (!g_device_info_printed) {
+        print_opencl_device_info(-1, init_ms);
+        g_device_info_printed = true;
+    }
+    ocl_log_verbose(verbose, "OpenCL: built kernel MAX_LIMBS=%u (%.0fms)\n", limbs, init_ms);
     return 0;
 }
 
-int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, const mpz_t s,
+extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose) {
+    uint32_t BITS = select_bits(n_log2);
+    if (BITS == 0) {
+        return ECM_ERROR;
+    }
+    double init_ms = 0.0;
+    return ensure_ecm_kernel(BITS / 32, verbose, &init_ms);
+}
+
+extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, const mpz_t s,
                     uint32_t curves, uint32_t *sigma_ptr,
                     unsigned long checkpoint_interval_ms, float *gputime, int verbose) {
     (void)checkpoint_interval_ms;
@@ -298,7 +416,8 @@ int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, const mpz_t
     }
     const uint32_t limbs = BITS / 32;
 
-    if (ensure_ecm_kernel(limbs, verbose) != 0) {
+    double device_init_ms = 0.0;
+    if (ensure_ecm_kernel(limbs, verbose, &device_init_ms) != 0) {
         free(s_bits);
         return ECM_ERROR;
     }
@@ -319,16 +438,26 @@ int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, const mpz_t
 
     auto t_global_start = std::chrono::high_resolution_clock::now();
 
-    ocl_log_verbose(verbose, "OpenCL ECM<%u> N=%zu bits, curves=%u, s=%lu bits\n",
-                    BITS, n_log2, curves, s_num_bits);
+    fprintf(stdout,
+            "GPU: CGBN<%u> kernel, %zu-bit N, %u curves, sigma=%u-%u, s=%llu bits, np0=0x%08x\n",
+            BITS, n_log2, curves, sigma, sigma + curves - 1,
+            (unsigned long long)s_num_bits, np0);
+    if (device_init_ms > 0.0) {
+        fprintf(stdout, "GPU: kernel compile/build for this limb size took %.0fms\n",
+                device_init_ms);
+    }
+    fflush(stdout);
 
     int batches_complete = 0;
     while (s_partial < s_num_bits) {
         uint64_t this_batch = std::min(batch_size, s_num_bits - s_partial);
 
-        ocl_log_verbose(verbose, "  batch %d: bits %lu..%lu (%.1f%%)\n", batches_complete,
-                        s_partial, s_partial + this_batch,
-                        100.0 * (double)s_partial / (double)s_num_bits);
+        if (verbose >= 1 && print_nth_batch(batches_complete)) {
+            fprintf(stderr, "GPU: Computing %llu bits/call, %llu/%llu (%.1f%%)\n",
+                    (unsigned long long)this_batch, (unsigned long long)s_partial,
+                    (unsigned long long)s_num_bits,
+                    100.0 * (double)s_partial / (double)s_num_bits);
+        }
 
         cl_ulong s_num_bits_arg = (cl_ulong)s_num_bits;
         cl_ulong s_start_arg = (cl_ulong)s_partial;

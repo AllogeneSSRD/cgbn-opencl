@@ -14,6 +14,7 @@
 
 #include "opencl_ecm_entry.h"
 #include "ecm.h"
+#include "cgbn_stage1.h"
 
 static void trim(std::string &s){
     while(!s.empty() && isspace((unsigned char)s.back())) s.pop_back();
@@ -404,11 +405,40 @@ int main(int argc, char **argv){
         std::cerr << "gpucurves must be > 0"<<std::endl;
         return 1;
     }
+
+    if (use_gpu) {
+        int prep = gpu_prepare_opencl((size_t)mpz_sizeinbase(N, 2), params->verbose);
+        if (prep != 0) {
+            std::cerr << "GPU: OpenCL prepare failed" << std::endl;
+            mpz_clear(N);
+            mpz_clear(batch_s);
+            ecm_clear(params);
+            return 1;
+        }
+    }
+
     mpz_t *factors = (mpz_t*) malloc(sizeof(mpz_t)*curves);
     int *array_found = (int*) malloc(sizeof(int)*curves);
     for(uint32_t i=0;i<curves;i++){ mpz_init(factors[i]); array_found[i]=ECM_NO_FACTOR_FOUND; }
 
-    uint32_t firstsigma = 2u; // initial sigma seed
+    uint32_t firstsigma = gpu_pick_random_sigma(curves);
+    uint32_t lastsigma = firstsigma + curves - 1;
+
+    mpz_t batch_d;
+    mpz_init(batch_d);
+    gpu_compute_batch_d(batch_d, firstsigma, N);
+
+    std::cout << "Using B1=" << B1 << ", B2=" << B2
+              << ", sigma=" << ECM_PARAM_BATCH_32BITS_D << ":" << firstsigma
+              << "-" << lastsigma << " (" << curves << " curves)" << std::endl;
+
+    {
+        unsigned long k_blocks = params->k;
+        std::cout << "dF=0, k=" << k_blocks << ", d=";
+        mpz_out_str(stdout, 10, batch_d);
+        std::cout << ", d2=0, i0=0" << std::endl;
+    }
+
     float gputime = 0.0f;
 
     int ret = opencl_ecm_stage1(factors, array_found, N, params->batch_s, curves, &firstsigma, params->gpu_checkpoint_interval_ms, &gputime, params->verbose);
@@ -424,6 +454,7 @@ int main(int argc, char **argv){
 
     for(uint32_t i=0;i<curves;i++) mpz_clear(factors[i]);
     free(factors); free(array_found);
+    mpz_clear(batch_d);
     mpz_clear(N); mpz_clear(batch_s);
     ecm_clear(params);
     return 0;
