@@ -12,7 +12,10 @@
 
 #ifdef _WIN32
 #include <io.h>
+#include <windows.h>
 #define access _access
+#else
+#include <unistd.h>
 #endif
 
 #include <gmp.h>
@@ -407,6 +410,33 @@ static std::string build_saved_n_expr(const std::string &original_expr, const mp
     return expr;
 }
 
+static std::string build_who_field() {
+    const char *uname = std::getenv("LOGNAME");
+    if (!uname || !*uname) {
+        uname = std::getenv("USERNAME");
+    }
+    std::string user = (uname && *uname) ? uname : "";
+
+    std::string host;
+#ifdef _WIN32
+    char hbuf[MAX_COMPUTERNAME_LENGTH + 2] = {0};
+    DWORD sz = MAX_COMPUTERNAME_LENGTH + 1;
+    if (GetComputerNameA(hbuf, &sz) && sz > 0) {
+        host.assign(hbuf, hbuf + sz);
+    }
+#else
+    char hbuf[64] = {0};
+    if (gethostname(hbuf, sizeof(hbuf) - 1) == 0) {
+        host = hbuf;
+    }
+#endif
+
+    if (user.empty() && host.empty()) {
+        return "";
+    }
+    return user + "@" + host;
+}
+
 static bool append_opencl_save_lines(const std::string &savefilename, const mpz_t N, double B1,
                                      uint32_t firstsigma, uint32_t curves, mpz_t *factors,
                                      const std::string &n_expr_save) {
@@ -426,6 +456,7 @@ static bool append_opencl_save_lines(const std::string &savefilename, const mpz_
     if (lt) {
         std::strftime(timebuf, sizeof(timebuf), "%a %b %d %H:%M:%S %Y", lt);
     }
+    const std::string who = build_who_field();
 
     for (uint32_t i = 0; i < curves; ++i) {
         mpz_set_ui(sigma_mpz, firstsigma + i);
@@ -447,6 +478,7 @@ static bool append_opencl_save_lines(const std::string &savefilename, const mpz_
             << "; CHECKSUM=" << csum
             << "; PROGRAM=GMP-ECM 7.0.6;"
             << " X0=0x0; Y0=0x0;"
+            << (who.empty() ? "" : (" WHO=" + who + ";"))
             << " TIME=" << timebuf << ";"
             << "\n";
 
