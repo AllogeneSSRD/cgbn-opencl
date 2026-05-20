@@ -176,3 +176,44 @@ This allows quick scaling studies before algorithm/ASM work:
 - `.\build\Debug\opencl_ecm_addsub.exe --bits 2048 600 256 30`
 - `.\build\Debug\opencl_ecm_addsub.exe --bits 4096 300 128 20`
 
+## 10) First Low-Risk MUL Optimization (Implemented)
+
+Applied change in `mont_mul_priv`:
+
+- removed private copies `B[]` and `Nloc[]`
+- directly consume input pointers `b[]` and `N[]`
+
+Goal:
+
+- reduce register/private-memory pressure
+- keep algorithm and numerical behavior unchanged
+
+### 10.1 1024-bit (after dynamic MAX_LIMBS build fix)
+
+Config: `--bits 1024 1000 256 50`
+
+- `mont_mul_priv`: 3422.43 ms, `3.74003e+06 ops/s`, private mem 656 B
+- `mont_sqr_priv`: 3215.84 ms, `3.98030e+06 ops/s`, private mem 528 B
+
+Compared to prior baseline (`~3.04333e+06` / `~3.22413e+06` ops/s):
+
+- mul: about +23%
+- sqr: about +23%
+
+### 10.2 2048-bit
+
+Config: `--bits 2048 400 192 20`
+
+- `mont_mul_priv`: 4219.62 ms, `364014 ops/s`, private mem 1296 B
+- `mont_sqr_priv`: 3948.56 ms, `389003 ops/s`, private mem 1040 B
+
+Notes:
+
+- 2048-bit run still shows mont kernels dominating total time.
+- private memory remains significantly higher for mont than add/sub, so register-pressure reduction and algorithmic changes are still primary levers.
+
+### 10.3 Important Measurement Correction
+
+`opencl_ecm_addsub` now builds kernels with `-DMAX_LIMBS=<bits/32>` (not fixed 128).  
+This avoids inflating private memory for smaller bit-width tests and makes cross-run comparisons fairer.
+

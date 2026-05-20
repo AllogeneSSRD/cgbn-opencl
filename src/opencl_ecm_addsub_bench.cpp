@@ -124,7 +124,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     std::string src = mont_priv + "\n" + bench_src;
     cl_int buildErr = CL_SUCCESS;
     char build_opts[64];
-    snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u", MAX_BENCH_WORDS);
+    snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u", WORDS);
     cl_program program = cgbn::opencl::build_program_from_source(
         ctx, src.c_str(), build_opts, buildErr);
     if (program == nullptr || buildErr != CL_SUCCESS) {

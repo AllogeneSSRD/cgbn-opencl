@@ -15,18 +15,11 @@ void mont_mul_priv(uint *out, const uint *a, const uint *b, const uint *N, uint 
     }
     uint t_hi = 0u;
 
-    uint B[MAX_LIMBS];
-    uint Nloc[MAX_LIMBS];
-    for (uint j = 0u; j < limbs; ++j) {
-        B[j] = b[j];
-        Nloc[j] = N[j];
-    }
-
     for (uint i = 0u; i < limbs; ++i) {
         uint ai = a[i];
         ulong carry = 0ul;
         for (uint j = 0u; j < limbs; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
+            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)b[j] + carry;
             t[j] = (uint)uv;
             carry = uv >> 32;
         }
@@ -37,7 +30,7 @@ void mont_mul_priv(uint *out, const uint *a, const uint *b, const uint *N, uint 
         uint m = (uint)((ulong)t[0] * (ulong)np0);
         carry = 0ul;
         for (uint j = 0u; j < limbs; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)m * (ulong)Nloc[j] + carry;
+            ulong uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
             if (j > 0u) {
                 t[j - 1u] = (uint)uv;
             }
@@ -54,7 +47,7 @@ void mont_mul_priv(uint *out, const uint *a, const uint *b, const uint *N, uint 
     if (!ge) {
         for (int i = (int)limbs - 1; i >= 0; --i) {
             uint tv = t[(uint)i];
-            uint nv = Nloc[(uint)i];
+            uint nv = N[(uint)i];
             if (tv > nv) {
                 ge = 1;
                 break;
@@ -69,7 +62,7 @@ void mont_mul_priv(uint *out, const uint *a, const uint *b, const uint *N, uint 
         ulong borrow = 0ul;
         for (uint i = 0u; i < limbs; ++i) {
             ulong tv = (ulong)t[i];
-            ulong nv = (ulong)Nloc[i];
+            ulong nv = (ulong)N[i];
             ulong w = tv - nv - borrow;
             t[i] = (uint)w;
             borrow = (tv < nv + borrow) ? 1ul : 0ul;
