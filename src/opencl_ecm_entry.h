@@ -21,6 +21,7 @@ int opencl_ecm_stage1(mpz_t *factors,
                       const mpz_t s,
                       uint32_t curves,
                       uint32_t *sigma,
+                      mpz_t *stage1_x_residues,
                       unsigned long checkpoint_interval_ms,
                       float *gputime,
                       int verbose);

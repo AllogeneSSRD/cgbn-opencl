@@ -5,9 +5,13 @@
 #include <cmath>
 #include <cstdlib>
 #include <cctype>
+#include <ctime>
+#include <fstream>
+#include <sys/stat.h>
 
 #ifdef _WIN32
 #include <io.h>
+#define access _access
 #endif
 
 #include <gmp.h>
@@ -322,6 +326,85 @@ static bool parse_sigma_arg(const std::string &arg, uint32_t *sigma_out) {
     }
 }
 
+static constexpr unsigned long CHKSUMMOD = 4294967291UL;
+
+static bool check_save_file_writable(const std::string &savefilename, bool saveappend) {
+    if (!saveappend && access(savefilename.c_str(), 0) == 0) {
+        std::cerr << "Save file " << savefilename << " already exists, will not overwrite" << std::endl;
+        return false;
+    }
+    FILE *savefile = fopen(savefilename.c_str(), "a");
+    if (savefile == nullptr) {
+        std::cerr << "Could not open file " << savefilename << " for writing" << std::endl;
+        return false;
+    }
+    fclose(savefile);
+    if (!saveappend) {
+        struct stat st {};
+        if (stat(savefilename.c_str(), &st) != 0 || st.st_size != 0) {
+            std::cerr << "Save file " << savefilename << " initialization failed" << std::endl;
+            return false;
+        }
+        if (remove(savefilename.c_str()) != 0) {
+            std::cerr << "Save file " << savefilename << " could not be cleaned up" << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool append_opencl_save_lines(const std::string &savefilename, const mpz_t N, double B1,
+                                     uint32_t firstsigma, uint32_t curves, mpz_t *stage1_x) {
+    std::ofstream out(savefilename, std::ios::out | std::ios::app);
+    if (!out.is_open()) {
+        std::cerr << "Could not open file " << savefilename << " for appending" << std::endl;
+        return false;
+    }
+
+    mpz_t sigma_mpz, checksum;
+    mpz_init(sigma_mpz);
+    mpz_init(checksum);
+
+    const time_t t = std::time(nullptr);
+    char timebuf[128] = {0};
+    const tm *lt = std::localtime(&t);
+    if (lt) {
+        std::strftime(timebuf, sizeof(timebuf), "%a %b %d %H:%M:%S %Y", lt);
+    }
+
+    for (uint32_t i = 0; i < curves; ++i) {
+        mpz_set_ui(sigma_mpz, firstsigma + i);
+        mpz_set_d(checksum, B1);
+        mpz_mul_ui(checksum, checksum, mpz_fdiv_ui(sigma_mpz, CHKSUMMOD));
+        mpz_mul_ui(checksum, checksum, mpz_fdiv_ui(N, CHKSUMMOD));
+        mpz_mul_ui(checksum, checksum, mpz_fdiv_ui(stage1_x[i], CHKSUMMOD));
+        mpz_mul_ui(checksum, checksum, (ECM_PARAM_BATCH_32BITS_D + 1) % CHKSUMMOD);
+        const unsigned long csum = mpz_fdiv_ui(checksum, CHKSUMMOD);
+
+        char *sigma_hex = mpz_get_str(nullptr, 16, sigma_mpz);
+        char *n_dec = mpz_get_str(nullptr, 10, N);
+        char *x_hex = mpz_get_str(nullptr, 16, stage1_x[i]);
+
+        out << "METHOD=ECM; PARAM=" << ECM_PARAM_BATCH_32BITS_D
+            << "; SIGMA=0x" << sigma_hex
+            << "; B1=" << std::llround(B1)
+            << "; N=" << n_dec
+            << "; X=0x" << x_hex
+            << "; CHECKSUM=" << csum
+            << "; PROGRAM=MPA-OpenCl;"
+            << " TIME=" << timebuf << ";"
+            << "\n";
+
+        free(sigma_hex);
+        free(n_dec);
+        free(x_hex);
+    }
+
+    mpz_clear(sigma_mpz);
+    mpz_clear(checksum);
+    return true;
+}
+
 int main(int argc, char **argv){
     bool verbose = false;
     bool use_gpu = false;
@@ -329,6 +412,8 @@ int main(int argc, char **argv){
     unsigned long gpuckpt_ms = ECM_DEFAULT_GPU_CHECKPOINT_INTERVAL_MS;
     bool sigma_fixed = false;
     uint32_t fixed_sigma = 0;
+    std::string savefilename;
+    bool saveappend = false;
     // parse args simple
     std::vector<std::string> pos;
     for(int i=1;i<argc;i++){
@@ -343,6 +428,16 @@ int main(int argc, char **argv){
                 return 1;
             }
             sigma_fixed = true;
+            continue;
+        }
+        if(a == "-save" && i+1<argc) {
+            savefilename = argv[++i];
+            saveappend = false;
+            continue;
+        }
+        if(a == "-savea" && i+1<argc) {
+            savefilename = argv[++i];
+            saveappend = true;
             continue;
         }
         pos.push_back(a);
@@ -445,6 +540,15 @@ int main(int argc, char **argv){
         }
     }
 
+    if (!savefilename.empty()) {
+        if (!check_save_file_writable(savefilename, saveappend)) {
+            mpz_clear(N);
+            mpz_clear(batch_s);
+            ecm_clear(params);
+            return 1;
+        }
+    }
+
     mpz_t *factors = (mpz_t*) malloc(sizeof(mpz_t)*curves);
     int *array_found = (int*) malloc(sizeof(int)*curves);
     for(uint32_t i=0;i<curves;i++){ mpz_init(factors[i]); array_found[i]=ECM_NO_FACTOR_FOUND; }
@@ -473,7 +577,14 @@ int main(int argc, char **argv){
 
     float gputime = 0.0f;
 
-    int ret = opencl_ecm_stage1(factors, array_found, N, params->batch_s, curves, &firstsigma, params->gpu_checkpoint_interval_ms, &gputime, params->verbose);
+    mpz_t *stage1_x = (mpz_t*) malloc(sizeof(mpz_t) * curves);
+    for (uint32_t i = 0; i < curves; i++) {
+        mpz_init(stage1_x[i]);
+    }
+
+    int ret = opencl_ecm_stage1(factors, array_found, N, params->batch_s, curves, &firstsigma,
+                                stage1_x, params->gpu_checkpoint_interval_ms, &gputime,
+                                params->verbose);
 
     std::cout << "opencl_ecm_stage1 returned: "<< ret <<" gputime="<< gputime <<" ms\n";
     for(uint32_t i=0;i<curves;i++){
@@ -483,7 +594,15 @@ int main(int argc, char **argv){
             free(s);
         }
     }
+    if (ret != ECM_ERROR && !savefilename.empty()) {
+        if (!append_opencl_save_lines(savefilename, N, B1, firstsigma, curves, stage1_x)) {
+            std::cerr << "Failed to append OpenCL save lines into " << savefilename << std::endl;
+            return 1;
+        }
+    }
 
+    for (uint32_t i = 0; i < curves; i++) mpz_clear(stage1_x[i]);
+    free(stage1_x);
     for(uint32_t i=0;i<curves;i++) mpz_clear(factors[i]);
     free(factors); free(array_found);
     mpz_clear(batch_d);
