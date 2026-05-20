@@ -4,6 +4,10 @@
 #define MAX_LIMBS 64
 #endif
 
+#ifndef TPI
+#define TPI 8
+#endif
+
 // ---------------------------------------------------------------------------
 // Private multi-limb helpers (one curve per work-item)
 //
@@ -234,25 +238,17 @@ inline void swap_limbs(uint *a, uint *b, uint limbs) {
 // data layout per curve (5 * limbs uint32): N, aX, aZ, bX, bZ
 // ---------------------------------------------------------------------------
 
-__kernel void kernel_double_add(
+inline void run_double_add_instance(
+    uint instance_i,
     __global const uint *s_bits,
     ulong s_num_bits,
     ulong s_bits_start,
     ulong s_bits_interval,
     __global uint *data,
-    uint count,
     uint sigma_0,
     uint np0,
     uint limbs)
 {
-    uint instance_i = get_global_id(0);
-    if (instance_i >= count) {
-        return;
-    }
-    if (limbs == 0u || limbs > MAX_LIMBS) {
-        return;
-    }
-
     uint base = instance_i * 5u * limbs;
     uint N[MAX_LIMBS];
     uint aX[MAX_LIMBS], aZ[MAX_LIMBS], bX[MAX_LIMBS], bZ[MAX_LIMBS];
@@ -265,7 +261,6 @@ __kernel void kernel_double_add(
         bZ[i] = data[base + 4u * limbs + i];
     }
 
-    // Curve coordinates are stored in Montgomery form (host set_p_2p).
     uint d = sigma_0 + instance_i;
     int swapped = 0;
 
@@ -298,5 +293,376 @@ __kernel void kernel_double_add(
         data[base + 2u * limbs + i] = aZ[i];
         data[base + 3u * limbs + i] = bX[i];
         data[base + 4u * limbs + i] = bZ[i];
+    }
+}
+
+__kernel void kernel_double_add(
+    __global const uint *s_bits,
+    ulong s_num_bits,
+    ulong s_bits_start,
+    ulong s_bits_interval,
+    __global uint *data,
+    uint count,
+    uint sigma_0,
+    uint np0,
+    uint limbs)
+{
+    uint instance_i = get_global_id(0);
+    if (instance_i >= count) {
+        return;
+    }
+    if (limbs == 0u || limbs > MAX_LIMBS) {
+        return;
+    }
+    run_double_add_instance(instance_i, s_bits, s_num_bits, s_bits_start, s_bits_interval, data,
+                            sigma_0, np0, limbs);
+}
+
+inline int mp_ge_l(__local const uint *a, __local const uint *N, uint limbs) {
+    for (int i = (int)limbs - 1; i >= 0; --i) {
+        if (a[(uint)i] > N[(uint)i]) return 1;
+        if (a[(uint)i] < N[(uint)i]) return 0;
+    }
+    return 1;
+}
+
+inline void mp_sub_n_l(__local uint *r, __local const uint *a, __local const uint *N, uint limbs) {
+    ulong borrow = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong av = (ulong)a[i];
+        ulong nv = (ulong)N[i];
+        ulong w = av - nv - borrow;
+        r[i] = (uint)w;
+        borrow = (av < nv + borrow) ? 1ul : 0ul;
+    }
+}
+
+inline uint mp_add_n_l(__local uint *r, __local const uint *a, __local const uint *b, uint limbs) {
+    ulong carry = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong sum = (ulong)a[i] + (ulong)b[i] + carry;
+        r[i] = (uint)sum;
+        carry = sum >> 32;
+    }
+    return (uint)carry;
+}
+
+inline void mp_copy_l(__local uint *dst, __local const uint *src, uint limbs) {
+    for (uint i = 0u; i < limbs; ++i) dst[i] = src[i];
+}
+
+inline void mp_add_mod_l(__local uint *r, __local const uint *a, __local const uint *b,
+                         __local const uint *N, uint limbs) {
+    ulong carry = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong sum = (ulong)a[i] + (ulong)b[i] + carry;
+        r[i] = (uint)sum;
+        carry = sum >> 32;
+    }
+    if (carry != 0ul || mp_ge_l(r, N, limbs)) mp_sub_n_l(r, r, N, limbs);
+}
+
+inline int mp_sub_mod_l(__local uint *r, __local const uint *a, __local const uint *b,
+                        __local const uint *N, uint limbs) {
+    ulong borrow = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong av = (ulong)a[i];
+        ulong bv = (ulong)b[i];
+        ulong w = av - bv - borrow;
+        r[i] = (uint)w;
+        borrow = (av < bv + borrow) ? 1ul : 0ul;
+    }
+    if (borrow) {
+        (void)mp_add_n_l(r, r, N, limbs);
+        return 1;
+    }
+    return 0;
+}
+
+inline void mp_shift_left_1_mod_l(__local uint *r, __local const uint *a, __local const uint *N,
+                                  uint limbs) {
+    uint carry = 0u;
+    for (uint i = 0u; i < limbs; ++i) {
+        uint old = a[i];
+        r[i] = (old << 1) | carry;
+        carry = old >> 31;
+    }
+    if (carry || mp_ge_l(r, N, limbs)) mp_sub_n_l(r, r, N, limbs);
+}
+
+inline void mont_normalize_l(__local uint *r, __local const uint *N, uint limbs) {
+    if (mp_ge_l(r, N, limbs)) mp_sub_n_l(r, r, N, limbs);
+}
+
+inline uint mul_ui32_limbs_l(__local uint *r, uint m, uint limbs) {
+    ulong carry = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong prod = (ulong)r[i] * (ulong)m + carry;
+        r[i] = (uint)prod;
+        carry = prod >> 32;
+    }
+    return (uint)carry;
+}
+
+inline void shift_right_32_limbs_l(__local uint *r, uint limbs) {
+    for (uint i = 0u; i + 1u < limbs; ++i) r[i] = r[i + 1u];
+    r[limbs - 1u] = 0u;
+}
+
+inline void special_mult_ui32_l(__local uint *r, uint m, __local const uint *N, uint np0, uint limbs,
+                                __local uint *tmp0) {
+    uint carry_t1 = mul_ui32_limbs_l(r, m, limbs);
+    uint t1_0 = r[0];
+    uint q = (uint)((ulong)t1_0 * (ulong)np0);
+
+    mp_copy_l(tmp0, N, limbs);
+    uint carry_t2 = mul_ui32_limbs_l(tmp0, q, limbs);
+    shift_right_32_limbs_l(r, limbs);
+    shift_right_32_limbs_l(tmp0, limbs);
+    r[limbs - 1u] = carry_t1;
+    tmp0[limbs - 1u] = carry_t2;
+
+    int carry_q = (int)mp_add_n_l(r, r, tmp0, limbs);
+    if (t1_0 != 0u) {
+        uint carry1 = 1u;
+        for (uint i = 0u; i < limbs && carry1 != 0u; ++i) {
+            ulong sum = (ulong)r[i] + (ulong)carry1;
+            r[i] = (uint)sum;
+            carry1 = (uint)(sum >> 32);
+        }
+        carry_q += (int)carry1;
+    }
+    if (carry_q > 0) mp_sub_n_l(r, r, N, limbs);
+    if (mp_ge_l(r, N, limbs)) mp_sub_n_l(r, r, N, limbs);
+}
+
+inline void mont_mul_wg_local(__local uint *out, __local const uint *a, __local const uint *b,
+                              __local const uint *n, uint np0, uint limbs, uint tid,
+                              __local uint *scratch) {
+    __local uint *t = scratch;
+    __local uint *B = t + (MAX_LIMBS + 1);
+    __local uint *N = B + MAX_LIMBS;
+
+    for (uint i = tid; i <= limbs; i += TPI) t[i] = 0u;
+    for (uint i = tid; i < limbs; i += TPI) {
+        B[i] = b[i];
+        N[i] = n[i];
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    if (tid == 0u) {
+        uint t_hi = 0u;
+        for (uint i = 0u; i < limbs; ++i) {
+            uint ai = a[i];
+            ulong carry = 0ul;
+            for (uint j = 0u; j < limbs; ++j) {
+                ulong uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
+                t[j] = (uint)uv;
+                carry = uv >> 32;
+            }
+            ulong uvh = (ulong)t[limbs] + carry;
+            t[limbs] = (uint)uvh;
+            t_hi += (uint)(uvh >> 32);
+
+            uint m = (uint)((ulong)t[0] * (ulong)np0);
+            carry = 0ul;
+            for (uint j = 0u; j < limbs; ++j) {
+                ulong uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
+                if (j > 0u) t[j - 1u] = (uint)uv;
+                carry = uv >> 32;
+            }
+            ulong top = (ulong)t[limbs] + carry;
+            t[limbs - 1u] = (uint)top;
+            ulong top2 = (ulong)t_hi + (top >> 32);
+            t[limbs] = (uint)top2;
+            t_hi = (uint)(top2 >> 32);
+        }
+
+        int ge = (t_hi != 0u || t[limbs] != 0u) ? 1 : 0;
+        if (!ge) {
+            for (int i = (int)limbs - 1; i >= 0; --i) {
+                if (t[(uint)i] > N[(uint)i]) {
+                    ge = 1;
+                    break;
+                }
+                if (t[(uint)i] < N[(uint)i]) {
+                    ge = 0;
+                    break;
+                }
+            }
+        }
+        if (ge) {
+            ulong borrow = 0ul;
+            for (uint i = 0u; i < limbs; ++i) {
+                ulong tv = (ulong)t[i];
+                ulong nv = (ulong)N[i];
+                ulong w = tv - nv - borrow;
+                t[i] = (uint)w;
+                borrow = (tv < nv + borrow) ? 1ul : 0ul;
+            }
+        }
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+    for (uint i = tid; i < limbs; i += TPI) out[i] = t[i];
+    barrier(CLK_LOCAL_MEM_FENCE);
+}
+
+inline void mont_sqr_wg_local(__local uint *out, __local const uint *a, __local const uint *n,
+                              uint np0, uint limbs, uint tid, __local uint *scratch) {
+    mont_mul_wg_local(out, a, a, n, np0, limbs, tid, scratch);
+}
+
+inline void double_add_v2_wg_local(__local uint *q, __local uint *u, __local uint *w, __local uint *v,
+                                   uint d, __local uint *N, uint np0, uint limbs, uint tid,
+                                   __local uint *t, __local uint *CB, __local uint *DA,
+                                   __local uint *AA, __local uint *BB, __local uint *K,
+                                   __local uint *dK, __local uint *mont_scratch) {
+    if (tid == 0u) {
+        mp_add_mod_l(t, v, w, N, limbs);
+        (void)mp_sub_mod_l(v, v, w, N, limbs);
+        mp_add_mod_l(w, u, q, N, limbs);
+        (void)mp_sub_mod_l(u, u, q, N, limbs);
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    mont_mul_wg_local(CB, t, u, N, np0, limbs, tid, mont_scratch);
+    if (tid == 0u) mont_normalize_l(CB, N, limbs);
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    mont_mul_wg_local(DA, v, w, N, np0, limbs, tid, mont_scratch);
+    if (tid == 0u) mont_normalize_l(DA, N, limbs);
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    mont_sqr_wg_local(AA, w, N, np0, limbs, tid, mont_scratch);
+    mont_sqr_wg_local(BB, u, N, np0, limbs, tid, mont_scratch);
+    if (tid == 0u) {
+        mont_normalize_l(AA, N, limbs);
+        mont_normalize_l(BB, N, limbs);
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    mont_mul_wg_local(q, AA, BB, N, np0, limbs, tid, mont_scratch);
+    if (tid == 0u) {
+        mont_normalize_l(q, N, limbs);
+        (void)mp_sub_mod_l(K, AA, BB, N, limbs);
+        mp_copy_l(dK, K, limbs);
+        special_mult_ui32_l(dK, d, N, np0, limbs, t);
+        mp_add_mod_l(u, BB, dK, N, limbs);
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    mont_mul_wg_local(u, K, u, N, np0, limbs, tid, mont_scratch);
+    if (tid == 0u) {
+        mont_normalize_l(u, N, limbs);
+        mp_add_mod_l(w, DA, CB, N, limbs);
+        (void)mp_sub_mod_l(v, DA, CB, N, limbs);
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    mont_sqr_wg_local(w, w, N, np0, limbs, tid, mont_scratch);
+    mont_sqr_wg_local(v, v, N, np0, limbs, tid, mont_scratch);
+    if (tid == 0u) {
+        mont_normalize_l(w, N, limbs);
+        mont_normalize_l(v, N, limbs);
+        mp_shift_left_1_mod_l(v, v, N, limbs);
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+}
+
+__kernel void kernel_double_add_wg(
+    __global const uint *s_bits,
+    ulong s_num_bits,
+    ulong s_bits_start,
+    ulong s_bits_interval,
+    __global uint *data,
+    uint count,
+    uint sigma_0,
+    uint np0,
+    uint limbs,
+    __local uint *local_mem)
+{
+    uint instance_i = get_group_id(0);
+    uint lane = get_local_id(0);
+    if (instance_i >= count) {
+        return;
+    }
+    if (limbs == 0u || limbs > MAX_LIMBS) {
+        return;
+    }
+
+    uint local_words_needed = 14u * limbs + 1u;
+    (void)local_words_needed;
+    __local uint *ptr = local_mem;
+    __local uint *N = ptr; ptr += limbs;
+    __local uint *q = ptr; ptr += limbs;
+    __local uint *u = ptr; ptr += limbs;
+    __local uint *w = ptr; ptr += limbs;
+    __local uint *v = ptr; ptr += limbs;
+    __local uint *t = ptr; ptr += limbs;
+    __local uint *CB = ptr; ptr += limbs;
+    __local uint *DA = ptr; ptr += limbs;
+    __local uint *AA = ptr; ptr += limbs;
+    __local uint *BB = ptr; ptr += limbs;
+    __local uint *K = ptr; ptr += limbs;
+    __local uint *dK = ptr; ptr += limbs;
+    __local uint *mont_scratch = ptr; // (MAX_LIMBS+1) + MAX_LIMBS + MAX_LIMBS
+    __local int *swapped_l = (__local int *)(mont_scratch + (3u * MAX_LIMBS + 1u));
+
+    uint base = instance_i * 5u * limbs;
+    for (uint i = lane; i < limbs; i += TPI) {
+        N[i] = data[base + i];
+        q[i] = data[base + limbs + i];
+        u[i] = data[base + 2u * limbs + i];
+        w[i] = data[base + 3u * limbs + i];
+        v[i] = data[base + 4u * limbs + i];
+    }
+    if (lane == 0u) {
+        *swapped_l = 0;
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    uint d = sigma_0 + instance_i;
+    ulong s_end = s_bits_start + s_bits_interval;
+    if (s_end > s_num_bits) s_end = s_num_bits;
+    for (ulong b = s_bits_start; b < s_end; ++b) {
+        if (lane == 0u) {
+            ulong nth = s_num_bits - 1ul - b;
+            uint limb_idx = (uint)(nth >> 5);
+            uint bit_idx = (uint)(nth & 31ul);
+            int bit = (int)((s_bits[limb_idx] >> bit_idx) & 1u);
+            if (bit != *swapped_l) {
+                *swapped_l = !(*swapped_l);
+                for (uint i = 0u; i < limbs; ++i) {
+                    uint tmp = q[i];
+                    q[i] = w[i];
+                    w[i] = tmp;
+                    tmp = u[i];
+                    u[i] = v[i];
+                    v[i] = tmp;
+                }
+            }
+        }
+        barrier(CLK_LOCAL_MEM_FENCE);
+        double_add_v2_wg_local(q, u, w, v, d, N, np0, limbs, lane, t, CB, DA, AA, BB, K, dK,
+                               mont_scratch);
+    }
+
+    if (lane == 0u && *swapped_l) {
+        for (uint i = 0u; i < limbs; ++i) {
+            uint tmp = q[i];
+            q[i] = w[i];
+            w[i] = tmp;
+            tmp = u[i];
+            u[i] = v[i];
+            v[i] = tmp;
+        }
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
+
+    for (uint i = lane; i < limbs; i += TPI) {
+        data[base + limbs + i] = q[i];
+        data[base + 2u * limbs + i] = u[i];
+        data[base + 3u * limbs + i] = w[i];
+        data[base + 4u * limbs + i] = v[i];
     }
 }

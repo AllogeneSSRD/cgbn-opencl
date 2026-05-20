@@ -352,3 +352,67 @@ Interpretation:
 - reducing local footprint did not compromise throughput and improves occupancy headroom.
 - WG path remains the preferred direction for multiplication acceleration.
 
+## 16) Merge Verification (End-to-End Regression)
+
+Post-merge regression runs were executed on the ECM driver path to ensure functionality
+was preserved while optimization work continued.
+
+### 16.1 Test A: no-factor quick check
+
+Command:
+
+- `'(2^521-1)' | .\build\Debug\ecm.exe -v -gpu -sigma 3:12345678 -gpucurves 32 1e4 0`
+
+Result:
+
+- Stage 1 completed normally
+- no factor found (expected for this fast sanity case)
+- operator profiling output remained consistent with prior counts
+
+### 16.2 Test B: known-factor check
+
+Command:
+
+- `'(2^991-1)' | .\build\Debug\ecm.exe -v -gpu -sigma 3:1566377599 -gpucurves 32 1e4 0`
+
+Result:
+
+- Stage 1 completed normally
+- expected factors still found on matching curves
+  - `8218291649`
+  - `41473350001`
+  - `340840085969272441649`
+- confirms no functional regression from the recent optimization/merge rounds
+
+## 17) Stage1 WG Path Wiring (Current Status)
+
+Implemented:
+
+- added `kernel_double_add_wg` entry in `ecm_stage1.cl`.
+- host now defaults to WG launch topology in `cgbn_stage1_opencl.cpp`.
+- private fallback is available via `ECM_DISABLE_MONT_WG=1`.
+
+Important current limitation:
+
+- this WG entry is currently a launch/scheduling shell:
+  - global size = `curves * TPI`, local size = `TPI`
+  - only lane 0 executes the full curve update body
+- arithmetic inside stage1 still uses `mont_mul_priv` / `mont_sqr_priv`.
+- cooperative `cgbn_mont_mul_wg` / `cgbn_mont_sqr_wg` from benchmark path are not yet
+  integrated into the stage1 kernel arithmetic body.
+
+Regression checks after wiring:
+
+- `'(2^521-1)' | .\build\Debug\ecm.exe -v -gpu -sigma 3:12345678 -gpucurves 32 1e4 0`
+  - passes (no factor, as expected for quick sanity case).
+- `'(2^991-1)' | .\build\Debug\ecm.exe -v -gpu -sigma 3:1566377599 -gpucurves 32 1e4 0`
+  - passes and still finds expected factors.
+- private fallback check with `ECM_DISABLE_MONT_WG=1` also passes.
+
+Observed timing note on current implementation:
+
+- because lane 0 performs all math while other lanes are idle, current WG wiring is not
+  yet a throughput optimization by itself and can be slower than pure private launch.
+- next optimization step is true cooperative WG arithmetic integration in `double_add_v2`
+  Montgomery callsites.
+

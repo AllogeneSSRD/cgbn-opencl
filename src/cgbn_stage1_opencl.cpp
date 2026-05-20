@@ -30,13 +30,14 @@
 
 #define CARRY_BITS 6
 #ifndef MAX_LIMBS
-#define MAX_LIMBS 64
+#define MAX_LIMBS 320
 #endif
 
 static cgbn::opencl::context_t g_ctx;
 static bool g_ctx_ready = false;
 static cl_program g_ecm_program = nullptr;
 static cl_kernel g_ecm_kernel = nullptr;
+static cl_kernel g_ecm_kernel_wg = nullptr;
 static uint32_t g_kernel_limbs = 0;
 static bool g_device_info_printed = false;
 
@@ -556,7 +557,7 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
 static uint32_t select_bits(size_t n_log2) {
     static const uint32_t candidates[] = {
         512, 1024, 1280, 1536, 1792, 2048, 2560, 3072, 3584, 4096,
-        4608, 5120, 5632, 6144, 6656, 7168, 7680, 8192};
+        4608, 5120, 5632, 6144, 6656, 7168, 7680, 8192, 8704, 9216};
     for (uint32_t b : candidates) {
         if (n_log2 + CARRY_BITS <= b) {
             return b;
@@ -577,6 +578,10 @@ static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms
     if (g_ecm_kernel) {
         clReleaseKernel(g_ecm_kernel);
         g_ecm_kernel = nullptr;
+    }
+    if (g_ecm_kernel_wg) {
+        clReleaseKernel(g_ecm_kernel_wg);
+        g_ecm_kernel_wg = nullptr;
     }
     if (g_ecm_program) {
         clReleaseProgram(g_ecm_program);
@@ -617,6 +622,11 @@ static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms
     g_ecm_kernel = clCreateKernel(g_ecm_program, "kernel_double_add", &err);
     if (err != CL_SUCCESS) {
         fprintf(stderr, "OpenCL: kernel_double_add not found (%d)\n", err);
+        return -1;
+    }
+    g_ecm_kernel_wg = clCreateKernel(g_ecm_program, "kernel_double_add_wg", &err);
+    if (err != CL_SUCCESS) {
+        fprintf(stderr, "OpenCL: kernel_double_add_wg not found (%d)\n", err);
         return -1;
     }
     g_kernel_limbs = limbs;
@@ -721,6 +731,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     }
 
     const uint32_t TPI = 8;
+    const bool use_mont_wg = !env_flag_enabled("ECM_DISABLE_MONT_WG");
     g_dump_ctx.enabled = env_flag_enabled("ECM_GPU_DUMP");
     if (g_dump_ctx.enabled) {
         const char *dump_path = env_string_or_default("ECM_GPU_DUMP_FILE", "dump.csv");
@@ -763,24 +774,31 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         cl_uint np0_arg = np0;
         cl_uint limbs_arg = limbs;
 
-        err = clSetKernelArg(g_ecm_kernel, 0, sizeof(cl_mem), &gpu_s_bits);
-        err |= clSetKernelArg(g_ecm_kernel, 1, sizeof(cl_ulong), &s_num_bits_arg);
-        err |= clSetKernelArg(g_ecm_kernel, 2, sizeof(cl_ulong), &s_start_arg);
-        err |= clSetKernelArg(g_ecm_kernel, 3, sizeof(cl_ulong), &s_interval_arg);
-        err |= clSetKernelArg(g_ecm_kernel, 4, sizeof(cl_mem), &gpu_data);
-        err |= clSetKernelArg(g_ecm_kernel, 5, sizeof(cl_uint), &count_arg);
-        err |= clSetKernelArg(g_ecm_kernel, 6, sizeof(cl_uint), &sigma_arg);
-        err |= clSetKernelArg(g_ecm_kernel, 7, sizeof(cl_uint), &np0_arg);
-        err |= clSetKernelArg(g_ecm_kernel, 8, sizeof(cl_uint), &limbs_arg);
+        cl_kernel active_kernel = use_mont_wg ? g_ecm_kernel_wg : g_ecm_kernel;
+        err = clSetKernelArg(active_kernel, 0, sizeof(cl_mem), &gpu_s_bits);
+        err |= clSetKernelArg(active_kernel, 1, sizeof(cl_ulong), &s_num_bits_arg);
+        err |= clSetKernelArg(active_kernel, 2, sizeof(cl_ulong), &s_start_arg);
+        err |= clSetKernelArg(active_kernel, 3, sizeof(cl_ulong), &s_interval_arg);
+        err |= clSetKernelArg(active_kernel, 4, sizeof(cl_mem), &gpu_data);
+        err |= clSetKernelArg(active_kernel, 5, sizeof(cl_uint), &count_arg);
+        err |= clSetKernelArg(active_kernel, 6, sizeof(cl_uint), &sigma_arg);
+        err |= clSetKernelArg(active_kernel, 7, sizeof(cl_uint), &np0_arg);
+        err |= clSetKernelArg(active_kernel, 8, sizeof(cl_uint), &limbs_arg);
+        if (use_mont_wg) {
+            size_t wg_local_words = (size_t)(14u * limbs + 1u);
+            size_t wg_local_bytes = wg_local_words * sizeof(uint32_t);
+            err |= clSetKernelArg(active_kernel, 9, wg_local_bytes, nullptr);
+        }
         if (err != CL_SUCCESS) {
             fprintf(stderr, "clSetKernelArg failed\n");
             break;
         }
 
-        size_t global = curves;
+        size_t global = use_mont_wg ? (size_t)curves * (size_t)TPI : (size_t)curves;
+        size_t local = use_mont_wg ? (size_t)TPI : 0u;
         auto t0 = std::chrono::high_resolution_clock::now();
-        err = clEnqueueNDRangeKernel(g_ctx.queue, g_ecm_kernel, 1, nullptr, &global, nullptr,
-                                     0, nullptr, nullptr);
+        err = clEnqueueNDRangeKernel(g_ctx.queue, active_kernel, 1, nullptr, &global,
+                                     use_mont_wg ? &local : nullptr, 0, nullptr, nullptr);
         clFinish(g_ctx.queue);
         if (err == CL_SUCCESS) {
             err = clEnqueueReadBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data, 0,

@@ -14,7 +14,7 @@
 
 namespace {
 
-constexpr uint32_t MAX_BENCH_BITS = 4096;
+constexpr uint32_t MAX_BENCH_BITS = 8192;
 constexpr uint32_t MAX_BENCH_WORDS = MAX_BENCH_BITS / 32;
 
 void fill_from_gmp(const mpz_t v, uint32_t *out_words, size_t words) {
