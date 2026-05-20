@@ -1,5 +1,6 @@
 #include "cgbn_opencl.h"
 #include <cstring>
+#include <cstdlib>
 #include <fstream>
 #include <vector>
 #include <iostream>
@@ -7,7 +8,7 @@
 namespace cgbn {
 namespace opencl {
 
-cl_int create_context(context_t &out) {
+static cl_int create_context_impl(context_t &out, int device_index) {
     cl_int err;
     cl_uint numPlatforms = 0;
     err = clGetPlatformIDs(0, NULL, &numPlatforms);
@@ -17,17 +18,24 @@ cl_int create_context(context_t &out) {
     err = clGetPlatformIDs(numPlatforms, platforms.data(), NULL);
     if (err != CL_SUCCESS) return err;
 
-    // pick first platform and first device (DEVICE_TYPE_ALL)
-    out.platform = platforms[0];
-    cl_uint numDevices = 0;
-    err = clGetDeviceIDs(out.platform, CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
-    if (err != CL_SUCCESS || numDevices == 0) return err ? err : -2;
+    std::vector<std::pair<cl_platform_id, cl_device_id>> all_devices;
+    for (cl_uint p = 0; p < numPlatforms; ++p) {
+        cl_uint numDevices = 0;
+        err = clGetDeviceIDs(platforms[p], CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
+        if (err == CL_DEVICE_NOT_FOUND || numDevices == 0) continue;
+        if (err != CL_SUCCESS) return err;
+        std::vector<cl_device_id> devices(numDevices);
+        err = clGetDeviceIDs(platforms[p], CL_DEVICE_TYPE_ALL, numDevices, devices.data(), NULL);
+        if (err != CL_SUCCESS) return err;
+        for (auto d : devices) {
+            all_devices.push_back({platforms[p], d});
+        }
+    }
+    if (all_devices.empty()) return -2;
+    if (device_index < 0 || device_index >= (int)all_devices.size()) return -3;
 
-    std::vector<cl_device_id> devices(numDevices);
-    err = clGetDeviceIDs(out.platform, CL_DEVICE_TYPE_ALL, numDevices, devices.data(), NULL);
-    if (err != CL_SUCCESS) return err;
-
-    out.device = devices[0];
+    out.platform = all_devices[(size_t)device_index].first;
+    out.device = all_devices[(size_t)device_index].second;
     out.ctx = clCreateContext(NULL, 1, &out.device, NULL, NULL, &err);
     if (err != CL_SUCCESS) return err;
 
@@ -45,6 +53,23 @@ cl_int create_context(context_t &out) {
     }
 
     return CL_SUCCESS;
+}
+
+cl_int create_context_with_device_index(context_t &out, int device_index) {
+    return create_context_impl(out, device_index);
+}
+
+cl_int create_context(context_t &out) {
+    int device_index = 0;
+    const char *env_idx = std::getenv("CGBN_OPENCL_DEVICE_INDEX");
+    if (env_idx && *env_idx) {
+        try {
+            device_index = std::stoi(std::string(env_idx));
+        } catch (...) {
+            device_index = 0;
+        }
+    }
+    return create_context_impl(out, device_index);
 }
 
 cl_int destroy_context(context_t &c) {

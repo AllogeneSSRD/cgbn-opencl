@@ -24,6 +24,7 @@
 #include "ecm.h"
 #include "cgbn_stage1.h"
 #include "opencl_ecm_log.h"
+#include "cl_probe.h"
 
 static void trim(std::string &s){
     while(!s.empty() && isspace((unsigned char)s.back())) s.pop_back();
@@ -500,6 +501,7 @@ int main(int argc, char **argv){
     unsigned long gpuckpt_ms = ECM_DEFAULT_GPU_CHECKPOINT_INTERVAL_MS;
     bool sigma_fixed = false;
     uint32_t fixed_sigma = 0;
+    int gpu_device_index = 0;
     std::string savefilename;
     bool saveappend = false;
     // parse args simple
@@ -510,6 +512,19 @@ int main(int argc, char **argv){
         if(a == "-gpu") { use_gpu = true; continue; }
         if(a == "-gpucurves" && i+1<argc){ gpucurves = (uint32_t)std::stoul(argv[++i]); continue; }
         if(a == "-gpuckpt" && i+1<argc){ gpuckpt_ms = (unsigned long) std::stoul(argv[++i]); continue; }
+        if(a == "-d" && i+1<argc){
+            try {
+                gpu_device_index = std::stoi(argv[++i]);
+            } catch (...) {
+                std::cerr << "Invalid -d value, expected integer device index" << std::endl;
+                return 1;
+            }
+            if (gpu_device_index < 0) {
+                std::cerr << "Invalid -d value, expected >= 0" << std::endl;
+                return 1;
+            }
+            continue;
+        }
         if(a == "-sigma" && i+1<argc){
             if(!parse_sigma_arg(argv[++i], &fixed_sigma)){
                 std::cerr << "Invalid -sigma value (need 1..2^32-1, optional param:3: prefix)" << std::endl;
@@ -534,7 +549,8 @@ int main(int argc, char **argv){
     std::cout << "ecm driver starting" << std::endl;
     std::cout << "  mode: " << (use_gpu ? "gpu" : "cpu-stub")
               << ", gpucurves=" << gpucurves
-              << ", gpuckpt_ms=" << gpuckpt_ms << std::endl;
+              << ", gpuckpt_ms=" << gpuckpt_ms
+              << ", device=" << gpu_device_index << std::endl;
     if(!pos.empty()){
         std::cout << "  B1=" << pos[0];
         if(pos.size() >= 2){
@@ -618,6 +634,12 @@ int main(int argc, char **argv){
     }
 
     if (use_gpu) {
+        if (!configureOpenclDeviceIndex(gpu_device_index, true)) {
+            mpz_clear(N);
+            mpz_clear(batch_s);
+            ecm_clear(params);
+            return 1;
+        }
         int prep = gpu_prepare_opencl((size_t)mpz_sizeinbase(N, 2), params->verbose);
         if (prep != 0) {
             std::cerr << "GPU: OpenCL prepare failed" << std::endl;

@@ -41,6 +41,18 @@ static cl_kernel g_ecm_kernel_wg = nullptr;
 static uint32_t g_kernel_limbs = 0;
 static bool g_device_info_printed = false;
 
+static int selected_device_index_from_env() {
+    const char *v = std::getenv("CGBN_OPENCL_DEVICE_INDEX");
+    if (!v || !*v) {
+        return 0;
+    }
+    try {
+        return std::stoi(v);
+    } catch (...) {
+        return 0;
+    }
+}
+
 static opencl_dump_ctx_t g_dump_ctx;
 
 struct ecm_ops_profile_counts_t {
@@ -583,7 +595,7 @@ static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms
         *device_init_ms = init_ms;
     }
     if (!g_device_info_printed) {
-        print_opencl_device_info(-1, init_ms);
+        print_opencl_device_info(selected_device_index_from_env(), init_ms);
         g_device_info_printed = true;
     }
     ocl_log_verbose(verbose, "OpenCL: built kernel MAX_LIMBS=%u (%.0fms)\n", limbs, init_ms);
@@ -655,7 +667,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     auto t_global_start = std::chrono::high_resolution_clock::now();
 
     ecm_ts_fprintf(stdout,
-            "GPU: OpenCL<%u> kernel, %zu-bit N, %u curves, sigma=%u-%u, s=%llu bits, np0=0x%08x\n",
+            "GPU: CGBN<%u> kernel, %zu-bit N, %u curves, sigma=%u-%u, s=%llu bits, np0=0x%08x\n",
             BITS, n_log2, curves, sigma, sigma + curves - 1,
             (unsigned long long)s_num_bits, np0);
     if (device_init_ms > 0.0) {

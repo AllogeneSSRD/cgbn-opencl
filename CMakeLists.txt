@@ -32,6 +32,7 @@ target_include_directories(opencl_ecm_entry PUBLIC
 
 add_executable(ecm
     src/cgbn_stage1_opencl.cpp
+    src/cl_probe.cpp
     src/ecm_driver.cpp
     src/ecm_params_init.cpp
     src/opencl_ecm_debug_utils.cpp

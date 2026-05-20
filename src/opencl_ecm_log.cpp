@@ -1,6 +1,7 @@
 #include "opencl_ecm_log.h"
 
 #include <chrono>
+#include <cstring>
 #include <ctime>
 #include <iomanip>
 #include <iostream>
@@ -64,7 +65,16 @@ bool g_installed = false;
 
 } // namespace
 
+bool ecm_log_timestamp_enabled() {
+    const char *v = std::getenv("ECM_LOG_TIMESTAMP");
+    if (!v || !*v) return true; // default ON
+    return !(strcmp(v, "0") == 0 || strcmp(v, "false") == 0 || strcmp(v, "FALSE") == 0);
+}
+
 void ecm_install_timestamped_iostreams() {
+    if (!ecm_log_timestamp_enabled()) {
+        return;
+    }
     std::lock_guard<std::mutex> lk(g_log_mutex);
     if (g_installed) {
         return;
@@ -77,6 +87,11 @@ void ecm_install_timestamped_iostreams() {
 }
 
 int ecm_ts_vfprintf(FILE *stream, const char *fmt, va_list ap) {
+    if (!ecm_log_timestamp_enabled()) {
+        int rc = std::vfprintf(stream, fmt, ap);
+        std::fflush(stream);
+        return rc;
+    }
     std::lock_guard<std::mutex> lk(g_log_mutex);
     std::string p = timestamp_prefix();
     std::fputs(p.c_str(), stream);

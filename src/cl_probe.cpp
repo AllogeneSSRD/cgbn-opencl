@@ -2,6 +2,7 @@
 #include <iostream>
 #include <vector>
 #include <string>
+#include <cstdlib>
 
 #define CHECK_CL(err, msg) \
     if (err != CL_SUCCESS) { \
@@ -9,17 +10,17 @@
         exit(EXIT_FAILURE); \
     }
 
-// 打印设备信息
+// Print device information.
 void printDeviceInfo(cl_device_id device) {
     cl_int err;
 
     char buffer[1024];
 
-    // 设备名称
+    // Device name
     clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(buffer), buffer, NULL);
     std::cout << "    Device Name: " << buffer << std::endl;
 
-    // 设备类型
+    // Device type
     cl_device_type devType;
     clGetDeviceInfo(device, CL_DEVICE_TYPE, sizeof(devType), &devType, NULL);
     std::cout << "    Device Type: "
@@ -27,25 +28,25 @@ void printDeviceInfo(cl_device_id device) {
                   (devType & CL_DEVICE_TYPE_CPU) ? "CPU" : "Other")
               << std::endl;
 
-    // 计算单元数量
+    // Compute unit count
     cl_uint computeUnits;
     clGetDeviceInfo(device, CL_DEVICE_MAX_COMPUTE_UNITS,
                     sizeof(computeUnits), &computeUnits, NULL);
     std::cout << "    Compute Units: " << computeUnits << std::endl;
 
-    // 最大频率
+    // Max frequency
     cl_uint freq;
     clGetDeviceInfo(device, CL_DEVICE_MAX_CLOCK_FREQUENCY,
                     sizeof(freq), &freq, NULL);
     std::cout << "    Clock Frequency: " << freq << " MHz" << std::endl;
 
-    // 工作组维度
+    // Work-group dimensions
     cl_uint dims;
     clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS,
                     sizeof(dims), &dims, NULL);
     std::cout << "    Work Item Dimensions: " << dims << std::endl;
 
-    // 每维最大 work-item
+    // Max work-item sizes per dimension
     std::vector<size_t> sizes(dims);
     clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_ITEM_SIZES,
                     sizeof(size_t) * dims, sizes.data(), NULL);
@@ -54,26 +55,26 @@ void printDeviceInfo(cl_device_id device) {
     for (auto s : sizes) std::cout << s << " ";
     std::cout << std::endl;
 
-    // 最大工作组大小
+    // Max work-group size
     size_t wgSize;
     clGetDeviceInfo(device, CL_DEVICE_MAX_WORK_GROUP_SIZE,
                     sizeof(wgSize), &wgSize, NULL);
     std::cout << "    Max Work Group Size: " << wgSize << std::endl;
 
-    // 全局内存
+    // Global memory
     cl_ulong globalMem;
     clGetDeviceInfo(device, CL_DEVICE_GLOBAL_MEM_SIZE,
                     sizeof(globalMem), &globalMem, NULL);
     std::cout << "    Global Memory: " << globalMem / (1024 * 1024) << " MB" << std::endl;
 
-    // 本地内存
+    // Local memory
     cl_ulong localMem;
     clGetDeviceInfo(device, CL_DEVICE_LOCAL_MEM_SIZE,
                     sizeof(localMem), &localMem, NULL);
     std::cout << "    Local Memory: " << localMem << " Bytes" << std::endl;
 }
 
-// 交互式选择设备（CLI 输入索引），返回选中的 cl_device_id
+// Interactive device selection by index, returns selected cl_device_id.
 cl_device_id chooseDeviceInteractive() {
     cl_uint numPlatforms;
     cl_int err = clGetPlatformIDs(0, NULL, &numPlatforms);
@@ -141,7 +142,7 @@ cl_device_id chooseDeviceInteractive() {
     return selDev;
 }
 
-// 主探测函数
+// Main probe function.
 void probePlatforms() {
     cl_uint numPlatforms;
     cl_int err = clGetPlatformIDs(0, NULL, &numPlatforms);
@@ -161,7 +162,7 @@ void probePlatforms() {
 
         std::cout << "\nPlatform " << i << ": " << buffer << std::endl;
 
-        // 获取设备
+        // Enumerate devices
         cl_uint numDevices;
         err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL,
                              0, NULL, &numDevices);
@@ -177,4 +178,74 @@ void probePlatforms() {
             printDeviceInfo(devices[j]);
         }
     }
+}
+
+int listOpenclDevices() {
+    cl_uint numPlatforms = 0;
+    cl_int err = clGetPlatformIDs(0, NULL, &numPlatforms);
+    if (err != CL_SUCCESS || numPlatforms == 0) {
+        std::cerr << "No OpenCL platforms found." << std::endl;
+        return 0;
+    }
+
+    std::vector<cl_platform_id> platforms(numPlatforms);
+    err = clGetPlatformIDs(numPlatforms, platforms.data(), NULL);
+    if (err != CL_SUCCESS) {
+        std::cerr << "Failed to enumerate OpenCL platforms, err=" << err << std::endl;
+        return 0;
+    }
+
+    int index = 0;
+    std::cout << "Available OpenCL devices:" << std::endl;
+    for (cl_uint i = 0; i < numPlatforms; i++) {
+        char pname[1024] = {0};
+        clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, sizeof(pname), pname, NULL);
+
+        cl_uint numDevices = 0;
+        err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
+        if (err == CL_DEVICE_NOT_FOUND || numDevices == 0) continue;
+        if (err != CL_SUCCESS) continue;
+
+        std::vector<cl_device_id> devices(numDevices);
+        err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, numDevices, devices.data(), NULL);
+        if (err != CL_SUCCESS) continue;
+
+        for (cl_uint j = 0; j < numDevices; j++) {
+            char dname[1024] = {0};
+            char dver[256] = {0};
+            cl_device_type dtype = 0;
+            clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof(dname), dname, NULL);
+            clGetDeviceInfo(devices[j], CL_DEVICE_VERSION, sizeof(dver), dver, NULL);
+            clGetDeviceInfo(devices[j], CL_DEVICE_TYPE, sizeof(dtype), &dtype, NULL);
+            const char *kind = (dtype & CL_DEVICE_TYPE_GPU) ? "GPU"
+                               : (dtype & CL_DEVICE_TYPE_CPU) ? "CPU"
+                                                              : "OTHER";
+            std::cout << "  [" << index << "] " << pname << " | " << dname
+                      << " | " << kind << " | " << dver << std::endl;
+            ++index;
+        }
+    }
+    if (index == 0) {
+        std::cerr << "No OpenCL devices found." << std::endl;
+    }
+    return index;
+}
+
+bool configureOpenclDeviceIndex(int deviceIndex, bool printDevices) {
+    if (printDevices) {
+        int count = listOpenclDevices();
+        if (count == 0) return false;
+        if (deviceIndex < 0 || deviceIndex >= count) {
+            std::cerr << "Invalid -d index: " << deviceIndex << ", available range: [0, "
+                      << (count - 1) << "]" << std::endl;
+            return false;
+        }
+    }
+    std::string v = std::to_string(deviceIndex);
+#ifdef _WIN32
+    _putenv_s("CGBN_OPENCL_DEVICE_INDEX", v.c_str());
+#else
+    setenv("CGBN_OPENCL_DEVICE_INDEX", v.c_str(), 1);
+#endif
+    return true;
 }
