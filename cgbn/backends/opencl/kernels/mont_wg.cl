@@ -97,11 +97,12 @@ __kernel void cgbn_mont_mul_wg(
     }
     barrier(CLK_LOCAL_MEM_FENCE);
     
-    // Conditional subtraction (all threads participate)
-    uint t_hi = local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2];
-    int ge = (t_hi != 0u || t[limbs] != 0u) ? 1 : 0;
-    if (!ge) {
-        if (tid == 0u) {
+    // Conditional subtraction: keep serial in tid0 to reduce synchronization
+    // overhead. Main CIOS path is already tid0-dominated.
+    if (tid == 0u) {
+        uint t_hi = local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2];
+        int ge = (t_hi != 0u || t[limbs] != 0u) ? 1 : 0;
+        if (!ge) {
             for (int i = (int)limbs - 1; i >= 0; --i) {
                 if (t[(uint)i] > N[(uint)i]) {
                     ge = 1;
@@ -112,31 +113,15 @@ __kernel void cgbn_mont_mul_wg(
                     break;
                 }
             }
-            local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2 + 1u] = (uint)ge;
         }
-        barrier(CLK_LOCAL_MEM_FENCE);
-        ge = (int)local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2 + 1u];
-    }
-    
-    if (ge) {
-        ulong borrow = 0ul;
-        for (uint i = tid * limbs_per_thread; i < (tid + 1u) * limbs_per_thread; ++i) {
-            ulong tv = (ulong)t[i];
-            ulong nv = (ulong)N[i];
-            ulong w = tv - nv - borrow;
-            t[i] = (uint)w;
-            borrow = (tv < nv + borrow) ? 1ul : 0ul;
-        }
-        local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2 + 2u + tid] = (uint)borrow;
-        barrier(CLK_LOCAL_MEM_FENCE);
-        
-        // Propagate borrow
-        if (tid == 0u) {
-            for (uint k = 1u; k < TPI; ++k) {
-                if (local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2 + 2u + k] != 0u) {
-                    ulong w = (ulong)t[k * limbs_per_thread] - 1ul;
-                    t[k * limbs_per_thread] = (uint)w;
-                }
+        if (ge) {
+            ulong borrow = 0ul;
+            for (uint i = 0u; i < limbs; ++i) {
+                ulong tv = (ulong)t[i];
+                ulong nv = (ulong)N[i];
+                ulong w = tv - nv - borrow;
+                t[i] = (uint)w;
+                borrow = (tv < nv + borrow) ? 1ul : 0ul;
             }
         }
     }
@@ -232,11 +217,12 @@ __kernel void cgbn_mont_sqr_wg(
     }
     barrier(CLK_LOCAL_MEM_FENCE);
     
-    // Conditional subtraction (all threads participate)
-    uint t_hi = local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2];
-    int ge = (t_hi != 0u || t[limbs] != 0u) ? 1 : 0;
-    if (!ge) {
-        if (tid == 0u) {
+    // Conditional subtraction: keep serial in tid0 to reduce synchronization
+    // overhead. Main CIOS path is already tid0-dominated.
+    if (tid == 0u) {
+        uint t_hi = local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2];
+        int ge = (t_hi != 0u || t[limbs] != 0u) ? 1 : 0;
+        if (!ge) {
             for (int i = (int)limbs - 1; i >= 0; --i) {
                 if (t[(uint)i] > N[(uint)i]) {
                     ge = 1;
@@ -247,31 +233,15 @@ __kernel void cgbn_mont_sqr_wg(
                     break;
                 }
             }
-            local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2 + 1u] = (uint)ge;
         }
-        barrier(CLK_LOCAL_MEM_FENCE);
-        ge = (int)local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2 + 1u];
-    }
-    
-    if (ge) {
-        ulong borrow = 0ul;
-        for (uint i = tid * limbs_per_thread; i < (tid + 1u) * limbs_per_thread; ++i) {
-            ulong tv = (ulong)t[i];
-            ulong nv = (ulong)N[i];
-            ulong w = tv - nv - borrow;
-            t[i] = (uint)w;
-            borrow = (tv < nv + borrow) ? 1ul : 0ul;
-        }
-        local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2 + 2u + tid] = (uint)borrow;
-        barrier(CLK_LOCAL_MEM_FENCE);
-        
-        // Propagate borrow
-        if (tid == 0u) {
-            for (uint k = 1u; k < TPI; ++k) {
-                if (local_mem[(MAX_LIMBS + 1) * 3 + MAX_LIMBS * 2 + 2u + k] != 0u) {
-                    ulong w = (ulong)t[k * limbs_per_thread] - 1ul;
-                    t[k * limbs_per_thread] = (uint)w;
-                }
+        if (ge) {
+            ulong borrow = 0ul;
+            for (uint i = 0u; i < limbs; ++i) {
+                ulong tv = (ulong)t[i];
+                ulong nv = (ulong)N[i];
+                ulong w = tv - nv - borrow;
+                t[i] = (uint)w;
+                borrow = (tv < nv + borrow) ? 1ul : 0ul;
             }
         }
     }

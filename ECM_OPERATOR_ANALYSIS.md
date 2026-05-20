@@ -290,3 +290,30 @@ Implication:
 
 - Cooperative WG Montgomery is currently the strongest next direction for `mul` optimization and should be the first candidate for stage-1 integration experiments.
 
+## 13) WG Optimization Round (Conditional-Sub Simplification)
+
+Change:
+
+- in `mont_wg.cl`, conditional final subtraction was changed from multi-thread borrow propagation
+  to `tid==0` serial subtraction.
+- objective: reduce barrier/synchronization overhead and simplify borrow handling.
+
+Observed (selected):
+
+- 2048-bit (`--use-wg --tpi 4`, `200x128x20`):
+  - `mont_mul_wg`: ~489k ops/s
+  - `mont_sqr_wg`: ~787k ops/s
+- 1024-bit (`--use-wg --tpi 4`, `500x192x20`):
+  - `mont_mul_wg`: ~1.864M ops/s
+  - `mont_sqr_wg`: ~1.877M ops/s
+
+Interpretation:
+
+- serial conditional subtraction did not hurt WG path and appears to stabilize/retain good throughput.
+- because the main CIOS body is already `tid==0` dominated, simplifying tail subtraction is a good low-risk WG cleanup.
+
+Note:
+
+- to keep comparisons fair, always compare with identical `bits/instances/iterations/repeats`.
+- keep WG as optional mode while validating correctness and full stage-1 integration behavior.
+
