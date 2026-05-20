@@ -105,6 +105,22 @@ private:
                 parse_power(rhs);
                 mpz_mul(lhs, lhs, rhs);
                 mpz_clear(rhs);
+            } else if (match('/')) {
+                mpz_t rhs;
+                mpz_init(rhs);
+                parse_power(rhs);
+                if (mpz_sgn(rhs) == 0) {
+                    set_error("division by zero");
+                    mpz_clear(rhs);
+                    break;
+                }
+                if (!mpz_divisible_p(lhs, rhs)) {
+                    set_error("division is not exact (result would not be an integer)");
+                    mpz_clear(rhs);
+                    break;
+                }
+                mpz_divexact(lhs, lhs, rhs);
+                mpz_clear(rhs);
             } else {
                 break;
             }
@@ -197,28 +213,93 @@ private:
 
 // Compute batch product s = prod_{p<=B1} p^{floor(log_p(B1))}
 static bool compute_batch_s(mpz_t s, double B1){
-    if(B1 < 2.0) { mpz_set_ui(s, 1); return true; }
-    uint32_t limit = (uint32_t) std::floor(B1 + 0.0001);
-    std::vector<char> sieve(limit+1, 1);
-    sieve[0]=sieve[1]=0;
-    for(uint32_t p=2;p*(uint64_t)p<=limit;++p){
-        if(sieve[p]){
-            for(uint64_t q=(uint64_t)p*p;q<=limit;q+=p) sieve[(size_t)q]=0;
+    static const unsigned MAX_HEIGHT = 32;
+
+    if(B1 < 2.0) {
+        mpz_set_ui(s, 1);
+        return true;
+    }
+
+    const uint64_t limit64 = (uint64_t)std::floor(B1 + 0.0001);
+    if (limit64 < 2 || limit64 > 5000000000ULL) {
+        return false;
+    }
+
+    const uint32_t limit = (uint32_t)limit64;
+
+    std::vector<char> sieve((size_t)limit + 1u, 1);
+    sieve[0] = sieve[1] = 0;
+    for (uint32_t p = 2; (uint64_t)p * (uint64_t)p <= limit; ++p) {
+        if (!sieve[p]) {
+            continue;
+        }
+        for (uint64_t q = (uint64_t)p * (uint64_t)p; q <= limit; q += p) {
+            sieve[(size_t)q] = 0;
         }
     }
-    mpz_set_ui(s,1);
-    mpz_t term; mpz_init(term);
-    for(uint32_t p=2;p<=limit;++p){
-        if(!sieve[p]) continue;
-        // compute p^e <= limit
-        uint64_t pp = p;
-        while(pp <= limit){
-            mpz_mul_ui(s, s, p);
-            if(pp > (uint64_t)limit / p) break;
-            pp *= p;
+
+    mpz_t acc[MAX_HEIGHT];
+    mpz_t ppz;
+    for (unsigned j = 0; j < MAX_HEIGHT; ++j) {
+        mpz_init(acc[j]);
+    }
+    mpz_init(ppz);
+
+    unsigned i = 0;
+    for (uint32_t pi = 2; pi <= limit; ++pi) {
+        if (!sieve[pi]) {
+            continue;
+        }
+
+        uint64_t pp = pi;
+        const uint64_t maxpp = limit / pi;
+        while (pp <= maxpp) {
+            pp *= pi;
+        }
+
+        mpz_import(ppz, 1, -1, sizeof(pp), 0, 0, &pp);
+
+        if ((i & 1u) == 0u) {
+            mpz_set(acc[0], ppz);
+        } else {
+            mpz_mul(acc[0], acc[0], ppz);
+        }
+
+        unsigned j = 0;
+        while ((i & (1u << j)) != 0u) {
+            if (j + 1 >= MAX_HEIGHT - 1) {
+                for (unsigned k = 0; k < MAX_HEIGHT; ++k) {
+                    mpz_clear(acc[k]);
+                }
+                mpz_clear(ppz);
+                return false;
+            }
+
+            if ((i & (1u << (j + 1))) == 0u) {
+                mpz_swap(acc[j + 1], acc[j]);
+            } else {
+                mpz_mul(acc[j + 1], acc[j + 1], acc[j]);
+            }
+            mpz_set_ui(acc[j], 1);
+            ++j;
+        }
+
+        ++i;
+    }
+
+    if (i == 0) {
+        mpz_set_ui(s, 1);
+    } else {
+        mpz_set(s, acc[0]);
+        for (unsigned j = 1; j < MAX_HEIGHT && mpz_cmp_ui(acc[j], 0) != 0; ++j) {
+            mpz_mul(s, s, acc[j]);
         }
     }
-    mpz_clear(term);
+
+    for (unsigned j = 0; j < MAX_HEIGHT; ++j) {
+        mpz_clear(acc[j]);
+    }
+    mpz_clear(ppz);
     return true;
 }
 
@@ -313,6 +394,7 @@ int main(int argc, char **argv){
         std::cerr << "Failed to compute batch_s"<<std::endl;
         return 1;
     }
+    std::cout << "batch_s bit-size: " << mpz_sizeinbase(batch_s, 2) << std::endl;
     mpz_set(params->batch_s, batch_s);
     params->batch_last_B1_used = B1;
 
