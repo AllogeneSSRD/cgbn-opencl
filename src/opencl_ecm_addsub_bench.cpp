@@ -10,6 +10,7 @@
 #include <vector>
 #include <cstdlib>
 #include <fstream>
+#include <sstream>
 
 namespace {
 
@@ -66,7 +67,8 @@ void query_kernel_resources(cl_kernel k, cl_device_id dev, size_t &private_bytes
 
 } // namespace
 
-bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances, int launch_repeats) {
+bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances, int launch_repeats,
+                                 bool use_wg, int tpi) {
     if (bits <= 0 || (bits % 32) != 0 || (uint32_t)bits > MAX_BENCH_BITS) {
         std::cerr << "bits must be a positive multiple of 32 and <= " << MAX_BENCH_BITS
                   << std::endl;
@@ -78,7 +80,9 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     std::cout << "ECM add/sub microbench: " << BITS
               << "-bit, kernel_iterations=" << kernel_iterations
               << ", instances=" << instances
-              << ", launch_repeats=" << launch_repeats << std::endl;
+              << ", launch_repeats=" << launch_repeats
+              << ", mode=" << (use_wg ? "wg" : "priv")
+              << ", tpi=" << tpi << std::endl;
 
     mpz_t n_gmp, a_gmp, b_gmp;
     mpz_init(n_gmp);
@@ -117,14 +121,34 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
 
     std::string mont_priv = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv.cl");
     std::string bench_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_addsub_bench.cl");
-    if (mont_priv.empty() || bench_src.empty()) {
+    std::string mont_wg_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg.cl");
+    std::string mont_wg_bench_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg_bench.cl");
+    if (bench_src.empty()) {
         std::cerr << "Failed to load ecm_addsub_bench.cl" << std::endl;
         return false;
     }
-    std::string src = mont_priv + "\n" + bench_src;
+    if (!use_wg && mont_priv.empty()) {
+        std::cerr << "Failed to load mont_priv.cl" << std::endl;
+        return false;
+    }
+    if (use_wg && (mont_wg_src.empty() || mont_wg_bench_src.empty())) {
+        std::cerr << "Failed to load mont_wg sources" << std::endl;
+        return false;
+    }
+    std::string src;
+    if (use_wg) {
+        const std::string include_line = "#include \"mont_wg.cl\"";
+        size_t inc_pos = mont_wg_bench_src.find(include_line);
+        if (inc_pos != std::string::npos) {
+            mont_wg_bench_src.erase(inc_pos, include_line.size());
+        }
+        src = mont_wg_src + "\n" + mont_wg_bench_src + "\n" + mont_priv + "\n" + bench_src;
+    } else {
+        src = mont_priv + "\n" + bench_src;
+    }
     cl_int buildErr = CL_SUCCESS;
-    char build_opts[64];
-    snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u", WORDS);
+    char build_opts[96];
+    snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DTPI=%d", WORDS, tpi);
     cl_program program = cgbn::opencl::build_program_from_source(
         ctx, src.c_str(), build_opts, buildErr);
     if (program == nullptr || buildErr != CL_SUCCESS) {
@@ -205,6 +229,62 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         return ok;
     };
 
+    auto run_named_wg = [&](const char *kname, bool is_mul, double &ms_out) -> bool {
+        cl_int kerr = CL_SUCCESS;
+        cl_kernel k = clCreateKernel(program, kname, &kerr);
+        if (kerr != CL_SUCCESS) {
+            std::cerr << "Create kernel " << kname << " failed: " << kerr << std::endl;
+            return false;
+        }
+        clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+        if (is_mul) {
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufN);
+            clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 4, sizeof(cl_uint), &np0);
+            clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+            clSetKernelArg(k, 6, sizeof(cl_uint), &iters);
+        } else {
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufN);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 3, sizeof(cl_uint), &np0);
+            clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+            clSetKernelArg(k, 5, sizeof(cl_uint), &iters);
+        }
+        size_t local_mem_size = ((WORDS + 1u) * 3u + WORDS * 2u + (uint32_t)tpi) * sizeof(uint32_t);
+        clSetKernelArg(k, is_mul ? 7 : 6, local_mem_size, nullptr);
+
+        size_t local = (size_t)tpi;
+        size_t global_wg = (size_t)instances * local;
+        auto t0 = std::chrono::high_resolution_clock::now();
+        for (int i = 0; i < launch_repeats; ++i) {
+            cl_int err2 = clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &global_wg, &local, 0, nullptr, nullptr);
+            if (err2 != CL_SUCCESS) {
+                std::cerr << "Enqueue " << kname << " failed: " << err2 << std::endl;
+                clReleaseKernel(k);
+                return false;
+            }
+        }
+        clFinish(ctx.queue);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        ms_out = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+        size_t priv_b = 0, loc_b = 0, pref = 0, wg = 0;
+        query_kernel_resources(k, ctx.device, priv_b, loc_b, pref, wg);
+        double op_count = (double)instances * (double)kernel_iterations * (double)launch_repeats;
+        double ops_s = op_count / (ms_out / 1000.0);
+        std::cout << "  [" << kname << "] private_mem=" << priv_b
+                  << "B local_mem=" << loc_b
+                  << "B pref_wg=" << pref
+                  << " max_wg=" << wg << std::endl;
+        if (csv_enabled) {
+            csv << kname << "," << ms_out << "," << ops_s << "," << priv_b << "," << loc_b
+                << "," << pref << "," << wg << "\n";
+        }
+        clReleaseKernel(k);
+        return true;
+    };
+
     double t_add_n = 0.0, t_add_mod = 0.0, t_sub_mod = 0.0, t_mul_priv = 0.0, t_sqr_priv = 0.0;
     if (!run_named("ecm_mp_add_n_bench", false, t_add_n)) return false;
     if (!run_named("ecm_mp_add_mod_bench", true, t_add_mod)) return false;
@@ -257,6 +337,16 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     std::cout << "mont_mul_priv: " << t_mul_priv << " ms, " << (op_count / (t_mul_priv / 1000.0)) << " ops/s" << std::endl;
     std::cout << "mont_sqr_priv: " << t_sqr_priv << " ms, " << (op_count / (t_sqr_priv / 1000.0)) << " ops/s" << std::endl;
 
+    if (use_wg) {
+        double t_mul_wg = 0.0, t_sqr_wg = 0.0;
+        if (!run_named_wg("cgbn_mont_mul_wg_bench", true, t_mul_wg)) return false;
+        if (!run_named_wg("cgbn_mont_sqr_wg_bench", false, t_sqr_wg)) return false;
+        std::cout << "mont_mul_wg:   " << t_mul_wg << " ms, " << (op_count / (t_mul_wg / 1000.0))
+                  << " ops/s" << std::endl;
+        std::cout << "mont_sqr_wg:   " << t_sqr_wg << " ms, " << (op_count / (t_sqr_wg / 1000.0))
+                  << " ops/s" << std::endl;
+    }
+
     clReleaseMemObject(bufA);
     clReleaseMemObject(bufB);
     clReleaseMemObject(bufN);
@@ -277,6 +367,8 @@ int main(int argc, char **argv) {
     int kernel_iterations = 1000;
     int instances = 256;
     int launch_repeats = 50;
+    bool use_wg = false;
+    int tpi = 4;
     std::vector<std::string> pos;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
@@ -284,12 +376,21 @@ int main(int argc, char **argv) {
             bits = std::stoi(std::string(argv[++i]));
             continue;
         }
+        if (a == "--use-wg") {
+            use_wg = true;
+            continue;
+        }
+        if (a == "--tpi" && i + 1 < argc) {
+            tpi = std::stoi(std::string(argv[++i]));
+            continue;
+        }
         pos.push_back(a);
     }
     if (pos.size() >= 1) kernel_iterations = std::stoi(pos[0]);
     if (pos.size() >= 2) instances = std::stoi(pos[1]);
     if (pos.size() >= 3) launch_repeats = std::stoi(pos[2]);
-    bool ok = runOpenClEcmAddSubBenchmark(bits, kernel_iterations, instances, launch_repeats);
+    bool ok = runOpenClEcmAddSubBenchmark(bits, kernel_iterations, instances, launch_repeats,
+                                          use_wg, tpi);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 #endif

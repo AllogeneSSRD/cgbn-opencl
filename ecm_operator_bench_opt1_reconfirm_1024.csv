@@ -1,0 +1,6 @@
+kernel,ms,ops_per_s,private_mem_bytes,local_mem_bytes,preferred_wg_multiple,max_wg_size
+ecm_mp_add_n_bench,71.5397,1.78922e+08,384,1,32,256
+ecm_mp_add_mod_bench,76.6468,1.67e+08,512,1,32,256
+ecm_mp_sub_mod_bench,75.1897,1.70236e+08,512,1,32,256
+ecm_mont_mul_priv_bench,3482.95,3.67504e+06,656,1,32,256
+ecm_mont_sqr_priv_bench,2692.09,4.75467e+06,528,1,32,256

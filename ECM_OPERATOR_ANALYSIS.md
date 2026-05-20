@@ -217,3 +217,76 @@ Notes:
 `opencl_ecm_addsub` now builds kernels with `-DMAX_LIMBS=<bits/32>` (not fixed 128).  
 This avoids inflating private memory for smaller bit-width tests and makes cross-run comparisons fairer.
 
+## 11) Failed Direction Log (Do-Not-Repeat)
+
+To avoid revisiting already-tested regressions, record them explicitly.
+
+### 11.1 Round-3 attempt: branch-split + manual unroll in Montgomery reduction
+
+Change attempted:
+
+- rewrote reduction loop to handle `j=0` separately and remove `if (j>0)`
+- added loop unroll hints in hot loops
+
+Observed result:
+
+- severe throughput regression at both 1024 and 2048 bits
+- reverted immediately
+
+Likely reason:
+
+- generated code lost favorable scheduling; carry-chain pressure worsened
+- unroll/branch transformation interacted poorly with this OpenCL compiler backend
+
+Status:
+
+- **reverted**, not part of current baseline.
+
+### 11.2 SQR specialization attempt with extra cached `A[]`
+
+Change attempted:
+
+- dedicated `mont_sqr_priv` body (instead of aliasing to mul)
+- cached additional private array `A[]`
+
+Observed result:
+
+- mixed/negative outcome; 1024-bit notably regressed
+- private/register pressure increased
+
+Status:
+
+- **reverted**, baseline keeps `mont_sqr_priv -> mont_mul_priv(out, a, a, ...)`.
+
+## 12) Switchable `mont_wg` Path (Prototype in Bench)
+
+`opencl_ecm_addsub` now supports switchable cooperative kernels:
+
+- private path (default)
+- work-group path: `--use-wg --tpi <N>`
+
+Example:
+
+- `.\build\Debug\opencl_ecm_addsub.exe --bits 2048 --use-wg --tpi 4 200 128 20`
+
+### 12.1 2048-bit comparison (same run config)
+
+Private path:
+
+- `mont_mul_priv`: ~417k ops/s
+- `mont_sqr_priv`: ~460k ops/s
+
+Work-group path (`TPI=4`):
+
+- `mont_mul_wg`: ~794k ops/s
+- `mont_sqr_wg`: ~791k ops/s
+
+Resource observation:
+
+- WG kernels report near-zero private mem, with local mem around 1328 B.
+- This aligns with improved throughput from reduced register pressure.
+
+Implication:
+
+- Cooperative WG Montgomery is currently the strongest next direction for `mul` optimization and should be the first candidate for stage-1 integration experiments.
+
