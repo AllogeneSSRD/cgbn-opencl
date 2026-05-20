@@ -1,0 +1,2 @@
+curves,s_num_bits,kernel_bits_processed,batches,gputime_ms,double_add_calls,mp_add_mod,mp_sub_mod,mont_mul_priv,mont_sqr_priv,mont_normalize,special_mult_ui32,mp_shift_left_1_mod
+32,14447,14446,73,6659.31,462272,1849088,1849088,1849088,1849088,3698176,462272,462272

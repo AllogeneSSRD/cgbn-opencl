@@ -13,8 +13,8 @@
 
 namespace {
 
-constexpr uint32_t BITS = 1024;
-constexpr uint32_t WORDS = BITS / 32;
+constexpr uint32_t MAX_BENCH_BITS = 4096;
+constexpr uint32_t MAX_BENCH_WORDS = MAX_BENCH_BITS / 32;
 
 void fill_from_gmp(const mpz_t v, uint32_t *out_words, size_t words) {
     mpz_t tmp, mod;
@@ -66,7 +66,15 @@ void query_kernel_resources(cl_kernel k, cl_device_id dev, size_t &private_bytes
 
 } // namespace
 
-bool runOpenClEcmAddSubBenchmark(int kernel_iterations, int instances, int launch_repeats) {
+bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances, int launch_repeats) {
+    if (bits <= 0 || (bits % 32) != 0 || (uint32_t)bits > MAX_BENCH_BITS) {
+        std::cerr << "bits must be a positive multiple of 32 and <= " << MAX_BENCH_BITS
+                  << std::endl;
+        return false;
+    }
+    const uint32_t BITS = (uint32_t)bits;
+    const uint32_t WORDS = BITS / 32;
+
     std::cout << "ECM add/sub microbench: " << BITS
               << "-bit, kernel_iterations=" << kernel_iterations
               << ", instances=" << instances
@@ -115,8 +123,10 @@ bool runOpenClEcmAddSubBenchmark(int kernel_iterations, int instances, int launc
     }
     std::string src = mont_priv + "\n" + bench_src;
     cl_int buildErr = CL_SUCCESS;
+    char build_opts[64];
+    snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u", MAX_BENCH_WORDS);
     cl_program program = cgbn::opencl::build_program_from_source(
-        ctx, src.c_str(), "-DMAX_LIMBS=64", buildErr);
+        ctx, src.c_str(), build_opts, buildErr);
     if (program == nullptr || buildErr != CL_SUCCESS) {
         std::cerr << "Failed to build ecm_addsub_bench.cl: " << buildErr << std::endl;
         return false;
@@ -263,13 +273,23 @@ bool runOpenClEcmAddSubBenchmark(int kernel_iterations, int instances, int launc
 #ifdef BUILD_OPENCL_ECM_ADDSUB_MAIN
 #include <cstdlib>
 int main(int argc, char **argv) {
+    int bits = 1024;
     int kernel_iterations = 1000;
     int instances = 256;
     int launch_repeats = 50;
-    if (argc >= 2) kernel_iterations = std::stoi(std::string(argv[1]));
-    if (argc >= 3) instances = std::stoi(std::string(argv[2]));
-    if (argc >= 4) launch_repeats = std::stoi(std::string(argv[3]));
-    bool ok = runOpenClEcmAddSubBenchmark(kernel_iterations, instances, launch_repeats);
+    std::vector<std::string> pos;
+    for (int i = 1; i < argc; ++i) {
+        std::string a = argv[i];
+        if (a == "--bits" && i + 1 < argc) {
+            bits = std::stoi(std::string(argv[++i]));
+            continue;
+        }
+        pos.push_back(a);
+    }
+    if (pos.size() >= 1) kernel_iterations = std::stoi(pos[0]);
+    if (pos.size() >= 2) instances = std::stoi(pos[1]);
+    if (pos.size() >= 3) launch_repeats = std::stoi(pos[2]);
+    bool ok = runOpenClEcmAddSubBenchmark(bits, kernel_iterations, instances, launch_repeats);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 #endif

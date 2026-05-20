@@ -137,3 +137,42 @@ Recommended immediate path:
 
 Use this report + `ecm_operator_bench.csv` as baseline before replacing stage-1 core paths.
 
+## 8) Runtime Operator Profile (Stage-1 Real Run)
+
+Profiling mode now supports runtime count export:
+
+- enable with `ECM_PROFILE_OPS=1`
+- optional CSV path: `ECM_PROFILE_OPS_FILE=ecm_ops_profile.csv`
+
+Example measured run (`N=2^521-1`, `B1=1e4`, `curves=32`):
+
+- `s_num_bits = 14447`
+- `kernel_bits_processed = 14446` (first bit handled by initial P/2P setup)
+- `batches = 73`
+- `gputime_ms = 6659.31`
+
+Derived operator totals:
+
+- `double_add_v2 = 462272`
+- `mp_add_mod = 1849088`
+- `mp_sub_mod = 1849088`
+- `mont_mul_priv = 1849088`
+- `mont_sqr_priv = 1849088`
+- `mont_normalize = 3698176`
+- `special_mult_ui32 = 462272`
+- `mp_shift_left_1_mod = 462272`
+
+This confirms arithmetic hotspot concentration in Montgomery mul/sqr + normalize chains.
+
+## 9) Bit-Width Sweep Support
+
+`opencl_ecm_addsub` now supports:
+
+- `--bits 1024|2048|4096` (or any positive multiple of 32 up to 4096)
+
+This allows quick scaling studies before algorithm/ASM work:
+
+- `.\build\Debug\opencl_ecm_addsub.exe --bits 1024 1000 256 50`
+- `.\build\Debug\opencl_ecm_addsub.exe --bits 2048 600 256 30`
+- `.\build\Debug\opencl_ecm_addsub.exe --bits 4096 300 128 20`
+
