@@ -3,12 +3,13 @@
 #include "cgbn_stage1.h"
 #include "ecm.h"
 #include "cgbn_opencl.h"
+#include "opencl_ecm_debug_utils.h"
+#include "opencl_ecm_log.h"
 
 #include <CL/cl.h>
 #include <gmp.h>
 
 #include <algorithm>
-#include <cstdarg>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -16,7 +17,6 @@
 #include <cstring>
 #include <string>
 #include <vector>
-#include <fstream>
 
 #ifdef _WIN32
 #include <process.h>
@@ -41,23 +41,7 @@ static cl_kernel g_ecm_kernel_wg = nullptr;
 static uint32_t g_kernel_limbs = 0;
 static bool g_device_info_printed = false;
 
-struct opencl_dump_ctx_t {
-    bool enabled = false;
-    std::ofstream out;
-};
-
 static opencl_dump_ctx_t g_dump_ctx;
-
-static bool env_flag_enabled(const char *name) {
-    const char *v = std::getenv(name);
-    if (!v || !*v) return false;
-    return !(strcmp(v, "0") == 0 || strcmp(v, "false") == 0 || strcmp(v, "FALSE") == 0);
-}
-
-static const char *env_string_or_default(const char *name, const char *fallback) {
-    const char *v = std::getenv(name);
-    return (v && *v) ? v : fallback;
-}
 
 struct ecm_ops_profile_counts_t {
     uint64_t kernel_bits_processed = 0;   // bits processed by kernel loop only
@@ -90,11 +74,11 @@ static ecm_ops_profile_counts_t compute_ops_profile_counts(uint64_t kernel_bits_
 static void emit_ops_profile(const ecm_ops_profile_counts_t &c, uint32_t curves, uint64_t s_num_bits,
                              int batches_complete, float gputime_ms, int verbose) {
     (void)verbose;
-    fprintf(stdout,
+    ecm_ts_fprintf(stdout,
             "ECM_PROFILE_OPS: curves=%u s_bits=%llu kernel_bits=%llu batches=%d gputime_ms=%.3f\n",
             curves, (unsigned long long)s_num_bits, (unsigned long long)c.kernel_bits_processed,
             batches_complete, gputime_ms);
-    fprintf(stdout,
+    ecm_ts_fprintf(stdout,
             "ECM_PROFILE_OPS: double_add_v2=%llu, mp_add_mod=%llu, mp_sub_mod=%llu, "
             "mont_mul_priv=%llu, mont_sqr_priv=%llu, mont_normalize=%llu, "
             "special_mult_ui32=%llu, mp_shift_left_1_mod=%llu\n",
@@ -111,7 +95,7 @@ static void emit_ops_profile(const ecm_ops_profile_counts_t &c, uint32_t curves,
     const char *csv_path = env_string_or_default("ECM_PROFILE_OPS_FILE", "ecm_ops_profile.csv");
     std::ofstream out(csv_path, std::ios::out | std::ios::app);
     if (!out.is_open()) {
-        fprintf(stderr, "ECM_PROFILE_OPS: failed to open %s for append\n", csv_path);
+        ecm_ts_fprintf(stderr, "ECM_PROFILE_OPS: failed to open %s for append\n", csv_path);
         return;
     }
     if (out.tellp() == std::streampos(0)) {
@@ -126,44 +110,6 @@ static void emit_ops_profile(const ecm_ops_profile_counts_t &c, uint32_t curves,
         << "\n";
 }
 
-static void dump_opencl_state_rows(const char *stage, int batch_index, uint64_t s_partial,
-                                   uint64_t batch_size, uint32_t sigma, uint32_t curves,
-                                   uint32_t BITS, uint32_t TPI, const uint32_t *data,
-                                   uint32_t limbs) {
-    if (!g_dump_ctx.enabled || !g_dump_ctx.out.is_open()) {
-        return;
-    }
-    auto to_mpz_local = [](mpz_t r, const uint32_t *x, uint32_t count) {
-        mpz_import(r, count, -1, sizeof(uint32_t), 0, 0, x);
-    };
-    mpz_t v;
-    mpz_init(v);
-    const uint32_t stride = 5u * limbs;
-    for (uint32_t curve = 0; curve < curves; ++curve) {
-        const uint32_t *datum = data + curve * stride;
-        g_dump_ctx.out << stage << "," << batch_index << "," << s_partial << "," << batch_size
-                       << "," << sigma << "," << curve << "," << BITS << "," << TPI;
-        for (uint32_t slot = 0; slot < 5; ++slot) {
-            to_mpz_local(v, datum + slot * limbs, limbs);
-            char *hex = mpz_get_str(nullptr, 16, v);
-            g_dump_ctx.out << ",0x" << hex;
-            free(hex);
-        }
-        g_dump_ctx.out << "\n";
-    }
-    mpz_clear(v);
-    g_dump_ctx.out.flush();
-}
-
-static void ocl_log_verbose(int verbose, const char *fmt, ...) {
-    if (verbose < 1) {
-        return;
-    }
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-}
 
 static int print_nth_batch(int n) {
     return ((n < 3) || (n < 30 && n % 10 == 0) || (n < 500 && n % 100 == 0) ||
@@ -197,13 +143,13 @@ static void print_opencl_device_info(int device_index, double init_ms) {
     clGetDeviceInfo(g_ctx.device, CL_DEVICE_MAX_MEM_ALLOC_SIZE, sizeof(max_mem_alloc),
                     &max_mem_alloc, nullptr);
 
-    fprintf(stdout, "GPU: will use device %d: %s, %s, %u compute units.\n", device_index,
+    ecm_ts_fprintf(stdout, "GPU: will use device %d: %s, %s, %u compute units.\n", device_index,
             dev_name, dev_version, compute_units);
-    fprintf(stdout, "GPU: driver %s\n", driver_version);
-    fprintf(stdout,
+    ecm_ts_fprintf(stdout, "GPU: driver %s\n", driver_version);
+    ecm_ts_fprintf(stdout,
             "GPU: maxSharedPerBlock = %lu maxThreadsPerBlock = %zu maxMemAllocPerBuffer = %lu\n",
             (unsigned long)local_mem, max_wg, (unsigned long)max_mem_alloc);
-    fprintf(stdout, "GPU: Selection and initialization of the device took %.0fms\n", init_ms);
+    ecm_ts_fprintf(stdout, "GPU: Selection and initialization of the device took %.0fms\n", init_ms);
     fflush(stdout);
 }
 
@@ -251,7 +197,7 @@ extern "C" void gpu_compute_batch_d(mpz_t d_out, uint32_t sigma, const mpz_t N) 
 static void from_mpz(const mpz_t s, uint32_t *x, uint32_t count) {
     size_t words;
     if (mpz_sizeinbase(s, 2) > (size_t)count * 32) {
-        fprintf(stderr, "from_mpz: value does not fit in %u limbs\n", count);
+        ecm_ts_fprintf(stderr, "from_mpz: value does not fit in %u limbs\n", count);
         exit(EXIT_FAILURE);
     }
     mpz_export(x, &words, -1, sizeof(uint32_t), 0, 0, s);
@@ -398,7 +344,7 @@ static int selftest_opencl_mont_mul(const mpz_t N, uint32_t bits, uint32_t np0) 
     from_montgomery(r, r, N, np0, limbs);
     int ok = (mpz_cmp(r, six) == 0);
     if (!ok) {
-        fprintf(stderr, "GPU: mont_mul self-test failed (2*3 mod N)\n");
+        ecm_ts_fprintf(stderr, "GPU: mont_mul self-test failed (2*3 mod N)\n");
     }
     clReleaseMemObject(bufA);
     clReleaseMemObject(bufB);
@@ -426,7 +372,7 @@ static int selftest_montgomery(const mpz_t N, uint32_t bits) {
     from_montgomery(back, mont_mpz, N, find_np0(N), limbs);
     int ok = (mpz_cmp(back, two) == 0);
     if (!ok) {
-        fprintf(stderr, "GPU: Montgomery self-test failed (2 -> mont -> 2)\n");
+        ecm_ts_fprintf(stderr, "GPU: Montgomery self-test failed (2 -> mont -> 2)\n");
     }
     mpz_clear(two);
     mpz_clear(mont_mpz);
@@ -515,7 +461,7 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
 
         to_mpz(modulo, datum + 0 * limbs_per, limbs_per);
         if (mpz_cmp(modulo, N) != 0) {
-            fprintf(stderr, "GPU: curve %d modulus mismatch\n", i);
+            ecm_ts_fprintf(stderr, "GPU: curve %d modulus mismatch\n", i);
         }
 
         mpz_t x_mont, z_mont;
@@ -532,14 +478,14 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
         if (mpz_cmp_ui(x_std, 2) == 0 && mpz_cmp_ui(z_std, 1) == 0) {
             errors++;
             if (errors < 10) {
-                fprintf(stderr, "GPU: curve %d may not have computed (still at initial point)\n", i);
+                ecm_ts_fprintf(stderr, "GPU: curve %d may not have computed (still at initial point)\n", i);
             }
         }
 
         array_found[i] = findfactor(factors[i], N, x_std, z_std);
         if (array_found[i] != ECM_NO_FACTOR_FOUND) {
             youpi = array_found[i];
-            fprintf(stderr, "GPU: factor found in Step 1 with curve %d (-sigma %d:%u)\n",
+            ecm_ts_fprintf(stderr, "GPU: factor found in Step 1 with curve %d (-sigma %d:%u)\n",
                     i, ECM_PARAM_BATCH_32BITS_D, sigma + (uint32_t)i);
         }
     }
@@ -592,7 +538,7 @@ static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms
     if (!g_ctx_ready) {
         cl_int err = cgbn::opencl::create_context(g_ctx);
         if (err != CL_SUCCESS) {
-            fprintf(stderr, "OpenCL: failed to create context (%d)\n", err);
+            ecm_ts_fprintf(stderr, "OpenCL: failed to create context (%d)\n", err);
             return -1;
         }
         g_ctx_ready = true;
@@ -603,7 +549,7 @@ static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms
     std::string ecm_src =
         cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_stage1.cl");
     if (mont_priv.empty() || ecm_src.empty()) {
-        fprintf(stderr, "OpenCL: failed to load kernel sources (run from project root)\n");
+        ecm_ts_fprintf(stderr, "OpenCL: failed to load kernel sources (run from project root)\n");
         return -1;
     }
     std::string src = mont_priv + "\n" + ecm_src;
@@ -614,19 +560,19 @@ static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms
     cl_int buildErr = CL_SUCCESS;
     g_ecm_program = cgbn::opencl::build_program_from_source(g_ctx, src.c_str(), opts, buildErr);
     if (g_ecm_program == nullptr || buildErr != CL_SUCCESS) {
-        fprintf(stderr, "OpenCL: failed to build ecm_stage1.cl\n");
+        ecm_ts_fprintf(stderr, "OpenCL: failed to build ecm_stage1.cl\n");
         return -1;
     }
 
     cl_int err;
     g_ecm_kernel = clCreateKernel(g_ecm_program, "kernel_double_add", &err);
     if (err != CL_SUCCESS) {
-        fprintf(stderr, "OpenCL: kernel_double_add not found (%d)\n", err);
+        ecm_ts_fprintf(stderr, "OpenCL: kernel_double_add not found (%d)\n", err);
         return -1;
     }
     g_ecm_kernel_wg = clCreateKernel(g_ecm_program, "kernel_double_add_wg", &err);
     if (err != CL_SUCCESS) {
-        fprintf(stderr, "OpenCL: kernel_double_add_wg not found (%d)\n", err);
+        ecm_ts_fprintf(stderr, "OpenCL: kernel_double_add_wg not found (%d)\n", err);
         return -1;
     }
     g_kernel_limbs = limbs;
@@ -660,7 +606,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
 
     uint32_t sigma = *sigma_ptr;
     if (sigma == 0 || (uint64_t)sigma + curves > 0xFFFFFFFFull) {
-        fprintf(stderr, "Invalid sigma/curves range\n");
+        ecm_ts_fprintf(stderr, "Invalid sigma/curves range\n");
         return ECM_ERROR;
     }
 
@@ -673,7 +619,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     size_t n_log2 = mpz_sizeinbase(N, 2);
     uint32_t BITS = select_bits(n_log2);
     if (BITS == 0) {
-        fprintf(stderr, "No OpenCL kernel large enough for N (%zu bits)\n", n_log2);
+        ecm_ts_fprintf(stderr, "No OpenCL kernel large enough for N (%zu bits)\n", n_log2);
         free(s_bits);
         return ECM_ERROR;
     }
@@ -691,7 +637,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         return ECM_ERROR;
     }
     if (selftest_opencl_mont_mul(N, BITS, np0) != 0) {
-        fprintf(stderr, "GPU: warning: mont.cl mul self-test failed\n");
+        ecm_ts_fprintf(stderr, "GPU: warning: mont.cl mul self-test failed\n");
     }
     size_t data_size = 0;
     uint32_t *data = set_p_2p(N, curves, sigma, BITS, &data_size);
@@ -708,12 +654,12 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
 
     auto t_global_start = std::chrono::high_resolution_clock::now();
 
-    fprintf(stdout,
-            "GPU: CGBN<%u> kernel, %zu-bit N, %u curves, sigma=%u-%u, s=%llu bits, np0=0x%08x\n",
+    ecm_ts_fprintf(stdout,
+            "GPU: OpenCL<%u> kernel, %zu-bit N, %u curves, sigma=%u-%u, s=%llu bits, np0=0x%08x\n",
             BITS, n_log2, curves, sigma, sigma + curves - 1,
             (unsigned long long)s_num_bits, np0);
     if (device_init_ms > 0.0) {
-        fprintf(stdout, "GPU: kernel compile/build for this limb size took %.0fms\n",
+        ecm_ts_fprintf(stdout, "GPU: kernel compile/build for this limb size took %.0fms\n",
                 device_init_ms);
     }
     fflush(stdout);
@@ -722,7 +668,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     err = clEnqueueWriteBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data, 0, nullptr,
                                nullptr);
     if (err != CL_SUCCESS) {
-        fprintf(stderr, "initial GPU upload failed\n");
+        ecm_ts_fprintf(stderr, "initial GPU upload failed\n");
         free(s_bits);
         free(data);
         clReleaseMemObject(gpu_s_bits);
@@ -732,21 +678,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
 
     const uint32_t TPI = 8;
     const bool use_mont_wg = !env_flag_enabled("ECM_DISABLE_MONT_WG");
-    g_dump_ctx.enabled = env_flag_enabled("ECM_GPU_DUMP");
-    if (g_dump_ctx.enabled) {
-        const char *dump_path = env_string_or_default("ECM_GPU_DUMP_FILE", "dump.csv");
-        g_dump_ctx.out.open(dump_path, std::ios::out | std::ios::trunc);
-        if (g_dump_ctx.out.is_open()) {
-            g_dump_ctx.out
-                << "stage,batch_index,s_partial,batch_size,sigma,curve_index,BITS,TPI,word0,word1,word2,word3,word4\n";
-            ocl_log_verbose(verbose,
-                            "OpenCL dump enabled: writing kernel call states to %s\n",
-                            dump_path);
-        } else {
-            g_dump_ctx.enabled = false;
-            fprintf(stderr, "OpenCL: failed to open dump output file\n");
-        }
-    }
+    opencl_dump_begin(g_dump_ctx, verbose);
 
     int batches_complete = 0;
     while (s_partial < s_num_bits) {
@@ -755,12 +687,12 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             size_t words_total = data_size / sizeof(uint32_t);
             std::vector<uint32_t> dump_rows(data, data + words_total);
             curves_from_montgomery(dump_rows.data(), curves, limbs, N, np0);
-            dump_opencl_state_rows("begin", batches_complete, s_partial, this_batch, sigma, curves,
-                                   BITS, TPI, dump_rows.data(), limbs);
+            dump_opencl_state_rows(g_dump_ctx, "begin", batches_complete, s_partial, this_batch,
+                                   sigma, curves, BITS, TPI, dump_rows.data(), limbs);
         }
 
         if (verbose >= 1 && print_nth_batch(batches_complete)) {
-            fprintf(stderr, "GPU: Computing %llu bits/call, %llu/%llu (%.1f%%)\n",
+            ecm_ts_fprintf(stderr, "GPU: Computing %llu bits/call, %llu/%llu (%.1f%%)\n",
                     (unsigned long long)this_batch, (unsigned long long)s_partial,
                     (unsigned long long)s_num_bits,
                     100.0 * (double)s_partial / (double)s_num_bits);
@@ -790,7 +722,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             err |= clSetKernelArg(active_kernel, 9, wg_local_bytes, nullptr);
         }
         if (err != CL_SUCCESS) {
-            fprintf(stderr, "clSetKernelArg failed\n");
+            ecm_ts_fprintf(stderr, "clSetKernelArg failed\n");
             break;
         }
 
@@ -805,8 +737,9 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
                                       nullptr, nullptr);
             if (err == CL_SUCCESS) {
                 curves_from_montgomery(data, curves, limbs, N, np0);
-                dump_opencl_state_rows("end", batches_complete + 1, s_partial + this_batch,
-                                       this_batch, sigma, curves, BITS, TPI, data, limbs);
+                dump_opencl_state_rows(g_dump_ctx, "end", batches_complete + 1,
+                                       s_partial + this_batch, this_batch, sigma, curves, BITS,
+                                       TPI, data, limbs);
                 if (s_partial + this_batch < s_num_bits) {
                     curves_to_montgomery(data, curves, limbs, N, BITS);
                     err = clEnqueueWriteBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data,
@@ -816,7 +749,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         }
         auto t1 = std::chrono::high_resolution_clock::now();
         if (err != CL_SUCCESS) {
-            fprintf(stderr, "kernel enqueue failed (%d)\n", err);
+            ecm_ts_fprintf(stderr, "kernel enqueue failed (%d)\n", err);
             break;
         }
 
@@ -855,10 +788,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
 
     clReleaseMemObject(gpu_s_bits);
     clReleaseMemObject(gpu_data);
-    if (g_dump_ctx.out.is_open()) {
-        g_dump_ctx.out.close();
-    }
-    g_dump_ctx.enabled = false;
+    opencl_dump_end(g_dump_ctx);
     free(s_bits);
     free(data);
 

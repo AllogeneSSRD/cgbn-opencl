@@ -23,6 +23,7 @@
 #include "opencl_ecm_entry.h"
 #include "ecm.h"
 #include "cgbn_stage1.h"
+#include "opencl_ecm_log.h"
 
 static void trim(std::string &s){
     while(!s.empty() && isspace((unsigned char)s.back())) s.pop_back();
@@ -492,6 +493,7 @@ static bool append_opencl_save_lines(const std::string &savefilename, const mpz_
 }
 
 int main(int argc, char **argv){
+    ecm_install_timestamped_iostreams();
     bool verbose = false;
     bool use_gpu = false;
     uint32_t gpucurves = 0;
@@ -583,11 +585,11 @@ int main(int argc, char **argv){
     }
 
     std::cout << "Parsed N bit-size: " << mpz_sizeinbase(N, 2) << std::endl;
-    if (verbose) {
-        std::cout << "Parsed N = ";
-        mpz_out_str(stdout, 10, N);
-        std::cout << std::endl;
-    }
+    // if (verbose) {
+    //     std::cout << "Parsed N = ";
+    //     mpz_out_str(stdout, 10, N);
+    //     std::cout << std::endl;
+    // }
 
     // set up ecm params
     ecm_params params;
@@ -654,12 +656,12 @@ int main(int argc, char **argv){
               << ", sigma=" << ECM_PARAM_BATCH_32BITS_D << ":" << firstsigma
               << "-" << lastsigma << " (" << curves << " curves)" << std::endl;
 
-    {
-        unsigned long k_blocks = params->k;
-        std::cout << "dF=0, k=" << k_blocks << ", d=";
-        mpz_out_str(stdout, 10, batch_d);
-        std::cout << ", d2=0, i0=0" << std::endl;
-    }
+    // {
+    //     unsigned long k_blocks = params->k;
+    //     std::cout << "dF=0, k=" << k_blocks << ", d=";
+    //     mpz_out_str(stdout, 10, batch_d);
+    //     std::cout << ", d2=0, i0=0" << std::endl;
+    // }
 
     float gputime = 0.0f;
 
