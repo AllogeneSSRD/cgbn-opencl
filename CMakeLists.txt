@@ -87,3 +87,17 @@ target_link_libraries(opencl_ecm_addsub
     cgbn_opencl
     "D:/code/vcpkg/installed/x64-windows/lib/gmp.lib"
 )
+
+add_executable(opencl_asm_selftest
+    src/cl_probe.cpp
+    src/opencl_asm_selftest.cpp
+)
+
+target_include_directories(opencl_asm_selftest PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(opencl_asm_selftest
+    OpenCL::OpenCL
+    cgbn_opencl
+)

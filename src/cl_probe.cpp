@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <cstdlib>
+#include <algorithm>
 
 #define CHECK_CL(err, msg) \
     if (err != CL_SUCCESS) { \
@@ -248,4 +249,73 @@ bool configureOpenclDeviceIndex(int deviceIndex, bool printDevices) {
     setenv("CGBN_OPENCL_DEVICE_INDEX", v.c_str(), 1);
 #endif
     return true;
+}
+
+int findFirstAmdGpuDeviceIndex(bool printDevices) {
+    cl_uint numPlatforms = 0;
+    cl_int err = clGetPlatformIDs(0, NULL, &numPlatforms);
+    if (err != CL_SUCCESS || numPlatforms == 0) {
+        if (printDevices) std::cerr << "No OpenCL platforms found." << std::endl;
+        return -1;
+    }
+
+    std::vector<cl_platform_id> platforms(numPlatforms);
+    err = clGetPlatformIDs(numPlatforms, platforms.data(), NULL);
+    if (err != CL_SUCCESS) {
+        if (printDevices) std::cerr << "Failed to enumerate OpenCL platforms, err=" << err << std::endl;
+        return -1;
+    }
+
+    int index = 0;
+    if (printDevices) std::cout << "Available OpenCL devices:" << std::endl;
+    for (cl_uint i = 0; i < numPlatforms; i++) {
+        char pname[1024] = {0};
+        clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, sizeof(pname), pname, NULL);
+
+        cl_uint numDevices = 0;
+        err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &numDevices);
+        if (err == CL_DEVICE_NOT_FOUND || numDevices == 0) continue;
+        if (err != CL_SUCCESS) continue;
+
+        std::vector<cl_device_id> devices(numDevices);
+        err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, numDevices, devices.data(), NULL);
+        if (err != CL_SUCCESS) continue;
+
+        for (cl_uint j = 0; j < numDevices; j++) {
+            char dname[1024] = {0};
+            char dver[256] = {0};
+            cl_device_type dtype = 0;
+            clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof(dname), dname, NULL);
+            clGetDeviceInfo(devices[j], CL_DEVICE_VERSION, sizeof(dver), dver, NULL);
+            clGetDeviceInfo(devices[j], CL_DEVICE_TYPE, sizeof(dtype), &dtype, NULL);
+            const char *kind = (dtype & CL_DEVICE_TYPE_GPU) ? "GPU"
+                               : (dtype & CL_DEVICE_TYPE_CPU) ? "CPU"
+                                                              : "OTHER";
+            if (printDevices) {
+                std::cout << "  [" << index << "] " << pname << " | " << dname
+                          << " | " << kind << " | " << dver << std::endl;
+            }
+
+            std::string sp = pname;
+            std::string sd = dname;
+            std::transform(sp.begin(), sp.end(), sp.begin(), [](unsigned char c){ return (char)std::tolower(c); });
+            std::transform(sd.begin(), sd.end(), sd.begin(), [](unsigned char c){ return (char)std::tolower(c); });
+            if ((dtype & CL_DEVICE_TYPE_GPU) &&
+                (sp.find("amd") != std::string::npos || sd.find("amd") != std::string::npos ||
+                 sd.find("gfx") != std::string::npos || sd.find("radeon") != std::string::npos)) {
+                return index;
+            }
+            ++index;
+        }
+    }
+    return -1;
+}
+
+bool configureFirstAmdGpuDevice(bool printDevices) {
+    int idx = findFirstAmdGpuDeviceIndex(printDevices);
+    if (idx < 0) {
+        std::cerr << "No AMD GPU OpenCL device found." << std::endl;
+        return false;
+    }
+    return configureOpenclDeviceIndex(idx, false);
 }

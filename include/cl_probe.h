@@ -14,5 +14,9 @@ int listOpenclDevices();
 // Validate and set selected device index for current process.
 // Returns true on success. If printDevices is true, prints the list first.
 bool configureOpenclDeviceIndex(int deviceIndex, bool printDevices);
+// Find first AMD GPU in flattened device list, returns -1 if not found.
+int findFirstAmdGpuDeviceIndex(bool printDevices);
+// Configure process to use first AMD GPU.
+bool configureFirstAmdGpuDevice(bool printDevices);
 
 #endif
