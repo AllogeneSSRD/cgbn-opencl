@@ -318,7 +318,7 @@ __kernel void kernel_double_add(
                             sigma_0, np0, limbs);
 }
 
-inline int mp_ge_l(__local const uint *a, __local const uint *N, uint limbs) {
+static inline int mp_ge_l(__local const uint *a, __local const uint *N, uint limbs) {
     for (int i = (int)limbs - 1; i >= 0; --i) {
         if (a[(uint)i] > N[(uint)i]) return 1;
         if (a[(uint)i] < N[(uint)i]) return 0;
@@ -326,7 +326,7 @@ inline int mp_ge_l(__local const uint *a, __local const uint *N, uint limbs) {
     return 1;
 }
 
-inline void mp_sub_n_l(__local uint *r, __local const uint *a, __local const uint *N, uint limbs) {
+static inline void mp_sub_n_l(__local uint *r, __local const uint *a, __local const uint *N, uint limbs) {
     ulong borrow = 0ul;
     for (uint i = 0u; i < limbs; ++i) {
         ulong av = (ulong)a[i];
@@ -337,7 +337,7 @@ inline void mp_sub_n_l(__local uint *r, __local const uint *a, __local const uin
     }
 }
 
-inline uint mp_add_n_l(__local uint *r, __local const uint *a, __local const uint *b, uint limbs) {
+static inline uint mp_add_n_l(__local uint *r, __local const uint *a, __local const uint *b, uint limbs) {
     ulong carry = 0ul;
     for (uint i = 0u; i < limbs; ++i) {
         ulong sum = (ulong)a[i] + (ulong)b[i] + carry;
@@ -347,11 +347,11 @@ inline uint mp_add_n_l(__local uint *r, __local const uint *a, __local const uin
     return (uint)carry;
 }
 
-inline void mp_copy_l(__local uint *dst, __local const uint *src, uint limbs) {
+static inline void mp_copy_l(__local uint *dst, __local const uint *src, uint limbs) {
     for (uint i = 0u; i < limbs; ++i) dst[i] = src[i];
 }
 
-inline void mp_add_mod_l(__local uint *r, __local const uint *a, __local const uint *b,
+static inline void mp_add_mod_l(__local uint *r, __local const uint *a, __local const uint *b,
                          __local const uint *N, uint limbs) {
     ulong carry = 0ul;
     for (uint i = 0u; i < limbs; ++i) {
@@ -362,7 +362,7 @@ inline void mp_add_mod_l(__local uint *r, __local const uint *a, __local const u
     if (carry != 0ul || mp_ge_l(r, N, limbs)) mp_sub_n_l(r, r, N, limbs);
 }
 
-inline int mp_sub_mod_l(__local uint *r, __local const uint *a, __local const uint *b,
+static inline int mp_sub_mod_l(__local uint *r, __local const uint *a, __local const uint *b,
                         __local const uint *N, uint limbs) {
     ulong borrow = 0ul;
     for (uint i = 0u; i < limbs; ++i) {
@@ -379,7 +379,7 @@ inline int mp_sub_mod_l(__local uint *r, __local const uint *a, __local const ui
     return 0;
 }
 
-inline void mp_shift_left_1_mod_l(__local uint *r, __local const uint *a, __local const uint *N,
+static inline void mp_shift_left_1_mod_l(__local uint *r, __local const uint *a, __local const uint *N,
                                   uint limbs) {
     uint carry = 0u;
     for (uint i = 0u; i < limbs; ++i) {
@@ -390,11 +390,11 @@ inline void mp_shift_left_1_mod_l(__local uint *r, __local const uint *a, __loca
     if (carry || mp_ge_l(r, N, limbs)) mp_sub_n_l(r, r, N, limbs);
 }
 
-inline void mont_normalize_l(__local uint *r, __local const uint *N, uint limbs) {
+static inline void mont_normalize_l(__local uint *r, __local const uint *N, uint limbs) {
     if (mp_ge_l(r, N, limbs)) mp_sub_n_l(r, r, N, limbs);
 }
 
-inline uint mul_ui32_limbs_l(__local uint *r, uint m, uint limbs) {
+static inline uint mul_ui32_limbs_l(__local uint *r, uint m, uint limbs) {
     ulong carry = 0ul;
     for (uint i = 0u; i < limbs; ++i) {
         ulong prod = (ulong)r[i] * (ulong)m + carry;
@@ -404,12 +404,12 @@ inline uint mul_ui32_limbs_l(__local uint *r, uint m, uint limbs) {
     return (uint)carry;
 }
 
-inline void shift_right_32_limbs_l(__local uint *r, uint limbs) {
+static inline void shift_right_32_limbs_l(__local uint *r, uint limbs) {
     for (uint i = 0u; i + 1u < limbs; ++i) r[i] = r[i + 1u];
     r[limbs - 1u] = 0u;
 }
 
-inline void special_mult_ui32_l(__local uint *r, uint m, __local const uint *N, uint np0, uint limbs,
+static inline void special_mult_ui32_l(__local uint *r, uint m, __local const uint *N, uint np0, uint limbs,
                                 __local uint *tmp0) {
     uint carry_t1 = mul_ui32_limbs_l(r, m, limbs);
     uint t1_0 = r[0];
@@ -436,7 +436,7 @@ inline void special_mult_ui32_l(__local uint *r, uint m, __local const uint *N, 
     if (mp_ge_l(r, N, limbs)) mp_sub_n_l(r, r, N, limbs);
 }
 
-inline void mont_mul_wg_local(__local uint *out, __local const uint *a, __local const uint *b,
+static inline void mont_mul_wg_local(__local uint *out, __local const uint *a, __local const uint *b,
                               __local const uint *n, uint np0, uint limbs, uint tid,
                               __local uint *scratch) {
     __local uint *t = scratch;
@@ -507,12 +507,12 @@ inline void mont_mul_wg_local(__local uint *out, __local const uint *a, __local 
     barrier(CLK_LOCAL_MEM_FENCE);
 }
 
-inline void mont_sqr_wg_local(__local uint *out, __local const uint *a, __local const uint *n,
+static inline void mont_sqr_wg_local(__local uint *out, __local const uint *a, __local const uint *n,
                               uint np0, uint limbs, uint tid, __local uint *scratch) {
     mont_mul_wg_local(out, a, a, n, np0, limbs, tid, scratch);
 }
 
-inline void double_add_v2_wg_local(__local uint *q, __local uint *u, __local uint *w, __local uint *v,
+static inline void double_add_v2_wg_local(__local uint *q, __local uint *u, __local uint *w, __local uint *v,
                                    uint d, __local uint *N, uint np0, uint limbs, uint tid,
                                    __local uint *t, __local uint *CB, __local uint *DA,
                                    __local uint *AA, __local uint *BB, __local uint *K,
