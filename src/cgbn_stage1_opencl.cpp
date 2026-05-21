@@ -72,6 +72,25 @@ static bool is_power_of_two_u32(uint32_t x) {
     return x != 0u && (x & (x - 1u)) == 0u;
 }
 
+static int selected_wg_impl_from_env() {
+    int wg_impl = 1;
+    if (const char *v = std::getenv("ECM_MONT_WG_IMPL")) {
+        wg_impl = std::atoi(v);
+    }
+    const bool allow_experimental = env_flag_enabled("ECM_ENABLE_EXPERIMENTAL_WG");
+    if (!allow_experimental && (wg_impl == 2 || wg_impl == 3)) {
+        ecm_ts_fprintf(stderr,
+                       "OpenCL: WG_IMPL=%d is experimental and disabled by default, fallback to WG_IMPL=1\n",
+                       wg_impl);
+        wg_impl = 1;
+    }
+    if (wg_impl < 0 || wg_impl > 3) {
+        ecm_ts_fprintf(stderr, "OpenCL: invalid ECM_MONT_WG_IMPL=%d, fallback to 1\n", wg_impl);
+        wg_impl = 1;
+    }
+    return wg_impl;
+}
+
 static uint32_t choose_effective_tpi(uint32_t limbs) {
     static const uint32_t kChoices[] = {32u, 16u, 8u, 4u, 2u, 1u};
     uint32_t requested = requested_tpi_from_env();
@@ -517,10 +536,14 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
     mpz_init(x_std);
     mpz_init(z_std);
 
+    const bool verify_results = env_flag_enabled("ECM_VERIFY_GPU_RESULTS");
+    const bool verify_strict = env_flag_enabled("ECM_VERIFY_GPU_STRICT");
+
     const uint32_t limbs_per = cgbn_bits / 32;
     const uint32_t np0 = find_np0(N);
     int youpi = ECM_NO_FACTOR_FOUND;
     int errors = 0;
+    int verify_errors = 0;
 
     for (int i = 0; i < curves; i++) {
         const uint32_t *datum = data + (5 * i * limbs_per);
@@ -550,6 +573,45 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
 
         array_found[i] = findfactor(factors[i], N, x_std, z_std);
         if (array_found[i] != ECM_NO_FACTOR_FOUND) {
+            if (verify_results) {
+                mpz_t rem, gcdz;
+                mpz_init(rem);
+                mpz_init(gcdz);
+
+                mpz_mod(rem, N, factors[i]);
+                if (mpz_cmp_ui(rem, 0) != 0) {
+                    verify_errors++;
+                    ecm_ts_fprintf(stderr,
+                                   "GPU verify: curve %d reported invalid factor (N %% factor != 0), sigma=%u\n",
+                                   i, sigma + (uint32_t)i);
+                    if (verify_strict) {
+                        mpz_clear(rem);
+                        mpz_clear(gcdz);
+                        mpz_clear(modulo);
+                        mpz_clear(x_std);
+                        mpz_clear(z_std);
+                        return ECM_ERROR;
+                    }
+                }
+
+                mpz_gcd(gcdz, z_std, N);
+                if (mpz_cmp(gcdz, factors[i]) != 0) {
+                    verify_errors++;
+                    ecm_ts_fprintf(stderr,
+                                   "GPU verify: curve %d gcd(z,N) mismatch reported factor, sigma=%u\n",
+                                   i, sigma + (uint32_t)i);
+                    if (verify_strict) {
+                        mpz_clear(rem);
+                        mpz_clear(gcdz);
+                        mpz_clear(modulo);
+                        mpz_clear(x_std);
+                        mpz_clear(z_std);
+                        return ECM_ERROR;
+                    }
+                }
+                mpz_clear(rem);
+                mpz_clear(gcdz);
+            }
             youpi = array_found[i];
             ecm_ts_fprintf(stderr, "GPU: factor found in Step 1 with curve %d (-sigma %d:%u)\n",
                     i, ECM_PARAM_BATCH_32BITS_D, sigma + (uint32_t)i);
@@ -561,6 +623,10 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
     mpz_clear(z_std);
 
     if (errors > 2) {
+        return ECM_ERROR;
+    }
+    if (verify_results && verify_errors > 0) {
+        ecm_ts_fprintf(stderr, "GPU verify: detected %d invalid result(s)\n", verify_errors);
         return ECM_ERROR;
     }
     return youpi;
@@ -638,8 +704,15 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
     }
     std::string src = mont_wg + "\n" + mont_priv + "\n" + ecm_src;
 
-    char opts[96];
-    snprintf(opts, sizeof(opts), "-DMAX_LIMBS=%u -DTPI=%u", limbs, tpi);
+    int wg_impl = selected_wg_impl_from_env();
+    int wg_chunk = 32;
+    int stage1_force_normalize = 1;
+    if (const char *v = std::getenv("ECM_MONT_WG_MERGE_CHUNK")) wg_chunk = std::atoi(v);
+    if (const char *v = std::getenv("ECM_STAGE1_FORCE_NORMALIZE")) stage1_force_normalize = std::atoi(v);
+    char opts[192];
+    snprintf(opts, sizeof(opts),
+             "-DMAX_LIMBS=%u -DTPI=%u -DMONT_WG_IMPL=%d -DMONT_WG_MERGE_CHUNK=%d -DECM_STAGE1_FORCE_NORMALIZE=%d",
+             limbs, tpi, wg_impl, wg_chunk, stage1_force_normalize);
 
     cl_int buildErr = CL_SUCCESS;
     g_ecm_program = cgbn::opencl::build_program_from_source(g_ctx, src.c_str(), opts, buildErr);
@@ -671,8 +744,9 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
         print_opencl_device_info(selected_device_index_from_env(), init_ms);
         g_device_info_printed = true;
     }
-    ocl_log_verbose(verbose, "OpenCL: built kernel MAX_LIMBS=%u TPI=%u (%.0fms)\n",
-                    limbs, tpi, init_ms);
+    ocl_log_verbose(verbose,
+                    "OpenCL: built kernel MAX_LIMBS=%u TPI=%u WG_IMPL=%d CHUNK=%d NORM=%d (%.0fms)\n",
+                    limbs, tpi, wg_impl, wg_chunk, stage1_force_normalize, init_ms);
     return 0;
 }
 
@@ -807,7 +881,17 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         err |= clSetKernelArg(active_kernel, 7, sizeof(cl_uint), &np0_arg);
         err |= clSetKernelArg(active_kernel, 8, sizeof(cl_uint), &limbs_arg);
         if (use_mont_wg) {
-            size_t wg_local_words = (size_t)(14u * limbs + 1u);
+            // kernel_double_add_wg local words:
+            // 12*limbs state + MONT_WG_SCRATCH_WORDS + swapped flag
+            int wg_impl_runtime = 1;
+            if (const char *v = std::getenv("ECM_MONT_WG_IMPL")) wg_impl_runtime = std::atoi(v);
+            size_t mont_scratch_words = (size_t)(3u * limbs + 1u);
+            if (wg_impl_runtime == 0) {
+                mont_scratch_words = (size_t)(limbs + 1u);
+            } else if (wg_impl_runtime == 3) {
+                mont_scratch_words = (size_t)(3u * limbs + 1u + 4u * tpi);
+            }
+            size_t wg_local_words = (size_t)(12u * limbs) + mont_scratch_words + 1u;
             size_t wg_local_bytes = wg_local_words * sizeof(uint32_t);
             err |= clSetKernelArg(active_kernel, 9, wg_local_bytes, nullptr);
         }

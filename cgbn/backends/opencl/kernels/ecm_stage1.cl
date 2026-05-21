@@ -8,6 +8,10 @@
 #define TPI 8
 #endif
 
+#ifndef ECM_STAGE1_FORCE_NORMALIZE
+#define ECM_STAGE1_FORCE_NORMALIZE 1
+#endif
+
 #include "mont_wg.cl"
 
 // ---------------------------------------------------------------------------
@@ -119,6 +123,16 @@ inline void mont_normalize(uint *r, const uint *N, uint limbs) {
     }
 }
 
+inline void maybe_mont_normalize(uint *r, const uint *N, uint limbs) {
+#if ECM_STAGE1_FORCE_NORMALIZE
+    mont_normalize(r, N, limbs);
+#else
+    (void)r;
+    (void)N;
+    (void)limbs;
+#endif
+}
+
 // r <- low limbs of (r * m); returns overflow limb above r
 inline uint mul_ui32_limbs(uint *r, uint m, uint limbs) {
     ulong carry = 0ul;
@@ -196,17 +210,17 @@ void double_add_v2(
     (void)mp_sub_mod(u, u, q, N, limbs);
 
     mont_mul_priv(CB, t, u, N, np0, limbs);
-    mont_normalize(CB, N, limbs);
+    maybe_mont_normalize(CB, N, limbs);
     mont_mul_priv(DA, v, w, N, np0, limbs);
-    mont_normalize(DA, N, limbs);
+    maybe_mont_normalize(DA, N, limbs);
 
     mont_sqr_priv(AA, w, N, np0, limbs);
     mont_sqr_priv(BB, u, N, np0, limbs);
-    mont_normalize(AA, N, limbs);
-    mont_normalize(BB, N, limbs);
+    maybe_mont_normalize(AA, N, limbs);
+    maybe_mont_normalize(BB, N, limbs);
 
     mont_mul_priv(q, AA, BB, N, np0, limbs);
-    mont_normalize(q, N, limbs);
+    maybe_mont_normalize(q, N, limbs);
 
     (void)mp_sub_mod(K, AA, BB, N, limbs);
 
@@ -215,15 +229,15 @@ void double_add_v2(
 
     mp_add_mod(u, BB, dK, N, limbs);
     mont_mul_priv(u, K, u, N, np0, limbs);
-    mont_normalize(u, N, limbs);
+    maybe_mont_normalize(u, N, limbs);
 
     mp_add_mod(w, DA, CB, N, limbs);
     (void)mp_sub_mod(v, DA, CB, N, limbs);
 
     mont_sqr_priv(w, w, N, np0, limbs);
-    mont_normalize(w, N, limbs);
+    maybe_mont_normalize(w, N, limbs);
     mont_sqr_priv(v, v, N, np0, limbs);
-    mont_normalize(v, N, limbs);
+    maybe_mont_normalize(v, N, limbs);
     mp_shift_left_1_mod(v, v, N, limbs);
 }
 
@@ -396,6 +410,16 @@ static inline void mont_normalize_l(__local uint *r, __local const uint *N, uint
     if (mp_ge_l(r, N, limbs)) mp_sub_n_l(r, r, N, limbs);
 }
 
+static inline void maybe_mont_normalize_l(__local uint *r, __local const uint *N, uint limbs) {
+#if ECM_STAGE1_FORCE_NORMALIZE
+    mont_normalize_l(r, N, limbs);
+#else
+    (void)r;
+    (void)N;
+    (void)limbs;
+#endif
+}
+
 static inline uint mul_ui32_limbs_l(__local uint *r, uint m, uint limbs) {
     ulong carry = 0ul;
     for (uint i = 0u; i < limbs; ++i) {
@@ -463,24 +487,24 @@ static inline void double_add_v2_wg_local(__local uint *q, __local uint *u, __lo
     barrier(CLK_LOCAL_MEM_FENCE);
 
     mont_mul_wg_local(CB, t, u, N, np0, limbs, tid, mont_scratch);
-    if (tid == 0u) mont_normalize_l(CB, N, limbs);
+    if (tid == 0u) maybe_mont_normalize_l(CB, N, limbs);
     barrier(CLK_LOCAL_MEM_FENCE);
 
     mont_mul_wg_local(DA, v, w, N, np0, limbs, tid, mont_scratch);
-    if (tid == 0u) mont_normalize_l(DA, N, limbs);
+    if (tid == 0u) maybe_mont_normalize_l(DA, N, limbs);
     barrier(CLK_LOCAL_MEM_FENCE);
 
     mont_sqr_wg_local(AA, w, N, np0, limbs, tid, mont_scratch);
     mont_sqr_wg_local(BB, u, N, np0, limbs, tid, mont_scratch);
     if (tid == 0u) {
-        mont_normalize_l(AA, N, limbs);
-        mont_normalize_l(BB, N, limbs);
+        maybe_mont_normalize_l(AA, N, limbs);
+        maybe_mont_normalize_l(BB, N, limbs);
     }
     barrier(CLK_LOCAL_MEM_FENCE);
 
     mont_mul_wg_local(q, AA, BB, N, np0, limbs, tid, mont_scratch);
     if (tid == 0u) {
-        mont_normalize_l(q, N, limbs);
+        maybe_mont_normalize_l(q, N, limbs);
         (void)mp_sub_mod_l(K, AA, BB, N, limbs);
         mp_copy_l(dK, K, limbs);
         special_mult_ui32_l(dK, d, N, np0, limbs, t);
@@ -490,7 +514,7 @@ static inline void double_add_v2_wg_local(__local uint *q, __local uint *u, __lo
 
     mont_mul_wg_local(u, K, u, N, np0, limbs, tid, mont_scratch);
     if (tid == 0u) {
-        mont_normalize_l(u, N, limbs);
+        maybe_mont_normalize_l(u, N, limbs);
         mp_add_mod_l(w, DA, CB, N, limbs);
         (void)mp_sub_mod_l(v, DA, CB, N, limbs);
     }
@@ -499,8 +523,8 @@ static inline void double_add_v2_wg_local(__local uint *q, __local uint *u, __lo
     mont_sqr_wg_local(w, w, N, np0, limbs, tid, mont_scratch);
     mont_sqr_wg_local(v, v, N, np0, limbs, tid, mont_scratch);
     if (tid == 0u) {
-        mont_normalize_l(w, N, limbs);
-        mont_normalize_l(v, N, limbs);
+        maybe_mont_normalize_l(w, N, limbs);
+        maybe_mont_normalize_l(v, N, limbs);
         mp_shift_left_1_mod_l(v, v, N, limbs);
     }
     barrier(CLK_LOCAL_MEM_FENCE);
@@ -527,7 +551,7 @@ __kernel void kernel_double_add_wg(
         return;
     }
 
-    uint local_words_needed = 14u * limbs + 1u;
+    uint local_words_needed = 12u * limbs + MONT_WG_SCRATCH_WORDS + 1u;
     (void)local_words_needed;
     __local uint *ptr = local_mem;
     __local uint *N = ptr; ptr += limbs;
@@ -542,8 +566,8 @@ __kernel void kernel_double_add_wg(
     __local uint *BB = ptr; ptr += limbs;
     __local uint *K = ptr; ptr += limbs;
     __local uint *dK = ptr; ptr += limbs;
-    __local uint *mont_scratch = ptr; // (MAX_LIMBS+1) + MAX_LIMBS + MAX_LIMBS
-    __local int *swapped_l = (__local int *)(mont_scratch + (3u * MAX_LIMBS + 1u));
+    __local uint *mont_scratch = ptr; // MONT_WG_SCRATCH_WORDS
+    __local int *swapped_l = (__local int *)(mont_scratch + MONT_WG_SCRATCH_WORDS);
 
     uint base = instance_i * 5u * limbs;
     for (uint i = lane; i < limbs; i += TPI) {

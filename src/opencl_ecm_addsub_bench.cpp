@@ -30,6 +30,10 @@ void fill_from_gmp(const mpz_t v, uint32_t *out_words, size_t words) {
     mpz_clear(mod);
 }
 
+void fill_to_gmp(const uint32_t *in_words, size_t words, mpz_t out) {
+    mpz_import(out, words, -1, sizeof(uint32_t), 0, 0, in_words);
+}
+
 bool run_kernel(cl_command_queue q, cl_kernel k, size_t global, int repeats, double &ms) {
     auto t0 = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < repeats; ++i) {
@@ -147,8 +151,14 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         src = mont_priv + "\n" + bench_src;
     }
     cl_int buildErr = CL_SUCCESS;
-    char build_opts[96];
-    snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DTPI=%d", WORDS, tpi);
+    int wg_impl = 1;
+    int wg_chunk = 32;
+    if (const char *v = std::getenv("ECM_MONT_WG_IMPL")) wg_impl = std::atoi(v);
+    if (const char *v = std::getenv("ECM_MONT_WG_MERGE_CHUNK")) wg_chunk = std::atoi(v);
+    char build_opts[192];
+    snprintf(build_opts, sizeof(build_opts),
+             "-DMAX_LIMBS=%u -DTPI=%d -DMONT_WG_IMPL=%d -DMONT_WG_MERGE_CHUNK=%d",
+             WORDS, tpi, wg_impl, wg_chunk);
     cl_program program = cgbn::opencl::build_program_from_source(
         ctx, src.c_str(), build_opts, buildErr);
     if (program == nullptr || buildErr != CL_SUCCESS) {
@@ -251,8 +261,12 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
             clSetKernelArg(k, 5, sizeof(cl_uint), &iters);
         }
-        // mont_wg kernel uses local arrays: t[(limbs+1)] + B[limbs] + N[limbs] + A[limbs]
-        size_t local_mem_size = ((WORDS + 1u) + WORDS + WORDS + WORDS) * sizeof(uint32_t);
+        // mont_wg kernel uses local arrays:
+        // t[(limbs+1)] + sum_lo[limbs] + sum_hi[limbs]
+        // + carry_in/out (4*TPI words) + B[limbs] + N[limbs] + A[limbs]
+        size_t local_mem_size =
+            ((WORDS + 1u) + WORDS + WORDS + (size_t)(4 * tpi) + WORDS + WORDS + WORDS) *
+            sizeof(uint32_t);
         clSetKernelArg(k, is_mul ? 7 : 6, local_mem_size, nullptr);
 
         size_t local = (size_t)tpi;
@@ -352,6 +366,96 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             csv << "summary_selected_mont_sqr_wg," << t_sqr_wg << ","
                 << (op_count / (t_sqr_wg / 1000.0)) << ",0,0,0,0\n";
         }
+
+        // Correctness check: compare WG montgomery mul/sqr against GMP reference.
+        auto verify_wg_kernel = [&](const char *kname, bool is_mul) -> bool {
+            cl_int kerr = CL_SUCCESS;
+            cl_kernel k = clCreateKernel(program, kname, &kerr);
+            if (kerr != CL_SUCCESS) {
+                std::cerr << "Create verify kernel " << kname << " failed: " << kerr << std::endl;
+                return false;
+            }
+            cl_uint verify_iters = 1u;
+            clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+            if (is_mul) {
+                clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+                clSetKernelArg(k, 2, sizeof(cl_mem), &bufN);
+                clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(k, 4, sizeof(cl_uint), &np0);
+                clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+                clSetKernelArg(k, 6, sizeof(cl_uint), &verify_iters);
+            } else {
+                clSetKernelArg(k, 1, sizeof(cl_mem), &bufN);
+                clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(k, 3, sizeof(cl_uint), &np0);
+                clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+                clSetKernelArg(k, 5, sizeof(cl_uint), &verify_iters);
+            }
+            size_t local_mem_size =
+                ((WORDS + 1u) + WORDS + WORDS + (size_t)(4 * tpi) + WORDS + WORDS + WORDS) *
+                sizeof(uint32_t);
+            clSetKernelArg(k, is_mul ? 7 : 6, local_mem_size, nullptr);
+
+            size_t local = (size_t)tpi;
+            size_t global_wg = (size_t)instances * local;
+            cl_int err2 =
+                clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &global_wg, &local, 0, nullptr, nullptr);
+            if (err2 != CL_SUCCESS) {
+                std::cerr << "Enqueue verify " << kname << " failed: " << err2 << std::endl;
+                clReleaseKernel(k);
+                return false;
+            }
+            clFinish(ctx.queue);
+            clReleaseKernel(k);
+
+            std::vector<uint32_t> out_words(WORDS);
+            err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                       out_words.data(), 0, nullptr, nullptr);
+            if (err2 != CL_SUCCESS) {
+                std::cerr << "Verify readback failed: " << err2 << std::endl;
+                return false;
+            }
+
+            mpz_t r, rinv, expect, got, tmp;
+            mpz_init(r);
+            mpz_init(rinv);
+            mpz_init(expect);
+            mpz_init(got);
+            mpz_init(tmp);
+            mpz_ui_pow_ui(r, 2u, (unsigned long)(WORDS * 32u));
+            if (mpz_invert(rinv, r, n_gmp) == 0) {
+                std::cerr << "GMP invert failed for R^-1 mod N" << std::endl;
+                mpz_clears(r, rinv, expect, got, tmp, nullptr);
+                return false;
+            }
+            if (is_mul) {
+                mpz_mul(tmp, a_gmp, b_gmp);
+            } else {
+                mpz_mul(tmp, a_gmp, a_gmp);
+            }
+            mpz_mod(tmp, tmp, n_gmp);
+            mpz_mul(expect, tmp, rinv);
+            mpz_mod(expect, expect, n_gmp);
+            fill_to_gmp(out_words.data(), WORDS, got);
+
+            bool ok = (mpz_cmp(expect, got) == 0);
+            if (!ok) {
+                char *exp_s = mpz_get_str(nullptr, 16, expect);
+                char *got_s = mpz_get_str(nullptr, 16, got);
+                std::cerr << "WG verify mismatch for " << kname << "\n"
+                          << "  expected=0x" << exp_s << "\n"
+                          << "  got=0x" << got_s << std::endl;
+                free(exp_s);
+                free(got_s);
+            } else {
+                std::cout << "  [" << kname << "] GMP verify: PASS" << std::endl;
+            }
+            mpz_clears(r, rinv, expect, got, tmp, nullptr);
+            return ok;
+        };
+
+        if (!verify_wg_kernel("cgbn_mont_mul_wg_bench", true)) return false;
+        if (!verify_wg_kernel("cgbn_mont_sqr_wg_bench", false)) return false;
     } else {
         if (csv_enabled) {
             csv << "summary_selected_mont_mul_priv," << t_mul_priv << ","
