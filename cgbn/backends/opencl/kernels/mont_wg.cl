@@ -16,6 +16,7 @@
 // 0: legacy serial (tid0-only)
 // 1: parallel base terms + serial full merge
 // 2: parallel base terms + serial chunked merge
+// 4: parallel base terms + serial full merge (2-limb unroll)
 #define MONT_WG_IMPL 1
 #endif
 
@@ -154,6 +155,21 @@ static inline void cgbn_mont_mul_wg_local_core(
                 carry_out_lo[lane] = 0u;
                 carry_out_hi[lane] = 0u;
             }
+#elif MONT_WG_IMPL == 4
+            for (uint j = 0u; j + 1u < limbs; j += 2u) {
+                ulong uv0 = (ulong)sum_lo[j] + carry;
+                t[j] = (uint)uv0;
+                carry = (uv0 >> 32) + (ulong)sum_hi[j];
+                ulong uv1 = (ulong)sum_lo[j + 1u] + carry;
+                t[j + 1u] = (uint)uv1;
+                carry = (uv1 >> 32) + (ulong)sum_hi[j + 1u];
+            }
+            if (limbs & 1u) {
+                uint j = limbs - 1u;
+                ulong uv = (ulong)sum_lo[j] + carry;
+                t[j] = (uint)uv;
+                carry = (uv >> 32) + (ulong)sum_hi[j];
+            }
 #else
             for (uint j = 0u; j < limbs; ++j) {
                 ulong uv = (ulong)sum_lo[j] + carry;
@@ -232,6 +248,25 @@ static inline void cgbn_mont_mul_wg_local_core(
                 carry_in_hi[lane] = 0u;
                 carry_out_lo[lane] = 0u;
                 carry_out_hi[lane] = 0u;
+            }
+#elif MONT_WG_IMPL == 4
+            for (uint j = 0u; j + 1u < limbs; j += 2u) {
+                ulong uv0 = (ulong)sum_lo[j] + carry;
+                if (j > 0u) {
+                    t[j - 1u] = (uint)uv0;
+                }
+                carry = (uv0 >> 32) + (ulong)sum_hi[j];
+                ulong uv1 = (ulong)sum_lo[j + 1u] + carry;
+                t[j] = (uint)uv1;
+                carry = (uv1 >> 32) + (ulong)sum_hi[j + 1u];
+            }
+            if (limbs & 1u) {
+                uint j = limbs - 1u;
+                ulong uv = (ulong)sum_lo[j] + carry;
+                if (j > 0u) {
+                    t[j - 1u] = (uint)uv;
+                }
+                carry = (uv >> 32) + (ulong)sum_hi[j];
             }
 #else
             for (uint j = 0u; j < limbs; ++j) {

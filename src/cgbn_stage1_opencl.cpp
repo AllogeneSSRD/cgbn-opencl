@@ -84,7 +84,7 @@ static int selected_wg_impl_from_env() {
                        wg_impl);
         wg_impl = 1;
     }
-    if (wg_impl < 0 || wg_impl > 3) {
+    if (wg_impl < 0 || wg_impl > 4) {
         ecm_ts_fprintf(stderr, "OpenCL: invalid ECM_MONT_WG_IMPL=%d, fallback to 1\n", wg_impl);
         wg_impl = 1;
     }
