@@ -6,6 +6,10 @@
 #define SELFTEST_DISABLE_MAD_U64 1
 #endif
 
+#ifndef SELFTEST_ENABLE_MAD_U64
+#define SELFTEST_ENABLE_MAD_U64 0
+#endif
+
 typedef long i64;
 typedef ulong u64;
 typedef uint u32;
@@ -50,7 +54,7 @@ static inline i64 run_latency_case(int what, int iterations) {
     }
     sink = (i64)as_long(a);
   } else if (what == 6) { // V_MAD_U64_U32
-#if SELFTEST_DISABLE_MAD_U64
+#if SELFTEST_DISABLE_MAD_U64 || !SELFTEST_ENABLE_MAD_U64
     sink = -1;
 #else
     u32 a = 2;
@@ -107,7 +111,7 @@ static inline i64 run_throughput_case(int what, int iterations) {
     }
     sink = (i64)(as_long(a0) ^ as_long(a1) ^ as_long(a2) ^ as_long(a3));
   } else if (what == 6) {
-#if SELFTEST_DISABLE_MAD_U64
+#if SELFTEST_DISABLE_MAD_U64 || !SELFTEST_ENABLE_MAD_U64
     sink = -1;
 #else
     u32 a = 2;
@@ -140,4 +144,28 @@ KERNEL(64) testThroughput(int what, int iterations, __global i64 *io) {
 #else
   io[get_global_id(0)] = -1;
 #endif
+}
+
+KERNEL(64) testBaselineLatency(int iterations, __global i64 *io) {
+  size_t gid = get_global_id(0);
+  int a = (int)gid + 1;
+  for (int i = 0; i < iterations; ++i) {
+    a = a + 1;
+  }
+  io[gid] = (i64)a;
+}
+
+KERNEL(64) testBaselineThroughput(int iterations, __global i64 *io) {
+  size_t gid = get_global_id(0);
+  int a0 = (int)gid + 1;
+  int a1 = (int)gid + 3;
+  int a2 = (int)gid + 5;
+  int a3 = (int)gid + 7;
+  for (int i = 0; i < iterations; ++i) {
+    a0 = a0 + 1;
+    a1 = a1 + 1;
+    a2 = a2 + 1;
+    a3 = a3 + 1;
+  }
+  io[gid] = (i64)(a0 + a1 + a2 + a3);
 }
