@@ -1,0 +1,533 @@
+Legend:
+  ':' means that the register is kept alive, while it is not actively being used by the current instruction
+  '^' means that the current instruction writes to the register
+  'v' means that the current instruction reads from the register
+  'x' means that the current instruction both reads from the register and writes to it
+ 'Rn': Number of live registers
+
+  Line | Rn  |                                | Instruction
+--------------------------------------------------------------------------------
+     1 |   1 | :                              | s_load_b128 s[8:11], s[0:1], 0x20
+     2 |   1 | :                              | s_waitcnt lgkmcnt(0)
+     3 |   1 | :                              | s_add_i32 s3, s9, -1
+     4 |   1 | :                              | s_delay_alu instid0(SALU_CYCLE_1) | instskip(SKIP_2) | instid1(SALU_CYCLE_1)
+     5 |   1 | :                              | s_cmpk_gt_u32 s3, 0x7f
+     6 |   1 | :                              | s_cselect_b32 s3, -1, 0
+     7 |   1 | :                              | s_and_b32 s4, s9, 7
+     8 |   1 | :                              | s_cmp_lg_u32 s4, 0
+     9 |   1 | :                              | s_cselect_b32 s4, -1, 0
+    10 |   1 | :                              | s_delay_alu instid0(SALU_CYCLE_1) | instskip(NEXT) | instid1(SALU_CYCLE_1)
+    11 |   1 | :                              | s_or_b32 s3, s3, s4
+    12 |   1 | :                              | s_and_b32 vcc_lo, exec_lo, s3
+    13 |   1 | :                              | s_cbranch_vccnz _L165
+    14 |   1 | :                              | s_clause 0x1
+    15 |   1 | :                              | s_load_b32 s3, s[0:1], 0x3c
+    16 |   1 | :                              | s_load_b32 s4, s[0:1], 0x58
+    17 |   1 | :                              | s_waitcnt lgkmcnt(0)
+    18 |   1 | :                              | s_and_b32 s3, s3, 0xffff
+    19 |   1 | :                              | s_delay_alu instid0(SALU_CYCLE_1) | instskip(NEXT) | instid1(SALU_CYCLE_1)
+    20 |   1 | :                              | s_mul_i32 s2, s2, s3
+    21 |   1 | x                              | v_add3_u32 v0, s2, s4, v0
+    22 |   1 | :                              | s_mov_b32 s2, exec_lo
+    23 |   1 | :                              | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+    24 |   2 | v    ^                         | v_and_b32 v5, 7, v0
+    25 |   2 | :    v                         | v_cmpx_ge_u32 s9, v5
+    26 |   2 | :    :                         | s_cbranch_execz _L166
+    27 |   3 | :^   v                         | v_lshl_add_u32 v1, v5, 2, s10
+    29 |   5 | ::^^ v                         | v_dual_mov_b32 v2, 0 :: v_dual_mov_b32 v3, v5
+    30 |   5 | :::: :                         | s_mov_b32 s3, 0
+    31 |   5 | :::: :                         | label_167: s_delay_alu instid0(VALU_DEP_1) | instskip(SKIP_4) | instid1(SALU_CYCLE_1)
+    32 |   5 | :::x :                         | v_add_nc_u32 v3, 8, v3
+    33 |   5 | :vv: :                         | ds_store_b32 v1, v2
+    34 |   5 | :x:: :                         | v_add_nc_u32 v1, 32, v1
+    35 |   5 | :::v :                         | v_cmp_lt_u32 vcc_lo, s9, v3
+    36 |   5 | :::: :                         | s_or_b32 s3, vcc_lo, s3
+    37 |   5 | :::: :                         | s_and_not1_b32 exec_lo, exec_lo, s3
+    38 |   5 | :::: :                         | s_cbranch_execnz _L167
+    39 |   2 | :    :                         | label_166: s_or_b32 exec_lo, exec_lo, s2
+    40 |   2 | :    :                         | s_load_b256 s[0:7], s[0:1], null
+    41 |   2 | x    :                         | v_lshrrev_b32 v0, 3, v0
+    42 |   2 | :    :                         | s_mov_b32 s11, exec_lo
+    43 |   2 | :    :                         | s_waitcnt lgkmcnt(0)
+    44 |   2 | :    :                         | s_barrier
+    45 |   2 | :    :                         | buffer_gl0_inv
+    46 |   3 | v   ^:                         | v_mul_lo_u32 v4, v0, s9
+    47 |   3 | :   :v                         | v_cmpx_gt_u32 s9, v5
+    48 |   3 | :   ::                         | s_cbranch_execz _L168
+    50 |   4 | ^^  :v                         | v_dual_mov_b32 v1, 0 :: v_dual_lshlrev_b32 v0, 2, v5
+    51 |   5 | :: ^:v                         | v_mov_b32 v3, v5
+    52 |   5 | :: :::                         | s_mov_b32 s12, 0
+    53 |   5 | :: :::                         | s_delay_alu instid0(VALU_DEP_2)
+    54 |   6 | v:^:::                         | v_add3_u32 v2, v0, s10, 0x204
+    55 |   5 |  :::::                         | s_nop 0
+    56 |   5 |  :::::                         | s_nop 0
+    57 |   5 |  :::::                         | s_nop 0
+    58 |   5 |  :::::                         | s_nop 0
+    59 |   5 |  :::::                         | s_nop 0
+    60 |   5 |  :::::                         | s_nop 0
+    61 |   5 |  :::::                         | s_nop 0
+    62 |   5 |  :::::                         | s_nop 0
+    63 |   5 |  :::::                         | s_nop 0
+    64 |   5 |  :::::                         | s_nop 0
+    65 |   5 |  :::::                         | s_nop 0
+    66 |   5 |  :::::                         | s_nop 0
+    67 |   5 |  :::::                         | label_169: s_delay_alu instid0(VALU_DEP_2) | instskip(SKIP_1) | instid1(VALU_DEP_2)
+    68 |   6 | ^::vv:                         | v_add_nc_u32 v0, v4, v3
+    69 |   6 | :::x::                         | v_add_nc_u32 v3, 8, v3
+    70 |   8 | vv::::^^                       | v_lshlrev_b64 v[6:7], 2, v[0:1]
+    71 |   7 |  :::::::                       | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_2)
+    72 |   8 |  :::::v:^                      | v_add_co_u32 v8, vcc_lo, s2, v6
+    73 |   9 |  ::::::v:^                     | v_add_co_ci_u32 v9, vcc_lo, s3, v7, vcc_lo
+    74 |   9 |  :::::x:::                     | v_add_co_u32 v6, vcc_lo, s4, v6
+    75 |   9 |  ::::::x::                     | v_add_co_ci_u32 v7, vcc_lo, s5, v7, vcc_lo
+    76 |   9 |  ::v::::::                     | v_cmp_le_u32 vcc_lo, s9, v3
+    77 |  10 | ^:::::::vv                     | global_load_b32 v0, v[8:9], off
+    78 |   8 | ::::::xv                       | global_load_b32 v6, v[6:7], off
+    79 |   7 | :::::::                        | s_or_b32 s12, vcc_lo, s12
+    80 |   7 | :::::::                        | s_waitcnt vmcnt(0)
+    81 |   7 | v:v:::v                        | ds_store_2addr_stride64_b32 v2, v0, v6
+    82 |   6 | ::x:::                         | v_add_nc_u32 v2, 32, v2
+    83 |   6 | ::::::                         | s_and_not1_b32 exec_lo, exec_lo, s12
+    84 |   6 | ::::::                         | s_cbranch_execnz _L169
+    85 |   3 | :   ::                         | label_168: s_or_b32 exec_lo, exec_lo, s11
+    86 |   3 | :   ::                         | s_delay_alu instid0(SALU_CYCLE_1)
+    87 |   3 | :   ::                         | s_mov_b32 s2, exec_lo
+    88 |   3 | :   ::                         | s_waitcnt lgkmcnt(0)
+    89 |   3 | :   ::                         | s_barrier
+    90 |   3 | :   ::                         | buffer_gl0_inv
+    91 |   3 | :   :v                         | v_cmpx_eq_u32 0, v5
+    92 |   3 | :   ::                         | s_cbranch_execz _L170
+    93 |   3 | :   ::                         | s_cmp_lg_u32 s9, 0
+    94 |   3 | :   ::                         | s_cbranch_scc0 _L171
+    95 |   3 | :   ::                         | s_lshl_b32 s3, s9, 2
+    96 |   4 | :   :: ^                       | v_mov_b32 v7, s10
+    97 |   4 | :   :: :                       | s_add_i32 s3, s10, s3
+    98 |   4 | :   :: :                       | s_delay_alu instid0(SALU_CYCLE_1)
+   100 |   6 | :^  ::^:                       | v_dual_mov_b32 v1, 0 :: v_dual_mov_b32 v6, s3
+   101 |   6 | ::  ::::                       | s_add_i32 s4, s3, -4
+   102 |   6 | ::  ::::                       | s_cmp_lg_u32 s9, 1
+   103 |   6 | ::  ::::                       | s_mov_b32 s13, 0
+   104 |   6 | ::  ::::                       | s_cselect_b32 s5, -1, 0
+   105 |   6 | ::  ::::                       | s_add_i32 s12, s9, -2
+   106 |   6 | ::  ::::                       | s_cmp_gt_u32 s9, 3
+   107 |   6 | ::  ::::                       | s_cselect_b32 s11, -1, 0
+   108 |   6 | ::  ::::                       | s_cmp_gt_u32 s12, 2
+   109 |   6 | ::  ::::                       | s_cselect_b32 s12, -1, 0
+   110 |   6 | ::  ::::                       | s_branch _L172
+   111 |   8 | :: ::::::                      | label_175: s_waitcnt lgkmcnt(0)
+   112 |   8 | :: ::::::                      | s_delay_alu instid0(VALU_DEP_1) | instskip(SKIP_2) | instid1(SALU_CYCLE_1)
+   113 |   9 | ::^v::::v                      | v_add_co_u32 v2, vcc_lo, v3, v8
+   114 |   7 | :v:^::::                       | v_add_co_ci_u32 v3, vcc_lo, 0, v1, vcc_lo
+   115 |   7 | ::: ::::                       | s_add_i32 s13, s13, 1
+   116 |   7 | ::: ::::                       | s_cmp_eq_u32 s13, s9
+   117 |   7 | ::: ::::                       | s_delay_alu instid0(VALU_DEP_1)
+   119 |   8 | x::x::::                       | v_dual_mov_b32 v3, s4 :: v_dual_add_nc_u32 v0, v3, v0
+   120 |   8 | v:vv::::                       | ds_store_2addr_b32 v3, v2, v0
+   121 |   6 | ::  ::::                       | s_cbranch_scc1 _L179
+   122 |   6 | ::  ::::                       | label_172: s_and_not1_b32 vcc_lo, exec_lo, s11
+   123 |   6 | ::  ::::                       | s_cbranch_vccnz _L173
+   124 |   6 | ^:  v:::                       | v_add_nc_u32 v0, s13, v4
+   125 |   6 | ::  ::::                       | s_mov_b32 s14, s9
+   126 |   6 | ::  ::::                       | s_mov_b32 s15, s10
+   127 |   6 | ::  ::::                       | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   128 |   8 | vv^^::::                       | v_lshlrev_b64 v[2:3], 2, v[0:1]
+   129 |   7 |  :x:::::                       | v_add_co_u32 v2, vcc_lo, s0, v2
+   130 |   7 |  :::::::                       | s_delay_alu instid0(VALU_DEP_2)
+   131 |   7 |  ::x::::                       | v_add_co_ci_u32 v3, vcc_lo, s1, v3, vcc_lo
+   132 |   8 |  :vv::::^                      | global_load_b32 v8, v[2:3], off
+   133 |   7 |  :^ :::::                      | v_mov_b32 v2, 0
+   134 |   8 |  ::^:::::                      | v_mov_b32 v3, 0
+   135 |   9 |  ::::::::          ^           | label_174: v_mov_b32 v19, s15
+   136 |   9 |  ::::::::          :           | s_add_i32 s14, s14, -4
+   137 |   9 |  ::::::::          :           | s_add_i32 s15, s15, 16
+   138 |   9 |  ::::::::          :           | s_cmp_eq_u32 s14, 0
+   139 |  11 |  ::::::::^^        v           | ds_load_2addr_b32 v[9:10], v19
+   140 |  13 |  ::::::::::^^      v           | ds_load_2addr_b32 v[11:12], v19
+   141 |  15 |  ::::::::::::^^    v           | ds_load_2addr_b32 v[13:14], v19
+   142 |  17 |  ::::::::::::::^^  v           | ds_load_2addr_b32 v[15:16], v19
+   143 |  17 |  ::::::::::::::::  :           | s_waitcnt lgkmcnt(3)
+   144 |  18 | ^:::::::::v::::::  :           | v_mov_b32 v0, v10
+   145 |  17 | ::x::::::v ::::::  :           | v_add_co_u32 v2, vcc_lo, v2, v9
+   146 |  16 | :::x:::::  ::::::  :           | v_add_co_ci_u32 v3, vcc_lo, 0, v3, vcc_lo
+   147 |  16 | :::::::::  ::::::  :           | s_waitcnt vmcnt(0)
+   148 |  16 | :::::::::  ::::::  :           | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   149 |  18 | ::vv::::v  v:::::^^:           | v_mad_u64_u32 v[17:18], null, v11, v8, v[2:3]
+   150 |  16 | ::^ :::::   ::::::v:           | v_mov_b32 v2, v18
+   151 |  15 | ::: :::::   :::::: :           | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   152 |  15 | v:x :::::   :::::: :           | v_add_co_u32 v2, s16, v2, v0
+   153 |  15 |  ::^:::::   :::::: :           | v_add_co_ci_u32 v3, null, 0, 0, s16
+   154 |  15 |  ::::::::   :::::: :           | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   155 |  15 |  :xx::::v   v::::: :           | v_mad_u64_u32 v[2:3], null, v12, v8, v[2:3]
+   156 |  15 | ^::v:::::    ::::: :           | v_mov_b32 v0, v3
+   157 |  14 | ::: :::::    ::::: :           | s_waitcnt lgkmcnt(0)
+   158 |  14 | ::: :::::    ::::: :           | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   159 |  15 | v:: :::::^   ::v:: :           | v_add_co_u32 v9, s16, v0, v15
+   160 |  14 |  :: ::::::^  :: :: :           | v_add_co_ci_u32 v10, null, 0, 0, s16
+   161 |  15 | ^:: :::::::  :: v: :           | v_mov_b32 v0, v16
+   162 |  14 | ::: :::::::  ::  : :           | s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_1)
+   163 |  14 | ::: ::::vxx  v:  : :           | v_mad_u64_u32 v[9:10], null, v13, v8, v[9:10]
+   164 |  14 | :::^::::::v   :  : :           | v_mov_b32 v3, v10
+   165 |  13 | ::::::::::    :  : :           | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   166 |  14 | v::v::::::^   :  : :           | v_add_co_u32 v10, s16, v3, v0
+   167 |  13 |  :: :::::::^  :  : :           | v_add_co_ci_u32 v11, null, 0, 0, s16
+   168 |  13 |  :: ::::::::  :  : :           | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   169 |  13 |  :: ::::v:xx  v  : :           | v_mad_u64_u32 v[10:11], null, v14, v8, v[10:11]
+   171 |  13 | ^:v :::::::x     : :           | v_dual_mov_b32 v0, v11 :: v_dual_mov_b32 v11, v2
+   172 |  13 | :v ^::::::::     : :           | v_mov_b32 v3, v1
+   173 |  13 | :: ::::::::v     v v           | ds_store_2addr_b32 v19, v17, v11
+   174 |  11 | :: ::::::vv        v           | ds_store_2addr_b32 v19, v9, v10
+   175 |   9 | v:^::::::                      | v_mov_b32 v2, v0
+   176 |   9 | :::::::::                      | s_cbranch_scc0 _L174
+   177 |   7 | ::^ ::v:                       | label_173: ds_load_b32 v2, v6
+   178 |   8 | :::^:::v                       | ds_load_b32 v3, v7
+   179 |   8 | ::::::::                       | s_waitcnt lgkmcnt(1)
+   180 |   9 | v:v:::::^                      | v_add_co_u32 v8, vcc_lo, v0, v2
+   181 |   7 |  : ::::::                      | s_waitcnt lgkmcnt(0)
+   182 |   8 |  :^v:::::                      | v_mul_lo_u32 v2, v3, s8
+   183 |   9 | ^v:::::::                      | v_add_co_ci_u32 v0, vcc_lo, 0, v1, vcc_lo
+   184 |   9 | ::::::v:v                      | ds_store_b32 v6, v8
+   185 |  10 | :::::::v:^                     | ds_load_b32 v9, v7
+   186 |  10 | ::::::::::                     | s_waitcnt lgkmcnt(0)
+   187 |  11 | ::v::::::v^                    | v_mul_lo_u32 v10, v9, v2
+   188 |  11 | ::v::::::x:                    | v_mul_hi_u32 v9, v9, v2
+   189 |  11 | :::::::::::                    | s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_2)
+   190 |  11 | :::x::::::v                    | v_add_co_u32 v3, vcc_lo, v10, v3
+   191 |  10 | :::^:::::v                     | v_add_co_ci_u32 v3, vcc_lo, 0, v9, vcc_lo
+   192 |   9 | :::::::::                      | s_and_not1_b32 vcc_lo, exec_lo, s5
+   193 |   9 | :::::::::                      | s_cbranch_vccnz _L175
+   194 |   8 | ::::::::                       | s_and_not1_b32 vcc_lo, exec_lo, s12
+   195 |   8 | ::::::::                       | s_mov_b32 s14, 1
+   196 |   8 | ::::::::                       | s_cbranch_vccnz _L176
+   197 |   8 | ::::::::                       | s_mov_b32 s16, 4
+   198 |   8 | ::::::::                       | s_mov_b32 s14, s10
+   199 |   8 | ::::::::                       | label_177: s_mov_b32 s15, s16
+   200 |   8 | ::::::::                       | s_add_i32 s16, s14, 0x408
+   201 |   9 | ::::::::        ^              | v_mov_b32 v16, s14
+   202 |   9 | ::::::::        :              | s_add_i32 s17, s14, 0x410
+   203 |  10 | ::::::::  ^     :              | v_mov_b32 v10, s16
+   204 |  11 | ::::::::  : ^   :              | v_mov_b32 v12, s17
+   205 |  13 | ::::::::^^: :   v              | ds_load_2addr_b32 v[8:9], v16
+   206 |  14 | ::::::::::x^:   :              | ds_load_2addr_b32 v[10:11], v10
+   207 |  15 | ::::::::::::x^  :              | ds_load_2addr_b32 v[12:13], v12
+   208 |  17 | ::::::::::::::^^v              | ds_load_2addr_b32 v[14:15], v16
+   209 |  17 | :::::::::::::::::              | s_add_i32 s14, s14, 16
+   210 |  17 | :::::::::::::::::              | s_waitcnt lgkmcnt(3)
+   211 |  17 | :::x::::v::::::::              | v_add_co_u32 v3, vcc_lo, v3, v8
+   212 |  16 | :::::::: ::::::::              | s_waitcnt lgkmcnt(2)
+   213 |  17 | ::v::::: :v::::::^             | v_mul_lo_u32 v17, v10, v2
+   214 |  17 | ::v::::: :x:::::::             | v_mul_hi_u32 v10, v10, v2
+   215 |  18 | :v::::::^:::::::::             | v_add_co_ci_u32 v8, vcc_lo, 0, v1, vcc_lo
+   216 |  19 | ::v::::::::v::::::^            | v_mul_hi_u32 v18, v11, v2
+   217 |  19 | ::v::::::::x:::::::            | v_mul_lo_u32 v11, v11, v2
+   218 |  19 | :::::::::::::::::::            | s_waitcnt lgkmcnt(1)
+   219 |  20 | ::v:::::::::v::::::^           | v_mul_hi_u32 v19, v12, v2
+   220 |  20 | ::v:::::::::x:::::::           | v_mul_lo_u32 v12, v12, v2
+   221 |  20 | :::v:::::::::::::x::           | v_add_co_u32 v17, vcc_lo, v3, v17
+   222 |  20 | :::^::::v:v:::::::::           | v_add_co_ci_u32 v3, vcc_lo, v8, v10, vcc_lo
+   223 |  18 | :::::::: : :::::::::           | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   224 |  18 | :::x:::: v :::::::::           | v_add_co_u32 v3, s16, v3, v9
+   225 |  18 | ::::::::^  :::::::::           | v_add_co_ci_u32 v8, null, 0, 0, s16
+   226 |  18 | :::::::::  :::::::::           | s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_2)
+   227 |  19 | :::v:::::^ v::::::::           | v_add_co_u32 v9, vcc_lo, v3, v11
+   228 |  18 | :::^::::v:  ::::::v:           | v_add_co_ci_u32 v3, vcc_lo, v8, v18, vcc_lo
+   229 |  17 | ::v::::: : ^:v:::: :           | v_mul_hi_u32 v11, v13, v2
+   230 |  17 | :::::::: : ::::::: :           | s_waitcnt lgkmcnt(0)
+   231 |  17 | :::::::: : ::::::: :           | s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_1)
+   232 |  17 | :::x:::: : :::v::: :           | v_add_co_u32 v3, s16, v3, v14
+   233 |  17 | ::::::::^: ::: ::: :           | v_add_co_ci_u32 v8, null, 0, 0, s16
+   234 |  17 | :::::::::: ::: ::: :           | s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_2)
+   235 |  18 | :::v::::::^:v: ::: :           | v_add_co_u32 v10, vcc_lo, v3, v12
+   236 |  17 | :::^::::v::: : ::: v           | v_add_co_ci_u32 v3, vcc_lo, v8, v19, vcc_lo
+   237 |  16 | ::v:::::^::: v :::             | v_mul_lo_u32 v8, v13, v2
+   238 |  15 | ::::::::::::   :::             | s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_1)
+   239 |  15 | :::x::::::::   v::             | v_add_co_u32 v3, s16, v3, v15
+   240 |  15 | ::::::::::::^   ::             | v_add_co_ci_u32 v12, null, 0, 0, s16
+   241 |  15 | :::::::::::::   ::             | s_add_i32 s16, s15, 4
+   242 |  15 | :::::::::::::   ::             | s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_2)
+   243 |  15 | :::v::::x::::   ::             | v_add_co_u32 v8, vcc_lo, v3, v8
+   244 |  15 | :::^:::::::vv   ::             | v_add_co_ci_u32 v3, vcc_lo, v12, v11, vcc_lo
+   245 |  13 | :::::::::::     ::             | s_cmp_eq_u32 s9, s16
+   246 |  13 | :::::::::v:     vv             | ds_store_2addr_b32 v16, v17, v9
+   247 |  11 | ::::::::v v     v              | ds_store_2addr_b32 v16, v10, v8
+   248 |   8 | ::::::::                       | s_cbranch_scc0 _L177
+   249 |   8 | ::::::::                       | s_add_i32 s14, s15, 1
+   250 |   8 | ::::::::                       | label_176: s_delay_alu instid0(SALU_CYCLE_1)
+   251 |   8 | ::::::::                       | s_lshl_b32 s14, s14, 2
+   252 |   8 | ::::::::                       | s_mov_b32 s15, -12
+   253 |   8 | ::::::::                       | s_add_i32 s14, s10, s14
+   254 |   8 | ::::::::                       | s_nop 0
+   255 |   8 | ::::::::                       | s_nop 0
+   256 |   8 | ::::::::                       | s_nop 0
+   257 |   8 | ::::::::                       | s_nop 0
+   258 |   8 | ::::::::                       | label_178: s_delay_alu instid0(SALU_CYCLE_1)
+   259 |   8 | ::::::::                       | s_add_i32 s16, s14, s15
+   260 |   8 | ::::::::                       | s_add_i32 s15, s15, 4
+   261 |   9 | ::::::::^                      | v_mov_b32 v8, s16
+   262 |   9 | :::::::::                      | s_cmp_lg_u32 s15, 0
+   263 |  10 | ::::::::v^                     | ds_load_b32 v9, v8
+   264 |  11 | ::::::::v:^                    | ds_load_b32 v10, v8
+   265 |  11 | :::::::::::                    | s_waitcnt lgkmcnt(1)
+   266 |  12 | ::v::::::v:^                   | v_mul_lo_u32 v11, v9, v2
+   267 |  12 | ::v::::::x::                   | v_mul_hi_u32 v9, v9, v2
+   268 |  12 | ::::::::::::                   | s_waitcnt lgkmcnt(0)
+   269 |  12 | :::x::::::v:                   | v_add_co_u32 v3, vcc_lo, v3, v10
+   270 |  12 | :v::::::::^:                   | v_add_co_ci_u32 v10, vcc_lo, 0, v1, vcc_lo
+   271 |  12 | ::::::::::::                   | s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_2)
+   272 |  12 | :::v:::::::x                   | v_add_co_u32 v11, vcc_lo, v3, v11
+   273 |  12 | :::^:::::vv:                   | v_add_co_ci_u32 v3, vcc_lo, v10, v9, vcc_lo
+   274 |  10 | ::::::::v  v                   | ds_store_b32 v8, v11
+   275 |   8 | ::::::::                       | s_cbranch_scc1 _L178
+   276 |   8 | ::^:::::                       | v_mov_b32 v2, s3
+   277 |   9 | ::v:::::^                      | ds_load_b32 v8, v2
+   278 |   8 | :: ::::::                      | s_branch _L175
+   279 |   3 | :   ::                         | label_179: s_branch _L180
+   280 |   3 | ^   ::                         | label_190: v_mov_b32 v0, s10
+   281 |   3 | x   ::                         | ds_load_b32 v0, v0
+   282 |   3 | :   ::                         | label_180: s_mov_b32 s1, 0
+   283 |   3 | :   ::                         | s_mov_b32 s0, exec_lo
+   284 |   3 | :   ::                         | s_waitcnt lgkmcnt(0)
+   285 |   3 | v   ::                         | v_cmpx_eq_u32 0, v0
+   286 |   2 |     ::                         | s_cbranch_execz _L181
+   287 |   2 |     ::                         | s_lshl_b32 s1, s9, 2
+   288 |   2 |     ::                         | s_delay_alu instid0(SALU_CYCLE_1)
+   289 |   2 |     ::                         | s_add_i32 s3, s1, s10
+   290 |   2 |     ::                         | s_add_i32 s1, s9, 1
+   291 |   2 |     ::                         | s_add_i32 s3, s3, -4
+   292 |   2 |     ::                         | s_branch _L182
+   293 |   4 | vv  ::                         | label_184: v_cmp_lt_u32 s5, v0, v1
+   294 |   2 |     ::                         | s_add_i32 s3, s3, -4
+   295 |   2 |     ::                         | s_nop 0
+   296 |   2 |     ::                         | label_183: s_delay_alu instid0(VALU_DEP_1)
+   297 |   2 |     ::                         | s_and_b32 vcc_lo, exec_lo, s5
+   298 |   2 |     ::                         | s_cbranch_vccnz _L185
+   299 |   2 |     ::                         | label_182: s_add_i32 s1, s1, -1
+   300 |   2 |     ::                         | s_mov_b32 s4, -1
+   301 |   2 |     ::                         | s_cmp_lt_i32 s1, 1
+   302 |   2 |     ::                         | s_mov_b32 s5, -1
+   303 |   2 |     ::                         | s_cbranch_scc1 _L183
+   304 |   3 |  ^  ::                         | v_mov_b32 v1, s3
+   305 |   4 | ^v  ::                         | ds_load_b32 v0, v1
+   306 |   4 | :x  ::                         | ds_load_b32 v1, v1
+   307 |   4 | ::  ::                         | s_waitcnt lgkmcnt(0)
+   308 |   4 | vv  ::                         | v_cmp_le_u32 vcc_lo, v0, v1
+   309 |   4 | ::  ::                         | s_cbranch_vccnz _L184
+   310 |   2 |     ::                         | s_mov_b32 s4, 0
+   311 |   2 |     ::                         | s_branch _L183
+   312 |   2 |     ::                         | label_185: s_and_b32 s1, s4, exec_lo
+   313 |   2 |     ::                         | label_181: s_or_b32 exec_lo, exec_lo, s0
+   314 |   2 |     ::                         | s_cmp_gt_u32 s9, 7
+   315 |   2 |     ::                         | s_cselect_b32 s0, -1, 0
+   316 |   2 |     ::                         | s_xor_b32 s1, s1, -1
+   317 |   2 |     ::                         | s_delay_alu instid0(SALU_CYCLE_1) | instskip(NEXT) | instid1(SALU_CYCLE_1)
+   318 |   2 |     ::                         | s_and_b32 s0, s0, s1
+   319 |   2 |     ::                         | s_and_b32 exec_lo, exec_lo, s0
+   320 |   2 |     ::                         | s_cbranch_execz _L170
+   322 |   4 |  ^^ ::                         | v_dual_mov_b32 v2, 0 :: v_dual_mov_b32 v1, 0
+   323 |   5 |  ::^::                         | v_mov_b32 v3, 0
+   324 |   5 |  :::::                         | s_mov_b32 s1, 0
+   325 |   5 |  :::::                         | s_mov_b32 s3, s9
+   326 |   5 |  :::::                         | s_mov_b32 s4, s10
+   327 |   5 |  :::::                         | label_186: s_delay_alu instid0(SALU_CYCLE_1)
+   328 |   6 |  :::::                  ^      | v_mov_b32 v24, s4
+   329 |   6 |  :::::                  :      | s_add_i32 s0, s4, 0x404
+   330 |   6 |  :::::                  :      | s_add_i32 s5, s4, 0x40c
+   331 |   6 |  :::::                  :      | s_add_i32 s8, s4, 0x414
+   332 |   6 |  :::::                  :      | s_add_i32 s11, s4, 0x41c
+   333 |   7 | ^:::::                  :      | v_mov_b32 v0, s0
+   334 |   8 | ::::::          ^       :      | v_mov_b32 v16, s5
+   335 |   9 | ::::::          : ^     :      | v_mov_b32 v18, s8
+   336 |  10 | ::::::          : : ^   :      | v_mov_b32 v20, s11
+   337 |  12 | ::::::^^        : : :   v      | ds_load_2addr_b32 v[6:7], v24
+   338 |  14 | ::::::::^^      : : :   v      | ds_load_2addr_b32 v[8:9], v24
+   339 |  16 | ::::::::::^^    : : :   v      | ds_load_2addr_b32 v[10:11], v24
+   340 |  18 | ::::::::::::^^  : : :   v      | ds_load_2addr_b32 v[12:13], v24
+   341 |  20 | v:::::::::::::^^: : :   :      | ds_load_2addr_b32 v[14:15], v0
+   342 |  20 |  :::::::::::::::x^: :   :      | ds_load_2addr_b32 v[16:17], v16
+   343 |  21 |  :::::::::::::::::x^:   :      | ds_load_2addr_b32 v[18:19], v18
+   344 |  22 |  :::::::::::::::::::x^  :      | ds_load_2addr_b32 v[20:21], v20
+   345 |  22 |  :::::::::::::::::::::  :      | s_add_i32 s3, s3, -8
+   346 |  22 |  :::::::::::::::::::::  :      | s_add_i32 s4, s4, 32
+   347 |  22 |  :::::::::::::::::::::  :      | s_cmp_lg_u32 s3, 0
+   348 |  22 |  :::::::::::::::::::::  :      | s_waitcnt lgkmcnt(7)
+   349 |  23 | ^:::::v:::::::::::::::  :      | v_mov_b32 v0, v6
+   350 |  23 | ::::::::::::::::::::::  :      | s_waitcnt lgkmcnt(3)
+   351 |  24 | ::v:::::::::::v:::::::^ :      | v_add_co_u32 v22, vcc_lo, v2, v14
+   352 |  24 | :: v:::::::::::::::::::^:      | v_add_co_ci_u32 v23, vcc_lo, 0, v3, vcc_lo
+   353 |  24 | :: ^:::::::::::::::::::::      | v_mov_b32 v3, s1
+   355 |  26 | ::x:::::::::::vv:::::::::^     | v_dual_mov_b32 v2, v15 :: v_dual_add_nc_u32 v25, v14, v2
+   356 |  25 | :::::::::::::: :::::::::::     | s_delay_alu instid0(VALU_DEP_3)
+   357 |  25 | vv:::::::::::: :::::::vv::     | v_cmp_gt_u64 vcc_lo, v[22:23], v[0:1]
+   358 |  23 | ^::::::v:::::: :::::::  ::     | v_mov_b32 v0, v7
+   359 |  23 | :::::::::::::: :::::::  ::     | s_waitcnt lgkmcnt(2)
+   360 |  24 | ::::::::::::::^::v::::  ::     | v_mov_b32 v14, v17
+   361 |  24 | ::::::v:::::::::::::::  :x     | v_sub_nc_u32 v25, v6, v25
+   362 |  23 | :::::: :::::::::::::::  ::     | s_waitcnt lgkmcnt(0)
+   364 |  25 | :::::: ::::::::::::v:v  ::^^   | v_dual_mov_b32 v26, v19 :: v_dual_mov_b32 v27, v21
+   365 |  26 | :::::: :::::::::::::::^ ::::   | v_cndmask_b32 v22, 0, 1, vcc_lo
+   366 |  26 | :::::: v:::::::x::::::: ::::   | v_sub_co_ci_u32 v15, vcc_lo, v7, v15, vcc_lo
+   367 |  25 | ::::::  ::::::::::::::: ::::   | s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_1)
+   368 |  25 | ::v:::  ::::::::::::::x ::::   | v_add_co_u32 v22, s0, v22, v2
+   369 |  25 | :: :::  :::::::::::::::^::::   | v_add_co_ci_u32 v23, null, 0, 0, s0
+   370 |  25 | :: :::  ::::::::::::::::::::   | s_delay_alu instid0(VALU_DEP_1) | instskip(SKIP_3) | instid1(VALU_DEP_2)
+   371 |  25 | vv :::  ::::::::::::::vv::::   | v_cmp_gt_u64 vcc_lo, v[22:23], v[0:1]
+   372 |  23 | ^: :::  v:::::::::::::  ::::   | v_mov_b32 v0, v8
+   373 |  24 | ::^:::  ::::::::::::::  ::::   | v_cndmask_b32 v2, 0, 1, vcc_lo
+   374 |  24 | ::::::  x:::::::v:::::  ::::   | v_sub_co_ci_u32 v8, vcc_lo, v8, v16, vcc_lo
+   375 |  25 | ::v:::^ ::::::::v:::::  ::::   | v_add_co_u32 v6, s0, v2, v16
+   376 |  23 | :: :::: :::::::: :::::  ::::   | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   377 |  24 | :: ::::^:::::::: :::::  ::::   | v_add_co_ci_u32 v7, null, 0, 0, s0
+   378 |  24 | vv :::vv:::::::: :::::  ::::   | v_cmp_gt_u64 vcc_lo, v[6:7], v[0:1]
+   379 |  22 | ^: :::  :v:::::: :::::  ::::   | v_mov_b32 v0, v9
+   380 |  23 | ::^:::  :::::::: :::::  ::::   | v_cndmask_b32 v2, 0, 1, vcc_lo
+   381 |  23 | ::::::  :x:::::: v::::  ::::   | v_sub_co_ci_u32 v9, vcc_lo, v9, v17, vcc_lo
+   382 |  22 | ::::::  ::::::::  ::::  ::::   | s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_1)
+   383 |  23 | ::v:::^ ::::::v:  ::::  ::::   | v_add_co_u32 v6, s0, v2, v14
+   384 |  22 | :: ::::^:::::: :  ::::  ::::   | v_add_co_ci_u32 v7, null, 0, 0, s0
+   385 |  22 | :: ::::::::::: :  ::::  ::::   | s_delay_alu instid0(VALU_DEP_1) | instskip(SKIP_3) | instid1(VALU_DEP_2)
+   386 |  22 | vv :::vv:::::: :  ::::  ::::   | v_cmp_gt_u64 vcc_lo, v[6:7], v[0:1]
+   387 |  20 | ^: :::  ::v::: :  ::::  ::::   | v_mov_b32 v0, v10
+   388 |  21 | ::^:::  :::::: :  ::::  ::::   | v_cndmask_b32 v2, 0, 1, vcc_lo
+   389 |  21 | ::::::  ::x::: :  v:::  ::::   | v_sub_co_ci_u32 v10, vcc_lo, v10, v18, vcc_lo
+   390 |  22 | ::v:::^ :::::: :  v:::  ::::   | v_add_co_u32 v6, s0, v2, v18
+   391 |  20 | :: :::: :::::: :   :::  ::::   | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   392 |  21 | :: ::::^:::::: :   :::  ::::   | v_add_co_ci_u32 v7, null, 0, 0, s0
+   393 |  21 | vv :::vv:::::: :   :::  ::::   | v_cmp_gt_u64 vcc_lo, v[6:7], v[0:1]
+   394 |  19 | ^: :::  :::v:: :   :::  ::::   | v_mov_b32 v0, v11
+   395 |  20 | ::^:::  :::::: :   :::  ::::   | v_cndmask_b32 v2, 0, 1, vcc_lo
+   396 |  20 | ::::::  :::x:: :   v::  ::::   | v_sub_co_ci_u32 v11, vcc_lo, v11, v19, vcc_lo
+   397 |  19 | ::::::  :::::: :    ::  ::::   | s_delay_alu instid0(VALU_DEP_2) | instskip(NEXT) | instid1(VALU_DEP_1)
+   398 |  20 | ::v:::^ :::::: :    ::  ::v:   | v_add_co_u32 v6, s0, v2, v26
+   399 |  19 | :: ::::^:::::: :    ::  :: :   | v_add_co_ci_u32 v7, null, 0, 0, s0
+   400 |  19 | :: ::::::::::: :    ::  :: :   | s_delay_alu instid0(VALU_DEP_1) | instskip(SKIP_3) | instid1(VALU_DEP_2)
+   401 |  19 | vv :::vv:::::: :    ::  :: :   | v_cmp_gt_u64 vcc_lo, v[6:7], v[0:1]
+   402 |  17 | ^: :::  ::::v: :    ::  :: :   | v_mov_b32 v0, v12
+   403 |  18 | ::^:::  :::::: :    ::  :: :   | v_cndmask_b32 v2, 0, 1, vcc_lo
+   404 |  18 | ::::::  ::::x: :    v:  :: :   | v_sub_co_ci_u32 v12, vcc_lo, v12, v20, vcc_lo
+   405 |  19 | ::v:::^ :::::: :    v:  :: :   | v_add_co_u32 v6, s0, v2, v20
+   406 |  17 | :: :::: :::::: :     :  :: :   | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   407 |  18 | :: ::::^:::::: :     :  :: :   | v_add_co_ci_u32 v7, null, 0, 0, s0
+   408 |  18 | vv :::vv:::::: :     :  :: :   | v_cmp_gt_u64 s0, v[6:7], v[0:1]
+   409 |  16 | ^: :::  :::::v :     :  :: :   | v_mov_b32 v0, v13
+   410 |  16 | :: :::  :::::: :     :  :: :   | s_delay_alu instid0(VALU_DEP_2)
+   411 |  17 | ::^:::  :::::: :     :  :: :   | v_cndmask_b32 v2, 0, 1, s0
+   412 |  17 | ::::::  :::::x :     v  :: :   | v_sub_co_ci_u32 v13, vcc_lo, v13, v21, s0
+   413 |  16 | ::::::  :::::: v        vv :   | ds_store_2addr_b32 v24, v25, v15
+   414 |  14 | ::::::  vv::::          v  :   | ds_store_2addr_b32 v24, v8, v9
+   415 |  12 | ::::::    vv::          v  :   | ds_store_2addr_b32 v24, v10, v11
+   416 |  10 | ::::::      vv          v  :   | ds_store_2addr_b32 v24, v12, v13
+   417 |   8 | ::v:::^                    v   | v_add_co_u32 v6, s5, v2, v27
+   418 |   6 | :: ::::                        | s_delay_alu instid0(VALU_DEP_1) | instskip(NEXT) | instid1(VALU_DEP_1)
+   419 |   7 | :: ::::^                       | v_add_co_ci_u32 v7, null, 0, 0, s5
+   420 |   7 | vv :::vv                       | v_cmp_gt_u64 vcc_lo, v[6:7], v[0:1]
+   421 |   5 |  :^:::                         | v_cndmask_b32 v2, 0, 1, vcc_lo
+   422 |   5 |  :::::                         | s_cbranch_scc1 _L186
+   423 |   2 |     ::                         | label_170: s_or_b32 exec_lo, exec_lo, s2
+   424 |   2 |     ::                         | s_lshr_b32 s0, s9, 3
+   425 |   2 |     ::                         | s_waitcnt lgkmcnt(0)
+   426 |   3 |   ^ :v                         | v_mul_lo_u32 v2, v5, s0
+   427 |   2 |   : :                          | s_barrier
+   428 |   2 |   : :                          | buffer_gl0_inv
+   429 |   2 |   : :                          | s_mov_b32 s1, exec_lo
+   430 |   3 |   v^:                          | v_add_nc_u32 v3, s0, v2
+   431 |   2 |    ::                          | s_delay_alu instid0(VALU_DEP_1)
+   432 |   3 |   ^v:                          | v_cmpx_lt_u32 v2, v3
+   433 |   3 |   :::                          | s_cbranch_execz _L165
+   434 |   3 |   :::                          | s_bfe_u32 s1, s9, 0x30003
+   435 |   3 |   :::                          | s_delay_alu instid0(SALU_CYCLE_1)
+   436 |   3 |   :::                          | s_cmp_eq_u32 s1, 0
+   437 |   3 |   :::                          | s_cbranch_scc1 _L187
+   438 |   4 |   v::^                         | v_lshl_add_u32 v5, v2, 2, s10
+   439 |   5 |  ^::::                         | v_mov_b32 v1, 0
+   440 |   6 |  ::::v  ^                      | label_188: ds_load_b32 v8, v5
+   441 |   7 | ^:v:v:  :                      | v_add_nc_u32 v0, v4, v2
+   442 |   7 | ::x:::  :                      | v_add_nc_u32 v2, 1, v2
+   443 |   7 | :::::x  :                      | v_add_nc_u32 v5, 4, v5
+   444 |   7 | ::::::  :                      | s_add_i32 s1, s1, -1
+   445 |   7 | ::::::  :                      | s_delay_alu instid0(VALU_DEP_3) | instskip(SKIP_1) | instid1(VALU_DEP_1)
+   446 |   9 | vv::::^^:                      | v_lshlrev_b64 v[6:7], 2, v[0:1]
+   447 |   8 |  ::::::::                      | s_cmp_lg_u32 s1, 0
+   448 |   8 |  :::::x::                      | v_add_co_u32 v6, vcc_lo, s6, v6
+   449 |   8 |  ::::::::                      | s_delay_alu instid0(VALU_DEP_2)
+   450 |   8 |  ::::::x:                      | v_add_co_ci_u32 v7, vcc_lo, s7, v7, vcc_lo
+   451 |   8 |  ::::::::                      | s_waitcnt lgkmcnt(0)
+   452 |   8 |  :::::vvv                      | global_store_b32 v[6:7], v8, off
+   453 |   5 |  :::::                         | s_cbranch_scc1 _L188
+   454 |   3 |   :::                          | label_187: s_add_i32 s0, s0, -1
+   455 |   3 |   :::                          | s_delay_alu instid0(SALU_CYCLE_1)
+   456 |   3 |   :::                          | s_cmp_lt_u32 s0, 7
+   457 |   3 |   :::                          | s_cbranch_scc1 _L165
+   458 |   4 |   v::^                         | v_lshl_add_u32 v5, v2, 2, s10
+   459 |   5 |  ^::::                         | v_mov_b32 v1, 0
+   460 |   5 |  :::::                         | s_mov_b32 s0, 0
+   461 |   5 |  :::::                         | label_189: s_delay_alu instid0(VALU_DEP_1) | instskip(SKIP_1) | instid1(VALU_DEP_2)
+   463 |   7 | ^vv:v: ^                       | v_dual_mov_b32 v7, v1 :: v_dual_add_nc_u32 v0, v4, v2
+   465 |   8 | :vx::: : ^                     | v_dual_mov_b32 v9, v1 :: v_dual_add_nc_u32 v2, 8, v2
+   467 |  10 | vv::::^: : ^                   | v_dual_mov_b32 v11, v1 :: v_dual_add_nc_u32 v6, 1, v0
+   468 |  12 | vv:::::: : :              ^^   | v_lshlrev_b64 v[26:27], 2, v[0:1]
+   470 |  14 | vv::::::^: : ^            ::   | v_dual_mov_b32 v13, v1 :: v_dual_add_nc_u32 v8, 2, v0
+   471 |  14 | :::::::::: : :            ::   | s_delay_alu instid0(VALU_DEP_4) | instskip(NEXT) | instid1(VALU_DEP_4)
+   472 |  14 | ::vv:::::: : :            ::   | v_cmp_eq_u32 vcc_lo, v3, v2
+   473 |  14 | ::::::xx:: : :            ::   | v_lshlrev_b64 v[6:7], 2, v[6:7]
+   475 |  16 | vv::::::::^: : ^          ::   | v_dual_mov_b32 v15, v1 :: v_dual_add_nc_u32 v10, 3, v0
+   476 |  16 | :::::::::::: : :          ::   | s_delay_alu instid0(VALU_DEP_4)
+   477 |  16 | ::::::::xx:: : :          ::   | v_lshlrev_b64 v[8:9], 2, v[8:9]
+   478 |  16 | :::::::::::: : :          ::   | s_or_b32 s0, vcc_lo, s0
+   479 |  16 | :::::::::::: : :          x:   | v_add_co_u32 v26, vcc_lo, s6, v26
+   481 |  18 | vv::::::::::^: :         ^::   | v_dual_mov_b32 v25, v1 :: v_dual_add_nc_u32 v12, 4, v0
+   482 |  18 | :::::::::::::: :         ::x   | v_add_co_ci_u32 v27, vcc_lo, s7, v27, vcc_lo
+   483 |  20 | :::::v:::::::: :^^       :::   | ds_load_2addr_b32 v[16:17], v5
+   484 |  22 | :::::v:::::::: :::^^     :::   | ds_load_2addr_b32 v[18:19], v5
+   485 |  24 | :::::v:::::::: :::::^^   :::   | ds_load_2addr_b32 v[20:21], v5
+   486 |  26 | :::::v:::::::: :::::::^^ :::   | ds_load_2addr_b32 v[22:23], v5
+   487 |  26 | ::::::::::xx:: ::::::::: :::   | v_lshlrev_b64 v[10:11], 2, v[10:11]
+   488 |  26 | ::::::x::::::: ::::::::: :::   | v_add_co_u32 v6, vcc_lo, s6, v6
+   489 |  27 | v:::::::::::::^::::::::: :::   | v_add_nc_u32 v14, 5, v0
+   490 |  27 | :::::::x:::::::::::::::: :::   | v_add_co_ci_u32 v7, vcc_lo, s7, v7, vcc_lo
+   491 |  27 | ::::::::::::xx:::::::::: :::   | v_lshlrev_b64 v[12:13], 2, v[12:13]
+   492 |  27 | ::::::::x::::::::::::::: :::   | v_add_co_u32 v8, vcc_lo, s6, v8
+   493 |  28 | v:::::::::::::::::::::::^:::   | v_add_nc_u32 v24, 6, v0
+   494 |  28 | :::::::::x::::::::::::::::::   | v_add_co_ci_u32 v9, vcc_lo, s7, v9, vcc_lo
+   495 |  28 | ::::::::::::::xx::::::::::::   | v_lshlrev_b64 v[14:15], 2, v[14:15]
+   496 |  28 | ::::::::::x:::::::::::::::::   | v_add_co_u32 v10, vcc_lo, s6, v10
+   497 |  28 | x:::::::::::::::::::::::::::   | v_add_nc_u32 v0, 7, v0
+   498 |  28 | :::::::::::x::::::::::::::::   | v_add_co_ci_u32 v11, vcc_lo, s7, v11, vcc_lo
+   499 |  28 | ::::::::::::::::::::::::xx::   | v_lshlrev_b64 v[24:25], 2, v[24:25]
+   500 |  28 | ::::::::::::x:::::::::::::::   | v_add_co_u32 v12, vcc_lo, s6, v12
+   501 |  28 | :::::::::::::x::::::::::::::   | v_add_co_ci_u32 v13, vcc_lo, s7, v13, vcc_lo
+   502 |  30 | vv::::::::::::::::::::::::::^^ | v_lshlrev_b64 v[28:29], 2, v[0:1]
+   503 |  29 |  :::::::::::::x::::::::::::::: | v_add_co_u32 v14, vcc_lo, s6, v14
+   504 |  29 |  ::::::::::::::x:::::::::::::: | v_add_co_ci_u32 v15, vcc_lo, s7, v15, vcc_lo
+   505 |  29 |  ::::x:::::::::::::::::::::::: | v_add_nc_u32 v5, 32, v5
+   506 |  29 |  :::::::::::::::::::::::x::::: | v_add_co_u32 v24, vcc_lo, s6, v24
+   507 |  29 |  ::::::::::::::::::::::::x:::: | v_add_co_ci_u32 v25, vcc_lo, s7, v25, vcc_lo
+   508 |  29 |  :::::::::::::::::::::::::::x: | v_add_co_u32 v28, vcc_lo, s6, v28
+   509 |  29 |  ::::::::::::::::::::::::::::x | v_add_co_ci_u32 v29, vcc_lo, s7, v29, vcc_lo
+   510 |  29 |  ::::::::::::::::::::::::::::: | s_waitcnt lgkmcnt(3)
+   511 |  29 |  ::::::::::::::::::::::::::::: | s_clause 0x1
+   512 |  29 |  :::::::::::::::v:::::::::vv:: | global_store_b32 v[26:27], v16, off
+   513 |  26 |  :::::vv:::::::: v::::::::  :: | global_store_b32 v[6:7], v17, off
+   514 |  23 |  :::::  ::::::::  ::::::::  :: | s_waitcnt lgkmcnt(2)
+   515 |  23 |  :::::  ::::::::  ::::::::  :: | s_clause 0x1
+   516 |  23 |  :::::  vv::::::  v:::::::  :: | global_store_b32 v[8:9], v18, off
+   517 |  20 |  :::::    vv::::   v::::::  :: | global_store_b32 v[10:11], v19, off
+   518 |  17 |  :::::      ::::    ::::::  :: | s_waitcnt lgkmcnt(1)
+   519 |  17 |  :::::      ::::    ::::::  :: | s_clause 0x1
+   520 |  17 |  :::::      vv::    v:::::  :: | global_store_b32 v[12:13], v20, off
+   521 |  14 |  :::::        vv     v::::  :: | global_store_b32 v[14:15], v21, off
+   522 |  11 |  :::::                ::::  :: | s_waitcnt lgkmcnt(0)
+   523 |  11 |  :::::                ::::  :: | s_clause 0x1
+   524 |  11 |  :::::                v:vv  :: | global_store_b32 v[24:25], v22, off
+   525 |   8 |  :::::                 v    vv | global_store_b32 v[28:29], v23, off
+   526 |   5 |  :::::                         | s_and_not1_b32 exec_lo, exec_lo, s0
+   527 |   5 |  :::::                         | s_cbranch_execnz _L189
+   528 |   0 |                                | label_165: s_nop 0
+   529 |   0 |                                | s_sendmsg sendmsg(MSG_DEALLOC_VGPRS)
+   530 |   0 |                                | s_endpgm
+   531 |   3 | :   ::                         | label_171: s_cbranch_execnz _L190
+   532 |   3 | :   ::                         | s_branch _L180
+
+Maximum # VGPR used  30, VGPRs allocated by HW:  32 (30 requested)
+
+Architecture info:
+  VGPRs total: 256
+  VGPR allocation granularity: 16

@@ -1,0 +1,5 @@
+kernel_isa_file,total_insts,v_insts,s_insts,mul_mad_fma,memory_insts,branch_insts,s_waitcnt
+gfx1150_ecm_mont_mul_priv_bench_mont_isa_4096_amd.rga.isa.txt,251,86,161,6,4,31,18
+gfx1150_ecm_mont_sqr_priv_bench_mont_isa_4096_amd.rga.isa.txt,255,82,170,6,3,31,17
+gfx1150_cgbn_mont_mul_wg_bench_mont_isa_4096_amd.rga.isa.txt,446,169,229,9,48,33,26
+gfx1150_cgbn_mont_sqr_wg_bench_mont_isa_4096_amd.rga.isa.txt,441,169,224,10,48,32,25

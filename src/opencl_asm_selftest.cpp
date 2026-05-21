@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <algorithm>
+#include <chrono>
 #include <iostream>
 #include <limits>
 #include <string>
@@ -61,13 +62,6 @@ bool has_strict_invalid_sink(const std::vector<int64_t> &sink, size_t active_ele
     return true;
 }
 
-double event_elapsed_ns(cl_event ev) {
-    cl_ulong s = 0, e = 0;
-    clGetEventProfilingInfo(ev, CL_PROFILING_COMMAND_START, sizeof(s), &s, nullptr);
-    clGetEventProfilingInfo(ev, CL_PROFILING_COMMAND_END, sizeof(e), &e, nullptr);
-    return (double)(e - s);
-}
-
 double median(std::vector<double> v) {
     if (v.empty()) return 0.0;
     std::sort(v.begin(), v.end());
@@ -78,7 +72,34 @@ double median(std::vector<double> v) {
 
 } // namespace
 
-int main() {
+static double run_kernel_host_timed_ns(cl_command_queue q, cl_kernel k,
+                                       size_t global, size_t local) {
+    auto t0 = std::chrono::high_resolution_clock::now();
+    cl_int err = clEnqueueNDRangeKernel(q, k, 1, nullptr, &global, &local, 0, nullptr, nullptr);
+    if (err != CL_SUCCESS) return -1.0;
+    err = clFinish(q);
+    if (err != CL_SUCCESS) return -1.0;
+    auto t1 = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<double, std::nano>(t1 - t0).count();
+}
+
+int main(int argc, char **argv) {
+    bool verbose_groups = false;
+    for (int i = 1; i < argc; ++i) {
+        std::string a = argv[i];
+        if (a == "-v") {
+            verbose_groups = true;
+            continue;
+        }
+        if (a == "-h" || a == "--help") {
+            std::cout << "Usage: opencl_asm_selftest [-v]\n"
+                         "  -v    Print throughput for every tested groups value\n";
+            return EXIT_SUCCESS;
+        }
+        std::cerr << "Unknown argument: " << a << std::endl;
+        std::cerr << "Use -h for help." << std::endl;
+        return EXIT_FAILURE;
+    }
     if (!configureFirstAmdGpuDevice(true)) {
         return EXIT_FAILURE;
     }
@@ -96,10 +117,10 @@ int main() {
     }
     cl_int qerr = CL_SUCCESS;
 #if CL_TARGET_OPENCL_VERSION >= 200
-    cl_queue_properties props[] = {CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0};
+    cl_queue_properties props[] = {0};
     cl_command_queue prof_queue = clCreateCommandQueueWithProperties(ctx.ctx, ctx.device, props, &qerr);
 #else
-    cl_command_queue prof_queue = clCreateCommandQueue(ctx.ctx, ctx.device, CL_QUEUE_PROFILING_ENABLE, &qerr);
+    cl_command_queue prof_queue = clCreateCommandQueue(ctx.ctx, ctx.device, 0, &qerr);
 #endif
     if (qerr != CL_SUCCESS || prof_queue == nullptr) {
         std::cerr << "Failed to create profiling queue: " << qerr << std::endl;
@@ -160,12 +181,12 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    const size_t groups = 4096;
+    const size_t groups = 2048;
     const size_t local = 64;
     const int it_latency = 1 << 15;
-    const int it_throughput = 1 << 16;
-    const int repeats = 5;
-    const std::vector<size_t> group_candidates = {64, 128, 256, 512, 1024, 2048, 4096, 8192};
+    const int it_throughput = 1 << 18;
+    const int repeats = 4;
+    const std::vector<size_t> group_candidates = {32, 64, 96, 128, 256, 384, 512, 768, 1024, 1536, 2048, 4096, 8192};
     std::vector<int64_t> host(groups, 0);
     cl_mem buf = clCreateBuffer(ctx.ctx, CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
                                 sizeof(int64_t) * host.size(), host.data(), &err);
@@ -201,8 +222,6 @@ int main() {
 
             for (int r = 0; r < repeats; ++r) {
                 int iters = it_latency;
-                cl_event ev_lat = nullptr, ev_lat_base = nullptr;
-
                 err = clSetKernelArg(k_lat, 0, sizeof(int), &what);
                 err |= clSetKernelArg(k_lat, 1, sizeof(int), &iters);
                 err |= clSetKernelArg(k_lat, 2, sizeof(cl_mem), &buf);
@@ -212,19 +231,14 @@ int main() {
                     unsupported = true;
                     break;
                 }
-                err = clEnqueueNDRangeKernel(prof_queue, k_lat, 1, nullptr, &global, &local, 0, nullptr, &ev_lat);
-                err |= clEnqueueNDRangeKernel(prof_queue, k_base_lat, 1, nullptr, &global, &local, 0, nullptr, &ev_lat_base);
-                if (err != CL_SUCCESS) {
+                double lat_one = run_kernel_host_timed_ns(prof_queue, k_lat, global, local);
+                double lat_base_one = run_kernel_host_timed_ns(prof_queue, k_base_lat, global, local);
+                if (lat_one <= 0.0 || lat_base_one <= 0.0) {
                     unsupported = true;
-                    if (ev_lat) clReleaseEvent(ev_lat);
-                    if (ev_lat_base) clReleaseEvent(ev_lat_base);
                     break;
                 }
-                clFinish(prof_queue);
-                lat_samples.push_back(event_elapsed_ns(ev_lat));
-                lat_base_samples.push_back(event_elapsed_ns(ev_lat_base));
-                clReleaseEvent(ev_lat);
-                clReleaseEvent(ev_lat_base);
+                lat_samples.push_back(lat_one);
+                lat_base_samples.push_back(lat_base_one);
 
                 // quick sink check once at first candidate/repeat
                 if (g == group_candidates.front() && r == 0) {
@@ -242,7 +256,6 @@ int main() {
                 }
 
                 iters = it_throughput;
-                cl_event ev_thr = nullptr, ev_thr_base = nullptr;
                 err = clSetKernelArg(k_thr, 0, sizeof(int), &what);
                 err |= clSetKernelArg(k_thr, 1, sizeof(int), &iters);
                 err |= clSetKernelArg(k_thr, 2, sizeof(cl_mem), &buf);
@@ -252,19 +265,14 @@ int main() {
                     unsupported = true;
                     break;
                 }
-                err = clEnqueueNDRangeKernel(prof_queue, k_thr, 1, nullptr, &global, &local, 0, nullptr, &ev_thr);
-                err |= clEnqueueNDRangeKernel(prof_queue, k_base_thr, 1, nullptr, &global, &local, 0, nullptr, &ev_thr_base);
-                if (err != CL_SUCCESS) {
+                double thr_one = run_kernel_host_timed_ns(prof_queue, k_thr, global, local);
+                double thr_base_one = run_kernel_host_timed_ns(prof_queue, k_base_thr, global, local);
+                if (thr_one <= 0.0 || thr_base_one <= 0.0) {
                     unsupported = true;
-                    if (ev_thr) clReleaseEvent(ev_thr);
-                    if (ev_thr_base) clReleaseEvent(ev_thr_base);
                     break;
                 }
-                clFinish(prof_queue);
-                thr_samples.push_back(event_elapsed_ns(ev_thr));
-                thr_base_samples.push_back(event_elapsed_ns(ev_thr_base));
-                clReleaseEvent(ev_thr);
-                clReleaseEvent(ev_thr_base);
+                thr_samples.push_back(thr_one);
+                thr_base_samples.push_back(thr_base_one);
             }
 
             if (unsupported || lat_samples.empty() || thr_samples.empty()) {
@@ -291,6 +299,15 @@ int main() {
             double lat_ns_per_op = lat_ns / (double(global) * double(it_latency) * double(tc.latency_ops_per_iter));
             double thr_total_ops = double(global) * double(it_throughput) * double(tc.throughput_ops_per_iter);
             double gops = thr_total_ops / thr_ns;
+
+            if (verbose_groups) {
+                std::cout << "  " << tc.name
+                          << " groups=" << g
+                          << " global=" << global
+                          << " ns=" << thr_ns
+                          << " throughput=" << gops
+                          << " Gops/s" << std::endl;
+            }
 
             if (gops > best_gops) {
                 best_gops = gops;

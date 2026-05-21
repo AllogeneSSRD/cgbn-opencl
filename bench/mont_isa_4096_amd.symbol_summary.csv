@@ -1,0 +1,7 @@
+symbol,size_bytes,inst_count_min_est,inst_count_max_est
+cgbn_mont_mul_wg,2808,351,702
+cgbn_mont_sqr_wg,2888,361,722
+cgbn_mont_mul_wg_bench,2352,294,588
+cgbn_mont_sqr_wg_bench,2332,291,583
+ecm_mont_mul_priv_bench,1496,187,374
+ecm_mont_sqr_priv_bench,1496,187,374
