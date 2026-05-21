@@ -558,13 +558,31 @@ static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms
 
     std::string mont_priv =
         cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv.cl");
+    std::string mont_wg =
+        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg.cl");
     std::string ecm_src =
         cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_stage1.cl");
-    if (mont_priv.empty() || ecm_src.empty()) {
+    if (mont_priv.empty() || mont_wg.empty() || ecm_src.empty()) {
         ecm_ts_fprintf(stderr, "OpenCL: failed to load kernel sources (run from project root)\n");
         return -1;
     }
-    std::string src = mont_priv + "\n" + ecm_src;
+
+    // Some OpenCL drivers compile from a temporary location and do not resolve
+    // relative #include paths reliably. Inline mont_wg.cl explicitly.
+    const std::string include_line = "#include \"mont_wg.cl\"";
+    size_t inc_pos = ecm_src.find(include_line);
+    if (inc_pos != std::string::npos) {
+        size_t erase_len = include_line.size();
+        if (inc_pos + erase_len < ecm_src.size() &&
+            (ecm_src[inc_pos + erase_len] == '\n' || ecm_src[inc_pos + erase_len] == '\r')) {
+            while (inc_pos + erase_len < ecm_src.size() &&
+                   (ecm_src[inc_pos + erase_len] == '\n' || ecm_src[inc_pos + erase_len] == '\r')) {
+                ++erase_len;
+            }
+        }
+        ecm_src.erase(inc_pos, erase_len);
+    }
+    std::string src = mont_wg + "\n" + mont_priv + "\n" + ecm_src;
 
     char opts[64];
     snprintf(opts, sizeof(opts), "-DMAX_LIMBS=%u", limbs);
@@ -692,6 +710,8 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     const bool use_mont_wg = !env_flag_enabled("ECM_DISABLE_MONT_WG");
     opencl_dump_begin(g_dump_ctx, verbose);
 
+    const bool sync_each_batch = g_dump_ctx.enabled || env_flag_enabled("ECM_SYNC_EACH_BATCH");
+
     int batches_complete = 0;
     while (s_partial < s_num_bits) {
         uint64_t this_batch = std::min(batch_size, s_num_bits - s_partial);
@@ -743,8 +763,8 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         auto t0 = std::chrono::high_resolution_clock::now();
         err = clEnqueueNDRangeKernel(g_ctx.queue, active_kernel, 1, nullptr, &global,
                                      use_mont_wg ? &local : nullptr, 0, nullptr, nullptr);
-        clFinish(g_ctx.queue);
-        if (err == CL_SUCCESS) {
+        if (err == CL_SUCCESS && sync_each_batch) {
+            clFinish(g_ctx.queue);
             err = clEnqueueReadBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data, 0,
                                       nullptr, nullptr);
             if (err == CL_SUCCESS) {
@@ -765,18 +785,28 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             break;
         }
 
-        double batch_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-        if (batch_ms < 80.0) {
-            batch_size = 11 * batch_size / 10;
-        } else if (batch_ms > 120.0) {
-            batch_size = std::max<uint64_t>(100, 9 * batch_size / 10);
+        if (sync_each_batch) {
+            double batch_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            if (batch_ms < 80.0) {
+                batch_size = 11 * batch_size / 10;
+            } else if (batch_ms > 120.0) {
+                batch_size = std::max<uint64_t>(100, 9 * batch_size / 10);
+            }
         }
 
         s_partial += this_batch;
         batches_complete++;
     }
 
-    // Host `data` already holds standard-form curve state after the last batch readback.
+    if (err == CL_SUCCESS && !sync_each_batch) {
+        err = clEnqueueReadBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data, 0,
+                                  nullptr, nullptr);
+        if (err == CL_SUCCESS) {
+            curves_from_montgomery(data, curves, limbs, N, np0);
+        } else {
+            ecm_ts_fprintf(stderr, "final GPU readback failed (%d)\n", err);
+        }
+    }
 
     auto t_global_end = std::chrono::high_resolution_clock::now();
     if (gputime) {

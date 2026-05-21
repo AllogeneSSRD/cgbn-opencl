@@ -8,6 +8,8 @@
 #define TPI 8
 #endif
 
+#include "mont_wg.cl"
+
 // ---------------------------------------------------------------------------
 // Private multi-limb helpers (one curve per work-item)
 //
@@ -439,77 +441,12 @@ static inline void special_mult_ui32_l(__local uint *r, uint m, __local const ui
 static inline void mont_mul_wg_local(__local uint *out, __local const uint *a, __local const uint *b,
                               __local const uint *n, uint np0, uint limbs, uint tid,
                               __local uint *scratch) {
-    __local uint *t = scratch;
-    __local uint *B = t + (MAX_LIMBS + 1);
-    __local uint *N = B + MAX_LIMBS;
-
-    for (uint i = tid; i <= limbs; i += TPI) t[i] = 0u;
-    for (uint i = tid; i < limbs; i += TPI) {
-        B[i] = b[i];
-        N[i] = n[i];
-    }
-    barrier(CLK_LOCAL_MEM_FENCE);
-
-    if (tid == 0u) {
-        uint t_hi = 0u;
-        for (uint i = 0u; i < limbs; ++i) {
-            uint ai = a[i];
-            ulong carry = 0ul;
-            for (uint j = 0u; j < limbs; ++j) {
-                ulong uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
-                t[j] = (uint)uv;
-                carry = uv >> 32;
-            }
-            ulong uvh = (ulong)t[limbs] + carry;
-            t[limbs] = (uint)uvh;
-            t_hi += (uint)(uvh >> 32);
-
-            uint m = (uint)((ulong)t[0] * (ulong)np0);
-            carry = 0ul;
-            for (uint j = 0u; j < limbs; ++j) {
-                ulong uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
-                if (j > 0u) t[j - 1u] = (uint)uv;
-                carry = uv >> 32;
-            }
-            ulong top = (ulong)t[limbs] + carry;
-            t[limbs - 1u] = (uint)top;
-            ulong top2 = (ulong)t_hi + (top >> 32);
-            t[limbs] = (uint)top2;
-            t_hi = (uint)(top2 >> 32);
-        }
-
-        int ge = (t_hi != 0u || t[limbs] != 0u) ? 1 : 0;
-        if (!ge) {
-            for (int i = (int)limbs - 1; i >= 0; --i) {
-                if (t[(uint)i] > N[(uint)i]) {
-                    ge = 1;
-                    break;
-                }
-                if (t[(uint)i] < N[(uint)i]) {
-                    ge = 0;
-                    break;
-                }
-            }
-        }
-        if (ge) {
-            ulong borrow = 0ul;
-            for (uint i = 0u; i < limbs; ++i) {
-                ulong tv = (ulong)t[i];
-                ulong nv = (ulong)N[i];
-                ulong w = tv - nv - borrow;
-                t[i] = (uint)w;
-                borrow = (tv < nv + borrow) ? 1ul : 0ul;
-            }
-        }
-    }
-    barrier(CLK_LOCAL_MEM_FENCE);
-    for (uint i = tid; i < limbs; i += TPI) out[i] = t[i];
-    barrier(CLK_LOCAL_MEM_FENCE);
+    cgbn_mont_mul_wg_local_core(out, a, b, n, np0, limbs, tid, scratch);
 }
 
 static inline void mont_sqr_wg_local(__local uint *out, __local const uint *a, __local const uint *n,
                               uint np0, uint limbs, uint tid, __local uint *scratch) {
-    mont_mul_wg_local(out, a, a, n, np0, limbs, tid, scratch);
+    cgbn_mont_sqr_wg_local_core(out, a, n, np0, limbs, tid, scratch);
 }
 
 static inline void double_add_v2_wg_local(__local uint *q, __local uint *u, __local uint *w, __local uint *v,
