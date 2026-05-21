@@ -39,6 +39,7 @@ static cl_program g_ecm_program = nullptr;
 static cl_kernel g_ecm_kernel = nullptr;
 static cl_kernel g_ecm_kernel_wg = nullptr;
 static uint32_t g_kernel_limbs = 0;
+static uint32_t g_kernel_tpi = 0;
 static bool g_device_info_printed = false;
 
 static int selected_device_index_from_env() {
@@ -51,6 +52,59 @@ static int selected_device_index_from_env() {
     } catch (...) {
         return 0;
     }
+}
+
+static uint32_t requested_tpi_from_env() {
+    const char *v = std::getenv("ECM_OPENCL_TPI");
+    if (!v || !*v) {
+        return 8u;
+    }
+    char *endp = nullptr;
+    unsigned long parsed = std::strtoul(v, &endp, 10);
+    if (endp == v || *endp != '\0' || parsed == 0ul || parsed > 32ul) {
+        ecm_ts_fprintf(stderr, "OpenCL: invalid ECM_OPENCL_TPI=%s, fallback to 8\n", v);
+        return 8u;
+    }
+    return (uint32_t)parsed;
+}
+
+static bool is_power_of_two_u32(uint32_t x) {
+    return x != 0u && (x & (x - 1u)) == 0u;
+}
+
+static uint32_t choose_effective_tpi(uint32_t limbs) {
+    static const uint32_t kChoices[] = {32u, 16u, 8u, 4u, 2u, 1u};
+    uint32_t requested = requested_tpi_from_env();
+    if (!is_power_of_two_u32(requested)) {
+        ecm_ts_fprintf(stderr, "OpenCL: ECM_OPENCL_TPI=%u is not power-of-two, fallback to 8\n",
+                       requested);
+        requested = 8u;
+    }
+
+    uint32_t chosen = 0u;
+    for (uint32_t d : kChoices) {
+        if (d <= requested && (limbs % d) == 0u) {
+            chosen = d;
+            break;
+        }
+    }
+    if (chosen == 0u) {
+        for (uint32_t d : kChoices) {
+            if ((limbs % d) == 0u) {
+                chosen = d;
+                break;
+            }
+        }
+    }
+    if (chosen == 0u) {
+        chosen = 1u;
+    }
+    if (chosen != requested) {
+        ecm_ts_fprintf(stderr,
+                       "OpenCL: requested TPI=%u incompatible with limbs=%u, using TPI=%u\n",
+                       requested, limbs, chosen);
+    }
+    return chosen;
 }
 
 static opencl_dump_ctx_t g_dump_ctx;
@@ -524,8 +578,8 @@ static uint32_t select_bits(size_t n_log2) {
     return 0;
 }
 
-static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms) {
-    if (g_ecm_kernel && g_kernel_limbs == limbs) {
+static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *device_init_ms) {
+    if (g_ecm_kernel && g_kernel_limbs == limbs && g_kernel_tpi == tpi) {
         if (device_init_ms) {
             *device_init_ms = 0.0;
         }
@@ -584,8 +638,8 @@ static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms
     }
     std::string src = mont_wg + "\n" + mont_priv + "\n" + ecm_src;
 
-    char opts[64];
-    snprintf(opts, sizeof(opts), "-DMAX_LIMBS=%u", limbs);
+    char opts[96];
+    snprintf(opts, sizeof(opts), "-DMAX_LIMBS=%u -DTPI=%u", limbs, tpi);
 
     cl_int buildErr = CL_SUCCESS;
     g_ecm_program = cgbn::opencl::build_program_from_source(g_ctx, src.c_str(), opts, buildErr);
@@ -606,6 +660,7 @@ static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms
         return -1;
     }
     g_kernel_limbs = limbs;
+    g_kernel_tpi = tpi;
     auto t_init1 = std::chrono::high_resolution_clock::now();
     double init_ms =
         std::chrono::duration<double, std::milli>(t_init1 - t_init0).count();
@@ -616,7 +671,8 @@ static int ensure_ecm_kernel(uint32_t limbs, int verbose, double *device_init_ms
         print_opencl_device_info(selected_device_index_from_env(), init_ms);
         g_device_info_printed = true;
     }
-    ocl_log_verbose(verbose, "OpenCL: built kernel MAX_LIMBS=%u (%.0fms)\n", limbs, init_ms);
+    ocl_log_verbose(verbose, "OpenCL: built kernel MAX_LIMBS=%u TPI=%u (%.0fms)\n",
+                    limbs, tpi, init_ms);
     return 0;
 }
 
@@ -626,7 +682,9 @@ extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose) {
         return ECM_ERROR;
     }
     double init_ms = 0.0;
-    return ensure_ecm_kernel(BITS / 32, verbose, &init_ms);
+    const uint32_t limbs = BITS / 32;
+    const uint32_t tpi = choose_effective_tpi(limbs);
+    return ensure_ecm_kernel(limbs, tpi, verbose, &init_ms);
 }
 
 extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, const mpz_t s,
@@ -654,9 +712,10 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         return ECM_ERROR;
     }
     const uint32_t limbs = BITS / 32;
+    const uint32_t tpi = choose_effective_tpi(limbs);
 
     double device_init_ms = 0.0;
-    if (ensure_ecm_kernel(limbs, verbose, &device_init_ms) != 0) {
+    if (ensure_ecm_kernel(limbs, tpi, verbose, &device_init_ms) != 0) {
         free(s_bits);
         return ECM_ERROR;
     }
@@ -685,8 +744,8 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     auto t_global_start = std::chrono::high_resolution_clock::now();
 
     ecm_ts_fprintf(stdout,
-            "GPU: CGBN<%u> kernel, %zu-bit N, %u curves, sigma=%u-%u, s=%llu bits, np0=0x%08x\n",
-            BITS, n_log2, curves, sigma, sigma + curves - 1,
+            "GPU: CGBN<%u,%u> kernel, %zu-bit N, %u curves, sigma=%u-%u, s=%llu bits, np0=0x%08x\n",
+            BITS, tpi, n_log2, curves, sigma, sigma + curves - 1,
             (unsigned long long)s_num_bits, np0);
     if (device_init_ms > 0.0) {
         ecm_ts_fprintf(stdout, "GPU: kernel compile/build for this limb size took %.0fms\n",
@@ -706,7 +765,6 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         return ECM_ERROR;
     }
 
-    const uint32_t TPI = 8;
     const bool use_mont_wg = !env_flag_enabled("ECM_DISABLE_MONT_WG");
     opencl_dump_begin(g_dump_ctx, verbose);
 
@@ -720,7 +778,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             std::vector<uint32_t> dump_rows(data, data + words_total);
             curves_from_montgomery(dump_rows.data(), curves, limbs, N, np0);
             dump_opencl_state_rows(g_dump_ctx, "begin", batches_complete, s_partial, this_batch,
-                                   sigma, curves, BITS, TPI, dump_rows.data(), limbs);
+                                   sigma, curves, BITS, tpi, dump_rows.data(), limbs);
         }
 
         if (verbose >= 1 && print_nth_batch(batches_complete)) {
@@ -758,8 +816,8 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             break;
         }
 
-        size_t global = use_mont_wg ? (size_t)curves * (size_t)TPI : (size_t)curves;
-        size_t local = use_mont_wg ? (size_t)TPI : 0u;
+        size_t global = use_mont_wg ? (size_t)curves * (size_t)tpi : (size_t)curves;
+        size_t local = use_mont_wg ? (size_t)tpi : 0u;
         auto t0 = std::chrono::high_resolution_clock::now();
         err = clEnqueueNDRangeKernel(g_ctx.queue, active_kernel, 1, nullptr, &global,
                                      use_mont_wg ? &local : nullptr, 0, nullptr, nullptr);
@@ -771,7 +829,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
                 curves_from_montgomery(data, curves, limbs, N, np0);
                 dump_opencl_state_rows(g_dump_ctx, "end", batches_complete + 1,
                                        s_partial + this_batch, this_batch, sigma, curves, BITS,
-                                       TPI, data, limbs);
+                                       tpi, data, limbs);
                 if (s_partial + this_batch < s_num_bits) {
                     curves_to_montgomery(data, curves, limbs, N, BITS);
                     err = clEnqueueWriteBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data,
