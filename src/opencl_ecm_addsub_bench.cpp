@@ -196,9 +196,20 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             }
         }
     }
+    int fused_unroll = 2;
+    if (const char *v = std::getenv("ECM_MP_ADD_MOD_FUSED_UNROLL")) {
+        fused_unroll = std::atoi(v);
+        if (fused_unroll != 1 && fused_unroll != 2) {
+            std::cerr << "Warning: invalid ECM_MP_ADD_MOD_FUSED_UNROLL=" << fused_unroll
+                      << ", fallback to 2\n";
+            fused_unroll = 2;
+        }
+    }
     char build_opts[256];
     if (addsub_only) {
-        snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u", WORDS);
+        snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DMP_ADD_MOD_FUSED_UNROLL=%d", WORDS,
+                 fused_unroll);
+        std::cout << "addsub build: fused_unroll=" << fused_unroll << std::endl;
     } else {
         snprintf(build_opts, sizeof(build_opts),
                  "-DMAX_LIMBS=%u -DTPI=%d -DMONT_WG_IMPL=%d -DMONT_WG_IMPL4_UNROLL=%d",
@@ -389,10 +400,78 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         return true;
     };
 
-    double t_add_n = 0.0, t_sub_n = 0.0, t_add_mod = 0.0, t_sub_mod = 0.0, t_mul_priv = 0.0, t_sqr_priv = 0.0;
+    auto verify_add_mod_kernels = [&]() -> bool {
+        auto run_once = [&](const char *kname) -> bool {
+            cl_int kerr = CL_SUCCESS;
+            cl_kernel k = clCreateKernel(program, kname, &kerr);
+            if (kerr != CL_SUCCESS) {
+                std::cerr << "Create verify kernel " << kname << " failed: " << kerr << std::endl;
+                return false;
+            }
+            clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufN);
+            clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+            size_t g = 1u;
+            cl_int err2 = clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+            clFinish(ctx.queue);
+            clReleaseKernel(k);
+            return err2 == CL_SUCCESS;
+        };
+
+        if (!run_once("ecm_mp_add_mod_legacy")) return false;
+        std::vector<uint32_t> out_legacy(WORDS);
+        cl_int err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                          out_legacy.data(), 0, nullptr, nullptr);
+        if (err2 != CL_SUCCESS) return false;
+
+        if (!run_once("ecm_mp_add_mod_mask")) return false;
+        std::vector<uint32_t> out_mask(WORDS);
+        err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS, out_mask.data(),
+                                  0, nullptr, nullptr);
+        if (err2 != CL_SUCCESS) return false;
+
+        if (!run_once("ecm_mp_add_mod_fused")) return false;
+        std::vector<uint32_t> out_fused(WORDS);
+        err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS, out_fused.data(),
+                                  0, nullptr, nullptr);
+        if (err2 != CL_SUCCESS) return false;
+
+        mpz_t expect, got_legacy, got_mask, got_fused;
+        mpz_init(expect);
+        mpz_init(got_legacy);
+        mpz_init(got_mask);
+        mpz_init(got_fused);
+        mpz_add(expect, a_gmp, b_gmp);
+        mpz_mod(expect, expect, n_gmp);
+        fill_to_gmp(out_legacy.data(), WORDS, got_legacy);
+        fill_to_gmp(out_mask.data(), WORDS, got_mask);
+        fill_to_gmp(out_fused.data(), WORDS, got_fused);
+
+        bool ok_legacy = (mpz_cmp(expect, got_legacy) == 0);
+        bool ok_mask = (mpz_cmp(expect, got_mask) == 0);
+        bool ok_fused = (mpz_cmp(expect, got_fused) == 0);
+        if (!ok_legacy || !ok_mask || !ok_fused) {
+            std::cerr << "add_mod verify: legacy=" << (ok_legacy ? "PASS" : "FAIL")
+                      << " mask=" << (ok_mask ? "PASS" : "FAIL")
+                      << " fused=" << (ok_fused ? "PASS" : "FAIL") << std::endl;
+            mpz_clears(expect, got_legacy, got_mask, got_fused, nullptr);
+            return false;
+        }
+        std::cout << "  [ecm_mp_add_mod] GMP verify: PASS (legacy, mask, fused)" << std::endl;
+        mpz_clears(expect, got_legacy, got_mask, got_fused, nullptr);
+        return true;
+    };
+
+    double t_add_n = 0.0, t_sub_n = 0.0, t_add_mod = 0.0, t_add_mod_legacy = 0.0, t_add_mod_mask = 0.0,
+           t_sub_mod = 0.0, t_mul_priv = 0.0, t_sqr_priv = 0.0;
     if (!run_pure("ecm_mp_add_n", false, t_add_n)) return false;
     if (!run_pure("ecm_mp_sub_n", false, t_sub_n)) return false;
-    if (!run_pure("ecm_mp_add_mod", true, t_add_mod)) return false;
+    if (addsub_only && !verify_add_mod_kernels()) return false;
+    if (!run_pure("ecm_mp_add_mod_legacy", true, t_add_mod_legacy)) return false;
+    if (!run_pure("ecm_mp_add_mod_mask", true, t_add_mod_mask)) return false;
+    if (!run_pure("ecm_mp_add_mod_fused", true, t_add_mod)) return false;
     if (!run_pure("ecm_mp_sub_mod", true, t_sub_mod)) return false;
 
     if (!addsub_only) {
@@ -441,7 +520,13 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     double op_count = (double)instances * (double)kernel_iterations * (double)launch_repeats;
     std::cout << "mp_add_n:   " << t_add_n << " ms, " << (op_count / (t_add_n / 1000.0)) << " ops/s" << std::endl;
     std::cout << "mp_sub_n:   " << t_sub_n << " ms, " << (op_count / (t_sub_n / 1000.0)) << " ops/s" << std::endl;
-    std::cout << "mp_add_mod: " << t_add_mod << " ms, " << (op_count / (t_add_mod / 1000.0)) << " ops/s" << std::endl;
+    std::cout << "mp_add_mod_legacy: " << t_add_mod_legacy << " ms, "
+              << (op_count / (t_add_mod_legacy / 1000.0)) << " ops/s" << std::endl;
+    std::cout << "mp_add_mod_mask:   " << t_add_mod_mask << " ms, "
+              << (op_count / (t_add_mod_mask / 1000.0)) << " ops/s"
+              << " (vs legacy: " << (t_add_mod_legacy / t_add_mod_mask) << "x)" << std::endl;
+    std::cout << "mp_add_mod_fused:  " << t_add_mod << " ms, " << (op_count / (t_add_mod / 1000.0))
+              << " ops/s (vs legacy: " << (t_add_mod_legacy / t_add_mod) << "x)" << std::endl;
     std::cout << "mp_sub_mod: " << t_sub_mod << " ms, " << (op_count / (t_sub_mod / 1000.0)) << " ops/s" << std::endl;
     if (!addsub_only) {
     std::cout << "mont_mul_priv: " << t_mul_priv << " ms, " << (op_count / (t_mul_priv / 1000.0)) << " ops/s" << std::endl;

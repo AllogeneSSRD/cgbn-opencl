@@ -733,11 +733,19 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
 
     int wg_impl = selected_wg_impl_from_env();
     int stage1_force_normalize = 1;
+    int add_mod_fused_unroll = 2;
     if (const char *v = std::getenv("ECM_STAGE1_FORCE_NORMALIZE")) stage1_force_normalize = std::atoi(v);
+    if (const char *v = std::getenv("ECM_MP_ADD_MOD_FUSED_UNROLL")) {
+        add_mod_fused_unroll = std::atoi(v);
+        if (add_mod_fused_unroll != 1 && add_mod_fused_unroll != 2) {
+            add_mod_fused_unroll = 2;
+        }
+    }
     char opts[256];
     snprintf(opts, sizeof(opts),
-             "-DMAX_LIMBS=%u -DTPI=%u -DMONT_WG_IMPL=%d -DMONT_WG_IMPL4_UNROLL=%d -DECM_STAGE1_FORCE_NORMALIZE=%d",
-             limbs, tpi, wg_impl, impl4_unroll, stage1_force_normalize);
+             "-DMAX_LIMBS=%u -DTPI=%u -DMONT_WG_IMPL=%d -DMONT_WG_IMPL4_UNROLL=%d "
+             "-DECM_STAGE1_FORCE_NORMALIZE=%d -DMP_ADD_MOD_FUSED_UNROLL=%d",
+             limbs, tpi, wg_impl, impl4_unroll, stage1_force_normalize, add_mod_fused_unroll);
 
     cl_int buildErr = CL_SUCCESS;
     g_ecm_program = cgbn::opencl::build_program_from_source(g_ctx, src.c_str(), opts, buildErr);
@@ -771,8 +779,8 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
         g_device_info_printed = true;
     }
     ocl_log_verbose(verbose,
-                    "OpenCL: built kernel MAX_LIMBS=%u TPI=%u WG_IMPL=%d IMPL4_UNROLL=%d NORM=%d (%.0fms)\n",
-                    limbs, tpi, wg_impl, impl4_unroll, stage1_force_normalize, init_ms);
+                    "OpenCL: built kernel MAX_LIMBS=%u TPI=%u WG_IMPL=%d IMPL4_UNROLL=%d ADDMOD_UNROLL=%d NORM=%d (%.0fms)\n",
+                    limbs, tpi, wg_impl, impl4_unroll, add_mod_fused_unroll, stage1_force_normalize, init_ms);
     return 0;
 }
 

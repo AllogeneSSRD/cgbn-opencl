@@ -34,7 +34,9 @@ Write-Host "[2/2] Running RGA bin analysis..."
 $kernels = @(
     "ecm_mp_add_n",
     "ecm_mp_sub_n",
-    "ecm_mp_add_mod",
+    "ecm_mp_add_mod_fused",
+    "ecm_mp_add_mod_legacy",
+    "ecm_mp_add_mod_mask",
     "ecm_mp_sub_mod"
 )
 
