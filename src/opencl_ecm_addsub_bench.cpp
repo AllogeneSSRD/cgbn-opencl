@@ -11,6 +11,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
+#include <algorithm>
+#include <cctype>
 
 namespace {
 
@@ -67,6 +69,30 @@ void query_kernel_resources(cl_kernel k, cl_device_id dev, size_t &private_bytes
     clGetKernelWorkGroupInfo(k, dev, CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE, sizeof(size_t),
                              &pref_wg_multiple, nullptr);
     clGetKernelWorkGroupInfo(k, dev, CL_KERNEL_WORK_GROUP_SIZE, sizeof(size_t), &workgroup_size, nullptr);
+}
+
+std::string read_device_vendor(cl_device_id dev) {
+    char vendor[256] = {0};
+    clGetDeviceInfo(dev, CL_DEVICE_VENDOR, sizeof(vendor) - 1, vendor, nullptr);
+    return std::string(vendor);
+}
+
+int resolve_impl4_unroll(cl_device_id dev) {
+    if (const char *v = std::getenv("ECM_MONT_WG_IMPL4_UNROLL")) {
+        int parsed = std::atoi(v);
+        if (parsed == 1 || parsed == 2) {
+            return parsed;
+        }
+        std::cerr << "Warning: invalid ECM_MONT_WG_IMPL4_UNROLL=" << parsed
+                  << ", fallback to auto" << std::endl;
+    }
+    std::string vendor = read_device_vendor(dev);
+    std::transform(vendor.begin(), vendor.end(), vendor.begin(),
+                   [](unsigned char c) { return (char)std::toupper(c); });
+    if (vendor.find("NVIDIA") != std::string::npos) {
+        return 1;
+    }
+    return 2;
 }
 
 } // namespace
@@ -151,14 +177,26 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         src = mont_priv + "\n" + bench_src;
     }
     cl_int buildErr = CL_SUCCESS;
-    int wg_impl = 1;
-    int wg_chunk = 32;
-    if (const char *v = std::getenv("ECM_MONT_WG_IMPL")) wg_impl = std::atoi(v);
-    if (const char *v = std::getenv("ECM_MONT_WG_MERGE_CHUNK")) wg_chunk = std::atoi(v);
-    char build_opts[192];
+    int wg_impl = 4;
+    int impl4_unroll = resolve_impl4_unroll(ctx.device);
+    if (const char *v = std::getenv("ECM_MONT_WG_IMPL")) {
+        wg_impl = std::atoi(v);
+        if (wg_impl == 2 || wg_impl == 3) {
+            std::cerr << "Warning: WG_IMPL=" << wg_impl
+                      << " removed (only 0/1/4 supported), fallback to 4\n";
+            wg_impl = 4;
+        } else if (wg_impl != 0 && wg_impl != 1 && wg_impl != 4) {
+            std::cerr << "Warning: invalid ECM_MONT_WG_IMPL=" << wg_impl
+                      << ", fallback to 4\n";
+            wg_impl = 4;
+        }
+    }
+    char build_opts[256];
     snprintf(build_opts, sizeof(build_opts),
-             "-DMAX_LIMBS=%u -DTPI=%d -DMONT_WG_IMPL=%d -DMONT_WG_MERGE_CHUNK=%d",
-             WORDS, tpi, wg_impl, wg_chunk);
+             "-DMAX_LIMBS=%u -DTPI=%d -DMONT_WG_IMPL=%d -DMONT_WG_IMPL4_UNROLL=%d",
+             WORDS, tpi, wg_impl, impl4_unroll);
+    std::cout << "WG build opts: impl=" << wg_impl
+              << " impl4_unroll=" << impl4_unroll << std::endl;
     cl_program program = cgbn::opencl::build_program_from_source(
         ctx, src.c_str(), build_opts, buildErr);
     if (program == nullptr || buildErr != CL_SUCCESS) {
@@ -487,9 +525,23 @@ int main(int argc, char **argv) {
     int launch_repeats = 50;
     bool use_wg = true;
     int tpi = 4;
+    int device_index = -1;
+    auto print_usage = [&]() {
+        std::cout
+            << "Usage: opencl_ecm_addsub [--bits <bits>] [--use-wg|--no-wg] [--tpi <tpi>] [-d|--device <index>] [kernel_iterations] [instances] [launch_repeats]\n"
+            << "  --bits <bits>            Benchmark bit width (multiple of 32, <= 8192)\n"
+            << "  --use-wg / --no-wg       Select WG or private benchmark mode\n"
+            << "  --tpi <tpi>              Threads per instance for WG mode\n"
+            << "  -d, --device <index>     OpenCL device index (overrides default/env)\n"
+            << "  -h, --help               Show this help message\n";
+    };
     std::vector<std::string> pos;
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];
+        if (a == "-h" || a == "--help") {
+            print_usage();
+            return EXIT_SUCCESS;
+        }
         if (a == "--bits" && i + 1 < argc) {
             bits = std::stoi(std::string(argv[++i]));
             continue;
@@ -506,11 +558,24 @@ int main(int argc, char **argv) {
             tpi = std::stoi(std::string(argv[++i]));
             continue;
         }
+        if ((a == "-d" || a == "--device") && i + 1 < argc) {
+            device_index = std::stoi(std::string(argv[++i]));
+            continue;
+        }
         pos.push_back(a);
     }
     if (pos.size() >= 1) kernel_iterations = std::stoi(pos[0]);
     if (pos.size() >= 2) instances = std::stoi(pos[1]);
     if (pos.size() >= 3) launch_repeats = std::stoi(pos[2]);
+    if (device_index >= 0) {
+        const std::string dev = std::to_string(device_index);
+#ifdef _WIN32
+        _putenv_s("CGBN_OPENCL_DEVICE_INDEX", dev.c_str());
+#else
+        setenv("CGBN_OPENCL_DEVICE_INDEX", dev.c_str(), 1);
+#endif
+        std::cout << "OpenCL device override: CGBN_OPENCL_DEVICE_INDEX=" << dev << std::endl;
+    }
     bool ok = runOpenClEcmAddSubBenchmark(bits, kernel_iterations, instances, launch_repeats,
                                           use_wg, tpi);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;

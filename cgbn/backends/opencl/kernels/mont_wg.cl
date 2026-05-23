@@ -15,19 +15,19 @@
 #ifndef MONT_WG_IMPL
 // 0: legacy serial (tid0-only)
 // 1: parallel base terms + serial full merge
-// 2: parallel base terms + serial chunked merge
 // 4: parallel base terms + serial full merge (2-limb unroll)
 #define MONT_WG_IMPL 1
 #endif
 
-#ifndef MONT_WG_MERGE_CHUNK
-#define MONT_WG_MERGE_CHUNK 32
+#ifndef MONT_WG_IMPL4_UNROLL
+// impl4 merge unroll factor:
+// 1 = scalar merge (same order as impl1)
+// 2 = 2-limb unrolled merge
+#define MONT_WG_IMPL4_UNROLL 2
 #endif
 
 #if MONT_WG_IMPL == 0
 #define MONT_WG_SCRATCH_WORDS (MAX_LIMBS + 1u)
-#elif MONT_WG_IMPL == 3
-#define MONT_WG_SCRATCH_WORDS (3u * MAX_LIMBS + 1u + 4u * TPI)
 #else
 #define MONT_WG_SCRATCH_WORDS (3u * MAX_LIMBS + 1u)
 #endif
@@ -52,12 +52,6 @@ static inline void cgbn_mont_mul_wg_local_core(
 #if MONT_WG_IMPL != 0
     __local uint *sum_lo = t + (MAX_LIMBS + 1);
     __local uint *sum_hi = sum_lo + MAX_LIMBS;
-#if MONT_WG_IMPL == 3
-    __local uint *carry_in_lo = sum_hi + MAX_LIMBS;
-    __local uint *carry_in_hi = carry_in_lo + TPI;
-    __local uint *carry_out_lo = carry_in_hi + TPI;
-    __local uint *carry_out_hi = carry_out_lo + TPI;
-#endif
 #endif
 
     for (uint i = tid; i <= limbs; i += TPI) {
@@ -139,23 +133,14 @@ static inline void cgbn_mont_mul_wg_local_core(
 
         if (tid == 0u) {
             ulong carry = 0ul;
-#if MONT_WG_IMPL == 2
-            for (uint j0 = 0u; j0 < limbs; j0 += MONT_WG_MERGE_CHUNK) {
-                uint j_end = min(limbs, j0 + (uint)MONT_WG_MERGE_CHUNK);
-                for (uint j = j0; j < j_end; ++j) {
-                    ulong uv = (ulong)sum_lo[j] + carry;
-                    t[j] = (uint)uv;
-                    carry = (uv >> 32) + (ulong)sum_hi[j];
-                }
+#if MONT_WG_IMPL == 4
+#if MONT_WG_IMPL4_UNROLL == 1
+            for (uint j = 0u; j < limbs; ++j) {
+                ulong uv = (ulong)sum_lo[j] + carry;
+                t[j] = (uint)uv;
+                carry = (uv >> 32) + (ulong)sum_hi[j];
             }
-#elif MONT_WG_IMPL == 3
-            for (uint lane = 0u; lane < TPI; ++lane) {
-                carry_in_lo[lane] = 0u;
-                carry_in_hi[lane] = 0u;
-                carry_out_lo[lane] = 0u;
-                carry_out_hi[lane] = 0u;
-            }
-#elif MONT_WG_IMPL == 4
+#else
             for (uint j = 0u; j + 1u < limbs; j += 2u) {
                 ulong uv0 = (ulong)sum_lo[j] + carry;
                 t[j] = (uint)uv0;
@@ -170,6 +155,7 @@ static inline void cgbn_mont_mul_wg_local_core(
                 t[j] = (uint)uv;
                 carry = (uv >> 32) + (ulong)sum_hi[j];
             }
+#endif
 #else
             for (uint j = 0u; j < limbs; ++j) {
                 ulong uv = (ulong)sum_lo[j] + carry;
@@ -177,49 +163,13 @@ static inline void cgbn_mont_mul_wg_local_core(
                 carry = (uv >> 32) + (ulong)sum_hi[j];
             }
 #endif
-            if (MONT_WG_IMPL != 3) {
+            {
                 ulong uvh = (ulong)t[limbs] + carry;
                 t[limbs] = (uint)uvh;
                 t_hi += (uint)(uvh >> 32);
             }
         }
         barrier(CLK_LOCAL_MEM_FENCE);
-
-#if MONT_WG_IMPL == 3
-        {
-            const uint chunk = limbs / TPI;
-            const uint j_begin = tid * chunk;
-            const uint j_end = j_begin + chunk;
-            for (uint iter = 0u; iter < TPI; ++iter) {
-                ulong carry = ((ulong)carry_in_hi[tid] << 32) | (ulong)carry_in_lo[tid];
-                for (uint j = j_begin; j < j_end; ++j) {
-                    ulong uv = (ulong)sum_lo[j] + carry;
-                    t[j] = (uint)uv;
-                    carry = (uv >> 32) + (ulong)sum_hi[j];
-                }
-                carry_out_lo[tid] = (uint)carry;
-                carry_out_hi[tid] = (uint)(carry >> 32);
-                barrier(CLK_LOCAL_MEM_FENCE);
-                if (tid == 0u) {
-                    carry_in_lo[0] = 0u;
-                    carry_in_hi[0] = 0u;
-                    for (uint lane = 1u; lane < TPI; ++lane) {
-                        carry_in_lo[lane] = carry_out_lo[lane - 1u];
-                        carry_in_hi[lane] = carry_out_hi[lane - 1u];
-                    }
-                }
-                barrier(CLK_LOCAL_MEM_FENCE);
-            }
-            if (tid == 0u) {
-                ulong carry = ((ulong)carry_out_hi[TPI - 1u] << 32) |
-                              (ulong)carry_out_lo[TPI - 1u];
-                ulong uvh = (ulong)t[limbs] + carry;
-                t[limbs] = (uint)uvh;
-                t_hi += (uint)(uvh >> 32);
-            }
-        }
-        barrier(CLK_LOCAL_MEM_FENCE);
-#endif
 
         uint m = (uint)((ulong)t[0] * (ulong)np0);
         for (uint j = tid; j < limbs; j += TPI) {
@@ -231,25 +181,16 @@ static inline void cgbn_mont_mul_wg_local_core(
 
         if (tid == 0u) {
             ulong carry = 0ul;
-#if MONT_WG_IMPL == 2
-            for (uint j0 = 0u; j0 < limbs; j0 += MONT_WG_MERGE_CHUNK) {
-                uint j_end = min(limbs, j0 + (uint)MONT_WG_MERGE_CHUNK);
-                for (uint j = j0; j < j_end; ++j) {
-                    ulong uv = (ulong)sum_lo[j] + carry;
-                    if (j > 0u) {
-                        t[j - 1u] = (uint)uv;
-                    }
-                    carry = (uv >> 32) + (ulong)sum_hi[j];
+#if MONT_WG_IMPL == 4
+#if MONT_WG_IMPL4_UNROLL == 1
+            for (uint j = 0u; j < limbs; ++j) {
+                ulong uv = (ulong)sum_lo[j] + carry;
+                if (j > 0u) {
+                    t[j - 1u] = (uint)uv;
                 }
+                carry = (uv >> 32) + (ulong)sum_hi[j];
             }
-#elif MONT_WG_IMPL == 3
-            for (uint lane = 0u; lane < TPI; ++lane) {
-                carry_in_lo[lane] = 0u;
-                carry_in_hi[lane] = 0u;
-                carry_out_lo[lane] = 0u;
-                carry_out_hi[lane] = 0u;
-            }
-#elif MONT_WG_IMPL == 4
+#else
             for (uint j = 0u; j + 1u < limbs; j += 2u) {
                 ulong uv0 = (ulong)sum_lo[j] + carry;
                 if (j > 0u) {
@@ -268,6 +209,7 @@ static inline void cgbn_mont_mul_wg_local_core(
                 }
                 carry = (uv >> 32) + (ulong)sum_hi[j];
             }
+#endif
 #else
             for (uint j = 0u; j < limbs; ++j) {
                 ulong uv = (ulong)sum_lo[j] + carry;
@@ -277,7 +219,7 @@ static inline void cgbn_mont_mul_wg_local_core(
                 carry = (uv >> 32) + (ulong)sum_hi[j];
             }
 #endif
-            if (MONT_WG_IMPL != 3) {
+            {
                 ulong top = (ulong)t[limbs] + carry;
                 t[limbs - 1u] = (uint)top;
                 ulong top2 = (ulong)t_hi + (top >> 32);
@@ -286,46 +228,6 @@ static inline void cgbn_mont_mul_wg_local_core(
             }
         }
         barrier(CLK_LOCAL_MEM_FENCE);
-
-#if MONT_WG_IMPL == 3
-        {
-            const uint chunk = limbs / TPI;
-            const uint j_begin = tid * chunk;
-            const uint j_end = j_begin + chunk;
-            for (uint iter = 0u; iter < TPI; ++iter) {
-                ulong carry = ((ulong)carry_in_hi[tid] << 32) | (ulong)carry_in_lo[tid];
-                for (uint j = j_begin; j < j_end; ++j) {
-                    ulong uv = (ulong)sum_lo[j] + carry;
-                    if (j > 0u) {
-                        t[j - 1u] = (uint)uv;
-                    }
-                    carry = (uv >> 32) + (ulong)sum_hi[j];
-                }
-                carry_out_lo[tid] = (uint)carry;
-                carry_out_hi[tid] = (uint)(carry >> 32);
-                barrier(CLK_LOCAL_MEM_FENCE);
-                if (tid == 0u) {
-                    carry_in_lo[0] = 0u;
-                    carry_in_hi[0] = 0u;
-                    for (uint lane = 1u; lane < TPI; ++lane) {
-                        carry_in_lo[lane] = carry_out_lo[lane - 1u];
-                        carry_in_hi[lane] = carry_out_hi[lane - 1u];
-                    }
-                }
-                barrier(CLK_LOCAL_MEM_FENCE);
-            }
-            if (tid == 0u) {
-                ulong carry = ((ulong)carry_out_hi[TPI - 1u] << 32) |
-                              (ulong)carry_out_lo[TPI - 1u];
-                ulong top = (ulong)t[limbs] + carry;
-                t[limbs - 1u] = (uint)top;
-                ulong top2 = (ulong)t_hi + (top >> 32);
-                t[limbs] = (uint)top2;
-                t_hi = (uint)(top2 >> 32);
-            }
-        }
-        barrier(CLK_LOCAL_MEM_FENCE);
-#endif
     }
 #endif
 
