@@ -55,3 +55,42 @@ GMP：legacy / mask / fused / `fused_unroll` 均 **PASS**。
 4. **生产谨慎**：`ecm_stage1` 内还有 Montgomery / barrier 等，单独把 `mp_add_mod` 展开 256 limb 会显著增大编译体积；且仅适用于编译期固定位宽。
 
 **结论**：在 addsub 微基准上，**固定 2048/4096/8192 的全展开值得继续试验**；在并入 stage1 前建议再测 NVIDIA，并看 RGA 的 VGPR/ISA 与占用率。
+
+---
+
+## 分而治之（split2 / split4）
+
+### 动机（RGA 资源）
+
+| 位宽 | 全展开 unroll | 问题 |
+|------|---------------|------|
+| 2048 / 64 limb | VGPR 163/256 | 无 spill |
+| 4096 / 128 limb | VGPR 256 + 15 spill | 顶满寄存器 |
+| 8192 / 256 limb | VGPR 256 + 562 spill，ICache 37KB/32KB | 严重 spill + 指令缓存溢出 |
+
+**思路**：一个 work-group = 一次 `mp_add_mod`；用 **2 或 4 个 thread** 各展开 **64 或 32 limb**，经 **LDS + barrier** 传递 `carry_add` / `carry_sub`（修正趟同样分块传 `c`）。每 thread 的标量规模与 2048-bit 单 thread 相当，降低 VGPR 压力。
+
+### 试验核
+
+- `ecm_mp_add_mod_fused_split2`：`local_size=2`，128→2×64，256→2×128
+- `ecm_mp_add_mod_fused_split4`：`local_size=4`，128→4×32，256→4×64
+
+代价：同一 wave 内 **顺序** 执行各 chunk（`if (lid==k)` + barrier），lane 利用率低于单 thread 全展开，但 **8192 上仍远快于单 thread 全展开**。
+
+### 实测（890M，`1000×128×50`）
+
+| bits | fused 循环 | unroll 单 thread | split2 | split4 |
+|------|------------|------------------|--------|--------|
+| 4096 | 2.65M | **17.6M** | **17.8M** | **17.9M** |
+| 8192 | 1.38M | 3.50M（spill） | **10.3M** | **11.9M** |
+
+4096：split 与 unroll 几乎持平（unroll 仅 15 spill，仍够快）。  
+**8192：split4 ≈ 3.4× unroll、≈ 8.6× fused 循环** — 分治主要解决大位宽 spill/ICache，而非 4096。
+
+GMP：split2 / split4 **PASS**。
+
+### 是否适合 ECM stage1？
+
+- **4096**：可直接用单 thread 全展开或 split，收益接近。
+- **8192**：**split4 是更稳妥的展开策略**（每 chunk 64 limb ≈ 2048 资源画像）。
+- stage1 内 `double_add_v2` 还有大量其它 live range，需单独 profile；且 work-group 需与 Montgomery WG 的 TPI/barrier 协调，**暂不建议直接并入**。

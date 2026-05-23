@@ -111,6 +111,97 @@ __kernel void ecm_mp_add_mod_fused_unroll(
     return body
 
 
+def emit_chunk_loads(chunk_start: int, chunk_size: int) -> str:
+    lines = []
+    for i in range(chunk_size):
+        gi = chunk_start + i
+        lines.append(
+            f"    uint a{i} = a[base + {gi}u];\n"
+            f"    uint b{i} = b[base + {gi}u];\n"
+            f"    uint n{i} = n[base + {gi}u];\n"
+        )
+    return "".join(lines)
+
+
+def emit_chunk_compute(chunk_size: int) -> str:
+    lines = ["    ulong ca = ca_in, cs = cs_in, s, t;\n"]
+    for i in range(chunk_size):
+        lines.append(emit_limb_block(i))
+    lines.append("    ca_out = ca;\n    cs_out = cs;\n")
+    return "".join(lines)
+
+
+def emit_chunk_fix(chunk_size: int) -> str:
+    lines = ["    ulong c = c_in, s;\n"]
+    for i in range(chunk_size):
+        lines.append(emit_fix_block(i))
+    lines.append("    c_out = c;\n")
+    return "".join(lines)
+
+
+def emit_chunk_stores(chunk_start: int, chunk_size: int) -> str:
+    return "".join(f"    out[base + {chunk_start + i}u] = r{i};\n" for i in range(chunk_size))
+
+
+def emit_split_kernel(total_limbs: int, threads: int) -> str:
+    if total_limbs % threads != 0:
+        raise ValueError(f"{total_limbs} not divisible by {threads}")
+    chunk = total_limbs // threads
+    chunks = [(t * chunk, chunk) for t in range(threads)]
+
+    body = f"""
+#if MAX_LIMBS == {total_limbs}
+// Split-{threads}: {total_limbs} limbs = {threads} x {chunk} per work-group (carry via LDS)
+__kernel void ecm_mp_add_mod_fused_split{threads}(
+    __global const uint *a,
+    __global const uint *b,
+    __global const uint *n,
+    __global uint *out,
+    uint limbs)
+{{
+    if (limbs != {total_limbs}u) return;
+    __local ulong cb[3];
+    uint gid = get_group_id(0);
+    uint lid = get_local_id(0);
+    uint base = gid * {total_limbs}u;
+"""
+    for t, (start, size) in enumerate(chunks):
+        body += f"\n    if (lid == {t}u) {{\n"
+        body += emit_chunk_loads(start, size)
+        body += f"        ulong ca_in = {'0ul' if t == 0 else 'cb[0]'};\n"
+        body += f"        ulong cs_in = {'1ul' if t == 0 else 'cb[1]'};\n"
+        body += "        ulong ca_out, cs_out;\n"
+        body += emit_chunk_compute(size)
+        body += "        cb[0] = ca_out;\n        cb[1] = cs_out;\n"
+        body += emit_chunk_stores(start, size)
+        body += "    }\n    barrier(CLK_LOCAL_MEM_FENCE);\n"
+
+    body += """
+    if (cb[0] == 0ul && cb[1] == 0ul) {
+"""
+    for t, (start, size) in enumerate(chunks):
+        body += f"        if (lid == {t}u) {{\n"
+        for i in range(size):
+            gi = start + i
+            body += f"            uint r{i} = out[base + {gi}u];\n"
+            body += f"            uint n{i} = n[base + {gi}u];\n"
+        body += f"            ulong c_in = {'0ul' if t == 0 else 'cb[2]'};\n"
+        body += "            ulong c_out;\n"
+        body += emit_chunk_fix(size)
+        body += "            cb[2] = c_out;\n"
+        for i in range(size):
+            gi = start + i
+            body += f"            out[base + {gi}u] = r{i};\n"
+        body += "        }\n        barrier(CLK_LOCAL_MEM_FENCE);\n"
+
+    body += """    }
+}
+#endif
+
+"""
+    return body
+
+
 def main() -> None:
     limb_counts = [64, 128, 256]  # 2048 / 4096 / 8192 bit
     parts = [HEADER]
@@ -121,6 +212,10 @@ def main() -> None:
         parts.append(emit_kernel_priv(n))
     for n in limb_counts:
         parts.append(emit_kernel(n))
+    for n in (128, 256):
+        parts.append(f"// --- split kernels for {n} limbs ---\n")
+        parts.append(emit_split_kernel(n, 2))
+        parts.append(emit_split_kernel(n, 4))
     OUT.write_text("".join(parts), encoding="utf-8")
     print(f"wrote {OUT} ({OUT.stat().st_size} bytes)")
 
