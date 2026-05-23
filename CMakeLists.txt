@@ -115,3 +115,17 @@ target_link_libraries(opencl_mont_isa_export
     OpenCL::OpenCL
     cgbn_opencl
 )
+
+add_executable(opencl_addsub_isa_export
+    src/cl_probe.cpp
+    src/opencl_addsub_isa_export.cpp
+)
+
+target_include_directories(opencl_addsub_isa_export PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+target_link_libraries(opencl_addsub_isa_export
+    OpenCL::OpenCL
+    cgbn_opencl
+)

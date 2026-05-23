@@ -1,6 +1,5 @@
-// Microbench kernels for ECM-style operators used in ecm_stage1.cl.
-// Host should prepend mont_priv.cl when building this source so
-// mont_mul_priv/mont_sqr_priv are available.
+// Pure OpenCL kernels for ECM-style add/sub/mod operators.
+// Each __kernel performs exactly one arithmetic operation (no in-kernel timing loop).
 
 #ifndef MAX_LIMBS
 #define MAX_LIMBS 64
@@ -67,12 +66,12 @@ inline int mp_sub_mod(uint *r, const uint *a, const uint *b, const uint *N, uint
     return 0;
 }
 
-__kernel void ecm_mp_add_n_bench(
+// r = a + b
+__kernel void ecm_mp_add_n(
     __global const uint *a,
     __global const uint *b,
     __global uint *out,
-    uint limbs,
-    uint iterations)
+    uint limbs)
 {
     uint gid = get_global_id(0);
     uint base = gid * limbs;
@@ -82,101 +81,18 @@ __kernel void ecm_mp_add_n_bench(
         x[i] = a[base + i];
         y[i] = b[base + i];
     }
-
-    for (uint it = 0u; it < iterations; ++it) {
-        (void)mp_add_n(r, x, y, limbs);
-        mp_copy(x, r, limbs);
-    }
-
-    for (uint i = 0u; i < limbs; ++i) out[base + i] = x[i];
-}
-
-__kernel void ecm_mp_add_mod_bench(
-    __global const uint *a,
-    __global const uint *b,
-    __global const uint *n,
-    __global uint *out,
-    uint limbs,
-    uint iterations)
-{
-    uint gid = get_global_id(0);
-    uint base = gid * limbs;
-
-    uint x[MAX_LIMBS], y[MAX_LIMBS], m[MAX_LIMBS], r[MAX_LIMBS];
+    (void)mp_add_n(r, x, y, limbs);
     for (uint i = 0u; i < limbs; ++i) {
-        x[i] = a[base + i];
-        y[i] = b[base + i];
-        m[i] = n[base + i];
+        out[base + i] = r[i];
     }
-
-    for (uint it = 0u; it < iterations; ++it) {
-        mp_add_mod(r, x, y, m, limbs);
-        mp_copy(x, r, limbs);
-    }
-
-    for (uint i = 0u; i < limbs; ++i) out[base + i] = x[i];
 }
 
-__kernel void ecm_mp_sub_mod_bench(
-    __global const uint *a,
-    __global const uint *b,
-    __global const uint *n,
-    __global uint *out,
-    uint limbs,
-    uint iterations)
-{
-    uint gid = get_global_id(0);
-    uint base = gid * limbs;
-
-    uint x[MAX_LIMBS], y[MAX_LIMBS], m[MAX_LIMBS], r[MAX_LIMBS];
-    for (uint i = 0u; i < limbs; ++i) {
-        x[i] = a[base + i];
-        y[i] = b[base + i];
-        m[i] = n[base + i];
-    }
-
-    for (uint it = 0u; it < iterations; ++it) {
-        (void)mp_sub_mod(r, x, y, m, limbs);
-        mp_copy(x, r, limbs);
-    }
-
-    for (uint i = 0u; i < limbs; ++i) out[base + i] = x[i];
-}
-
-__kernel void ecm_mont_mul_priv_bench(
-    __global const uint *a,
-    __global const uint *b,
-    __global const uint *n,
-    __global uint *out,
-    uint np0,
-    uint limbs,
-    uint iterations)
-{
-    uint gid = get_global_id(0);
-    uint base = gid * limbs;
-
-    uint x[MAX_LIMBS], y[MAX_LIMBS], m[MAX_LIMBS], r[MAX_LIMBS];
-    for (uint i = 0u; i < limbs; ++i) {
-        x[i] = a[base + i];
-        y[i] = b[base + i];
-        m[i] = n[base + i];
-    }
-
-    for (uint it = 0u; it < iterations; ++it) {
-        mont_mul_priv(r, x, y, m, np0, limbs);
-        mp_copy(x, r, limbs);
-    }
-
-    for (uint i = 0u; i < limbs; ++i) out[base + i] = x[i];
-}
-
-__kernel void ecm_mont_sqr_priv_bench(
+// r = a - N
+__kernel void ecm_mp_sub_n(
     __global const uint *a,
     __global const uint *n,
     __global uint *out,
-    uint np0,
-    uint limbs,
-    uint iterations)
+    uint limbs)
 {
     uint gid = get_global_id(0);
     uint base = gid * limbs;
@@ -186,11 +102,54 @@ __kernel void ecm_mont_sqr_priv_bench(
         x[i] = a[base + i];
         m[i] = n[base + i];
     }
-
-    for (uint it = 0u; it < iterations; ++it) {
-        mont_sqr_priv(r, x, m, np0, limbs);
-        mp_copy(x, r, limbs);
+    mp_sub_n(r, x, m, limbs);
+    for (uint i = 0u; i < limbs; ++i) {
+        out[base + i] = r[i];
     }
+}
 
-    for (uint i = 0u; i < limbs; ++i) out[base + i] = x[i];
+// r = (a + b) mod N
+__kernel void ecm_mp_add_mod(
+    __global const uint *a,
+    __global const uint *b,
+    __global const uint *n,
+    __global uint *out,
+    uint limbs)
+{
+    uint gid = get_global_id(0);
+    uint base = gid * limbs;
+
+    uint x[MAX_LIMBS], y[MAX_LIMBS], m[MAX_LIMBS], r[MAX_LIMBS];
+    for (uint i = 0u; i < limbs; ++i) {
+        x[i] = a[base + i];
+        y[i] = b[base + i];
+        m[i] = n[base + i];
+    }
+    mp_add_mod(r, x, y, m, limbs);
+    for (uint i = 0u; i < limbs; ++i) {
+        out[base + i] = r[i];
+    }
+}
+
+// r = (a - b) mod N
+__kernel void ecm_mp_sub_mod(
+    __global const uint *a,
+    __global const uint *b,
+    __global const uint *n,
+    __global uint *out,
+    uint limbs)
+{
+    uint gid = get_global_id(0);
+    uint base = gid * limbs;
+
+    uint x[MAX_LIMBS], y[MAX_LIMBS], m[MAX_LIMBS], r[MAX_LIMBS];
+    for (uint i = 0u; i < limbs; ++i) {
+        x[i] = a[base + i];
+        y[i] = b[base + i];
+        m[i] = n[base + i];
+    }
+    (void)mp_sub_mod(r, x, y, m, limbs);
+    for (uint i = 0u; i < limbs; ++i) {
+        out[base + i] = r[i];
+    }
 }

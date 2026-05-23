@@ -36,9 +36,9 @@ void fill_to_gmp(const uint32_t *in_words, size_t words, mpz_t out) {
     mpz_import(out, words, -1, sizeof(uint32_t), 0, 0, in_words);
 }
 
-bool run_kernel(cl_command_queue q, cl_kernel k, size_t global, int repeats, double &ms) {
+bool run_kernel(cl_command_queue q, cl_kernel k, size_t global, int total_enqueues, double &ms) {
     auto t0 = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < repeats; ++i) {
+    for (int i = 0; i < total_enqueues; ++i) {
         cl_int err = clEnqueueNDRangeKernel(q, k, 1, nullptr, &global, nullptr, 0, nullptr, nullptr);
         if (err != CL_SUCCESS) {
             std::cerr << "Enqueue failed: " << err << std::endl;
@@ -98,7 +98,7 @@ int resolve_impl4_unroll(cl_device_id dev) {
 } // namespace
 
 bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances, int launch_repeats,
-                                 bool use_wg, int tpi) {
+                                 bool use_wg, int tpi, bool addsub_only) {
     if (bits <= 0 || (bits % 32) != 0 || (uint32_t)bits > MAX_BENCH_BITS) {
         std::cerr << "bits must be a positive multiple of 32 and <= " << MAX_BENCH_BITS
                   << std::endl;
@@ -112,7 +112,8 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
               << ", instances=" << instances
               << ", launch_repeats=" << launch_repeats
               << ", mode=" << (use_wg ? "wg" : "priv")
-              << ", tpi=" << tpi << std::endl;
+              << ", tpi=" << tpi
+              << ", addsub_only=" << (addsub_only ? "1" : "0") << std::endl;
 
     mpz_t n_gmp, a_gmp, b_gmp;
     mpz_init(n_gmp);
@@ -157,16 +158,18 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         std::cerr << "Failed to load ecm_addsub_bench.cl" << std::endl;
         return false;
     }
-    if (!use_wg && mont_priv.empty()) {
+    if (!addsub_only && !use_wg && mont_priv.empty()) {
         std::cerr << "Failed to load mont_priv.cl" << std::endl;
         return false;
     }
-    if (use_wg && (mont_wg_src.empty() || mont_wg_bench_src.empty())) {
+    if (!addsub_only && use_wg && (mont_wg_src.empty() || mont_wg_bench_src.empty())) {
         std::cerr << "Failed to load mont_wg sources" << std::endl;
         return false;
     }
     std::string src;
-    if (use_wg) {
+    if (addsub_only) {
+        src = bench_src;
+    } else if (use_wg) {
         const std::string include_line = "#include \"mont_wg.cl\"";
         size_t inc_pos = mont_wg_bench_src.find(include_line);
         if (inc_pos != std::string::npos) {
@@ -174,29 +177,35 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         }
         src = mont_wg_src + "\n" + mont_wg_bench_src + "\n" + mont_priv + "\n" + bench_src;
     } else {
-        src = mont_priv + "\n" + bench_src;
+        src = mont_wg_bench_src + "\n" + mont_priv + "\n" + bench_src;
     }
     cl_int buildErr = CL_SUCCESS;
     int wg_impl = 4;
     int impl4_unroll = resolve_impl4_unroll(ctx.device);
-    if (const char *v = std::getenv("ECM_MONT_WG_IMPL")) {
-        wg_impl = std::atoi(v);
-        if (wg_impl == 2 || wg_impl == 3) {
-            std::cerr << "Warning: WG_IMPL=" << wg_impl
-                      << " removed (only 0/1/4 supported), fallback to 4\n";
-            wg_impl = 4;
-        } else if (wg_impl != 0 && wg_impl != 1 && wg_impl != 4) {
-            std::cerr << "Warning: invalid ECM_MONT_WG_IMPL=" << wg_impl
-                      << ", fallback to 4\n";
-            wg_impl = 4;
+    if (!addsub_only) {
+        if (const char *v = std::getenv("ECM_MONT_WG_IMPL")) {
+            wg_impl = std::atoi(v);
+            if (wg_impl == 2 || wg_impl == 3) {
+                std::cerr << "Warning: WG_IMPL=" << wg_impl
+                          << " removed (only 0/1/4 supported), fallback to 4\n";
+                wg_impl = 4;
+            } else if (wg_impl != 0 && wg_impl != 1 && wg_impl != 4) {
+                std::cerr << "Warning: invalid ECM_MONT_WG_IMPL=" << wg_impl
+                          << ", fallback to 4\n";
+                wg_impl = 4;
+            }
         }
     }
     char build_opts[256];
-    snprintf(build_opts, sizeof(build_opts),
-             "-DMAX_LIMBS=%u -DTPI=%d -DMONT_WG_IMPL=%d -DMONT_WG_IMPL4_UNROLL=%d",
-             WORDS, tpi, wg_impl, impl4_unroll);
-    std::cout << "WG build opts: impl=" << wg_impl
-              << " impl4_unroll=" << impl4_unroll << std::endl;
+    if (addsub_only) {
+        snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u", WORDS);
+    } else {
+        snprintf(build_opts, sizeof(build_opts),
+                 "-DMAX_LIMBS=%u -DTPI=%d -DMONT_WG_IMPL=%d -DMONT_WG_IMPL4_UNROLL=%d",
+                 WORDS, tpi, wg_impl, impl4_unroll);
+        std::cout << "WG build opts: impl=" << wg_impl
+                  << " impl4_unroll=" << impl4_unroll << std::endl;
+    }
     cl_program program = cgbn::opencl::build_program_from_source(
         ctx, src.c_str(), build_opts, buildErr);
     if (program == nullptr || buildErr != CL_SUCCESS) {
@@ -232,6 +241,48 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             csv_enabled = false;
         }
     }
+
+    auto run_pure = [&](const char *kname, bool needsN, double &ms_out) -> bool {
+        cl_int kerr = CL_SUCCESS;
+        cl_kernel k = clCreateKernel(program, kname, &kerr);
+        if (kerr != CL_SUCCESS) {
+            std::cerr << "Create kernel " << kname << " failed: " << kerr << std::endl;
+            return false;
+        }
+        clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+        if (needsN) {
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufN);
+            clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+        } else if (std::string(kname) == "ecm_mp_sub_n") {
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufN);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 3, sizeof(cl_uint), &limbs);
+        } else {
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 3, sizeof(cl_uint), &limbs);
+        }
+        const int total_enqueues = launch_repeats * kernel_iterations;
+        bool ok = run_kernel(ctx.queue, k, global, total_enqueues, ms_out);
+        if (ok) {
+            size_t priv_b = 0, loc_b = 0, pref = 0, wg = 0;
+            query_kernel_resources(k, ctx.device, priv_b, loc_b, pref, wg);
+            double op_count = (double)instances * (double)total_enqueues;
+            double ops_s = op_count / (ms_out / 1000.0);
+            std::cout << "  [" << kname << "] private_mem=" << priv_b
+                      << "B local_mem=" << loc_b
+                      << "B pref_wg=" << pref
+                      << " max_wg=" << wg << std::endl;
+            if (csv_enabled) {
+                csv << kname << "," << ms_out << "," << ops_s << "," << priv_b << "," << loc_b
+                    << "," << pref << "," << wg << "\n";
+            }
+        }
+        clReleaseKernel(k);
+        return ok;
+    };
 
     auto run_named = [&](const char *kname, bool needsN, double &ms_out) -> bool {
         cl_int kerr = CL_SUCCESS;
@@ -338,10 +389,13 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         return true;
     };
 
-    double t_add_n = 0.0, t_add_mod = 0.0, t_sub_mod = 0.0, t_mul_priv = 0.0, t_sqr_priv = 0.0;
-    if (!run_named("ecm_mp_add_n_bench", false, t_add_n)) return false;
-    if (!run_named("ecm_mp_add_mod_bench", true, t_add_mod)) return false;
-    if (!run_named("ecm_mp_sub_mod_bench", true, t_sub_mod)) return false;
+    double t_add_n = 0.0, t_sub_n = 0.0, t_add_mod = 0.0, t_sub_mod = 0.0, t_mul_priv = 0.0, t_sqr_priv = 0.0;
+    if (!run_pure("ecm_mp_add_n", false, t_add_n)) return false;
+    if (!run_pure("ecm_mp_sub_n", false, t_sub_n)) return false;
+    if (!run_pure("ecm_mp_add_mod", true, t_add_mod)) return false;
+    if (!run_pure("ecm_mp_sub_mod", true, t_sub_mod)) return false;
+
+    if (!addsub_only) {
     if (!run_named("ecm_mont_mul_priv_bench", true, t_mul_priv)) return false;
 
     {
@@ -375,6 +429,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         }
         clReleaseKernel(ks);
     }
+    } // !addsub_only
 
     err = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
                               host_out.data(), 0, nullptr, nullptr);
@@ -385,8 +440,10 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
 
     double op_count = (double)instances * (double)kernel_iterations * (double)launch_repeats;
     std::cout << "mp_add_n:   " << t_add_n << " ms, " << (op_count / (t_add_n / 1000.0)) << " ops/s" << std::endl;
+    std::cout << "mp_sub_n:   " << t_sub_n << " ms, " << (op_count / (t_sub_n / 1000.0)) << " ops/s" << std::endl;
     std::cout << "mp_add_mod: " << t_add_mod << " ms, " << (op_count / (t_add_mod / 1000.0)) << " ops/s" << std::endl;
     std::cout << "mp_sub_mod: " << t_sub_mod << " ms, " << (op_count / (t_sub_mod / 1000.0)) << " ops/s" << std::endl;
+    if (!addsub_only) {
     std::cout << "mont_mul_priv: " << t_mul_priv << " ms, " << (op_count / (t_mul_priv / 1000.0)) << " ops/s" << std::endl;
     std::cout << "mont_sqr_priv: " << t_sqr_priv << " ms, " << (op_count / (t_sqr_priv / 1000.0)) << " ops/s" << std::endl;
 
@@ -502,6 +559,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 << (op_count / (t_sqr_priv / 1000.0)) << ",0,0,0,0\n";
         }
     }
+    } // !addsub_only
 
     clReleaseMemObject(bufA);
     clReleaseMemObject(bufB);
@@ -524,6 +582,7 @@ int main(int argc, char **argv) {
     int instances = 256;
     int launch_repeats = 50;
     bool use_wg = true;
+    bool addsub_only = false;
     int tpi = 4;
     int device_index = -1;
     auto print_usage = [&]() {
@@ -531,6 +590,7 @@ int main(int argc, char **argv) {
             << "Usage: opencl_ecm_addsub [--bits <bits>] [--use-wg|--no-wg] [--tpi <tpi>] [-d|--device <index>] [kernel_iterations] [instances] [launch_repeats]\n"
             << "  --bits <bits>            Benchmark bit width (multiple of 32, <= 8192)\n"
             << "  --use-wg / --no-wg       Select WG or private benchmark mode\n"
+            << "  --addsub-only            Benchmark pure add/sub/mod kernels only\n"
             << "  --tpi <tpi>              Threads per instance for WG mode\n"
             << "  -d, --device <index>     OpenCL device index (overrides default/env)\n"
             << "  -h, --help               Show this help message\n";
@@ -544,6 +604,10 @@ int main(int argc, char **argv) {
         }
         if (a == "--bits" && i + 1 < argc) {
             bits = std::stoi(std::string(argv[++i]));
+            continue;
+        }
+        if (a == "--addsub-only") {
+            addsub_only = true;
             continue;
         }
         if (a == "--use-wg") {
@@ -577,7 +641,7 @@ int main(int argc, char **argv) {
         std::cout << "OpenCL device override: CGBN_OPENCL_DEVICE_INDEX=" << dev << std::endl;
     }
     bool ok = runOpenClEcmAddSubBenchmark(bits, kernel_iterations, instances, launch_repeats,
-                                          use_wg, tpi);
+                                          use_wg, tpi, addsub_only);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 #endif

@@ -1,0 +1,5 @@
+kernel,ms,ops_per_s,private_mem_bytes,local_mem_bytes,preferred_wg_multiple,max_wg_size
+ecm_mp_add_n,2087.29,3.06618e+06,1568,0,32,256
+ecm_mp_sub_n,1933.15,3.31066e+06,1568,0,32,256
+ecm_mp_add_mod,2433.7,2.62974e+06,2080,0,32,256
+ecm_mp_sub_mod,2061.72,3.10421e+06,2080,0,32,256
