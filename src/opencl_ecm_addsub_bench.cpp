@@ -168,7 +168,15 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     }
     std::string src;
     if (addsub_only) {
-        src = bench_src;
+        std::string unroll_src =
+            cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mp_addmod_unroll_generated.cl");
+        if (unroll_src.empty()) {
+            std::cerr << "Warning: mp_addmod_unroll_generated.cl missing; run "
+                         "tools/gen_mp_add_mod_unroll.py (fused_unroll bench skipped)\n";
+            src = bench_src;
+        } else {
+            src = bench_src + "\n" + unroll_src;
+        }
     } else if (use_wg) {
         const std::string include_line = "#include \"mont_wg.cl\"";
         size_t inc_pos = mont_wg_bench_src.find(include_line);
@@ -438,40 +446,87 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                                   0, nullptr, nullptr);
         if (err2 != CL_SUCCESS) return false;
 
-        mpz_t expect, got_legacy, got_mask, got_fused;
+        bool ok_unroll = true;
+        bool have_unroll = false;
+        {
+            cl_int kerr = CL_SUCCESS;
+            cl_kernel ku = clCreateKernel(program, "ecm_mp_add_mod_fused_unroll", &kerr);
+            if (kerr == CL_SUCCESS) {
+                have_unroll = true;
+                clSetKernelArg(ku, 0, sizeof(cl_mem), &bufA);
+                clSetKernelArg(ku, 1, sizeof(cl_mem), &bufB);
+                clSetKernelArg(ku, 2, sizeof(cl_mem), &bufN);
+                clSetKernelArg(ku, 3, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(ku, 4, sizeof(cl_uint), &limbs);
+                size_t g = 1u;
+                err2 = clEnqueueNDRangeKernel(ctx.queue, ku, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(ku);
+                if (err2 != CL_SUCCESS) return false;
+            }
+        }
+
+        mpz_t expect, got_legacy, got_mask, got_fused, got_unroll;
         mpz_init(expect);
         mpz_init(got_legacy);
         mpz_init(got_mask);
         mpz_init(got_fused);
+        mpz_init(got_unroll);
         mpz_add(expect, a_gmp, b_gmp);
         mpz_mod(expect, expect, n_gmp);
         fill_to_gmp(out_legacy.data(), WORDS, got_legacy);
         fill_to_gmp(out_mask.data(), WORDS, got_mask);
         fill_to_gmp(out_fused.data(), WORDS, got_fused);
+        if (have_unroll) {
+            std::vector<uint32_t> out_unroll(WORDS);
+            err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                       out_unroll.data(), 0, nullptr, nullptr);
+            if (err2 != CL_SUCCESS) return false;
+            fill_to_gmp(out_unroll.data(), WORDS, got_unroll);
+            ok_unroll = (mpz_cmp(expect, got_unroll) == 0);
+        }
 
         bool ok_legacy = (mpz_cmp(expect, got_legacy) == 0);
         bool ok_mask = (mpz_cmp(expect, got_mask) == 0);
         bool ok_fused = (mpz_cmp(expect, got_fused) == 0);
-        if (!ok_legacy || !ok_mask || !ok_fused) {
+        if (!ok_legacy || !ok_mask || !ok_fused || !ok_unroll) {
             std::cerr << "add_mod verify: legacy=" << (ok_legacy ? "PASS" : "FAIL")
                       << " mask=" << (ok_mask ? "PASS" : "FAIL")
-                      << " fused=" << (ok_fused ? "PASS" : "FAIL") << std::endl;
-            mpz_clears(expect, got_legacy, got_mask, got_fused, nullptr);
+                      << " fused=" << (ok_fused ? "PASS" : "FAIL")
+                      << " unroll=" << (ok_unroll ? "PASS" : "FAIL") << std::endl;
+            mpz_clears(expect, got_legacy, got_mask, got_fused, got_unroll, nullptr);
             return false;
         }
-        std::cout << "  [ecm_mp_add_mod] GMP verify: PASS (legacy, mask, fused)" << std::endl;
-        mpz_clears(expect, got_legacy, got_mask, got_fused, nullptr);
+        std::cout << "  [ecm_mp_add_mod] GMP verify: PASS (legacy, mask, fused"
+                  << (have_unroll ? ", fused_unroll" : "") << ")" << std::endl;
+        mpz_clears(expect, got_legacy, got_mask, got_fused, got_unroll, nullptr);
         return true;
     };
 
     double t_add_n = 0.0, t_sub_n = 0.0, t_add_mod = 0.0, t_add_mod_legacy = 0.0, t_add_mod_mask = 0.0,
-           t_sub_mod = 0.0, t_mul_priv = 0.0, t_sqr_priv = 0.0;
+           t_add_mod_unroll = 0.0, t_add_mod_unroll_priv = 0.0, t_sub_mod = 0.0, t_mul_priv = 0.0,
+           t_sqr_priv = 0.0;
     if (!run_pure("ecm_mp_add_n", false, t_add_n)) return false;
     if (!run_pure("ecm_mp_sub_n", false, t_sub_n)) return false;
     if (addsub_only && !verify_add_mod_kernels()) return false;
     if (!run_pure("ecm_mp_add_mod_legacy", true, t_add_mod_legacy)) return false;
     if (!run_pure("ecm_mp_add_mod_mask", true, t_add_mod_mask)) return false;
     if (!run_pure("ecm_mp_add_mod_fused", true, t_add_mod)) return false;
+    {
+        cl_int kerr = CL_SUCCESS;
+        cl_kernel ku = clCreateKernel(program, "ecm_mp_add_mod_fused_unroll", &kerr);
+        if (kerr == CL_SUCCESS) {
+            clReleaseKernel(ku);
+            if (!run_pure("ecm_mp_add_mod_fused_unroll", true, t_add_mod_unroll)) return false;
+        } else {
+            std::cout << "mp_add_mod_fused_unroll: (no kernel for MAX_LIMBS=" << WORDS << ")" << std::endl;
+        }
+        cl_kernel kp = clCreateKernel(program, "ecm_mp_add_mod_fused_unroll_priv", &kerr);
+        if (kerr == CL_SUCCESS) {
+            clReleaseKernel(kp);
+            if (!run_pure("ecm_mp_add_mod_fused_unroll_priv", true, t_add_mod_unroll_priv)) return false;
+        }
+    }
     if (!run_pure("ecm_mp_sub_mod", true, t_sub_mod)) return false;
 
     if (!addsub_only) {
@@ -527,6 +582,18 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
               << " (vs legacy: " << (t_add_mod_legacy / t_add_mod_mask) << "x)" << std::endl;
     std::cout << "mp_add_mod_fused:  " << t_add_mod << " ms, " << (op_count / (t_add_mod / 1000.0))
               << " ops/s (vs legacy: " << (t_add_mod_legacy / t_add_mod) << "x)" << std::endl;
+    if (t_add_mod_unroll > 0.0) {
+        std::cout << "mp_add_mod_fused_unroll: " << t_add_mod_unroll << " ms, "
+                  << (op_count / (t_add_mod_unroll / 1000.0)) << " ops/s (vs fused: "
+                  << (t_add_mod / t_add_mod_unroll) << "x, vs legacy: "
+                  << (t_add_mod_legacy / t_add_mod_unroll) << "x)" << std::endl;
+    }
+    if (t_add_mod_unroll_priv > 0.0) {
+        std::cout << "mp_add_mod_fused_unroll_priv: " << t_add_mod_unroll_priv << " ms, "
+                  << (op_count / (t_add_mod_unroll_priv / 1000.0)) << " ops/s (vs fused: "
+                  << (t_add_mod / t_add_mod_unroll_priv) << "x, vs unroll_global: "
+                  << (t_add_mod_unroll / t_add_mod_unroll_priv) << "x)" << std::endl;
+    }
     std::cout << "mp_sub_mod: " << t_sub_mod << " ms, " << (op_count / (t_sub_mod / 1000.0)) << " ops/s" << std::endl;
     if (!addsub_only) {
     std::cout << "mont_mul_priv: " << t_mul_priv << " ms, " << (op_count / (t_mul_priv / 1000.0)) << " ops/s" << std::endl;
