@@ -340,7 +340,8 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         return ok;
     };
 
-    auto run_priv_opt2_512_local = [&](const char *kname, bool is_mul, double &ms_out) -> bool {
+    auto run_priv_local_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
+                                     double &ms_out) -> bool {
         cl_int kerr = CL_SUCCESS;
         cl_kernel k = clCreateKernel(program, kname, &kerr);
         if (kerr != CL_SUCCESS) {
@@ -355,7 +356,7 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
             clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
             clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
             clSetKernelArg(k, 6, sizeof(cl_uint), &iters);
-            size_t local_mem_size = (size_t)2u * 16u * sizeof(uint32_t); // local_size=1 in launch
+            size_t local_mem_size = (size_t)2u * (size_t)required_words * sizeof(uint32_t); // local_size=1 in launch
             clSetKernelArg(k, 7, local_mem_size, nullptr);
         } else {
             clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
@@ -363,11 +364,11 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
             clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
             clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
             clSetKernelArg(k, 5, sizeof(cl_uint), &iters);
-            size_t local_mem_size = (size_t)2u * 16u * sizeof(uint32_t); // local_size=1 in launch
+            size_t local_mem_size = (size_t)2u * (size_t)required_words * sizeof(uint32_t); // local_size=1 in launch
             clSetKernelArg(k, 6, local_mem_size, nullptr);
         }
 
-        if (WORDS != 16u) {
+        if (WORDS != required_words) {
             clReleaseKernel(k);
             ms_out = 0.0;
             return true;
@@ -403,14 +404,15 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         return true;
     };
 
-    auto run_priv_opt_512_unroll_only = [&](const char *kname, bool is_mul, double &ms_out) -> bool {
+    auto run_priv_unroll_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
+                                      double &ms_out) -> bool {
         cl_int kerr = CL_SUCCESS;
         cl_kernel k = clCreateKernel(program, kname, &kerr);
         if (kerr != CL_SUCCESS) {
             std::cerr << "Create kernel " << kname << " failed: " << kerr << std::endl;
             return false;
         }
-        if (WORDS != 16u) {
+        if (WORDS != required_words) {
             clReleaseKernel(k);
             ms_out = 0.0;
             return true;
@@ -549,28 +551,58 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     if (!run_priv_opt("ecm_mont_sqr_priv_opt_bench", false, t_sqr_priv_opt)) return false;
 
     double t_mul_priv_unroll_only_512 = 0.0, t_sqr_priv_unroll_only_512 = 0.0;
-    if (!run_priv_opt_512_unroll_only("ecm_mont_mul_priv_unroll_only_512_bench", true,
-                                      t_mul_priv_unroll_only_512)) {
+    if (!run_priv_unroll_kernel("ecm_mont_mul_priv_unroll_only_512_bench", true, 16u,
+                                t_mul_priv_unroll_only_512)) {
         return false;
     }
-    if (!run_priv_opt_512_unroll_only("ecm_mont_sqr_priv_unroll_only_512_bench", false,
-                                      t_sqr_priv_unroll_only_512)) {
+    if (!run_priv_unroll_kernel("ecm_mont_sqr_priv_unroll_only_512_bench", false, 16u,
+                                t_sqr_priv_unroll_only_512)) {
         return false;
     }
 
     double t_mul_priv_local_only_512 = 0.0, t_sqr_priv_local_only_512 = 0.0;
-    if (!run_priv_opt2_512_local("ecm_mont_mul_priv_local_only_512_bench", true, t_mul_priv_local_only_512)) {
+    if (!run_priv_local_kernel("ecm_mont_mul_priv_local_only_512_bench", true, 16u,
+                               t_mul_priv_local_only_512)) {
         return false;
     }
-    if (!run_priv_opt2_512_local("ecm_mont_sqr_priv_local_only_512_bench", false, t_sqr_priv_local_only_512)) {
+    if (!run_priv_local_kernel("ecm_mont_sqr_priv_local_only_512_bench", false, 16u,
+                               t_sqr_priv_local_only_512)) {
         return false;
     }
     double t_mul_priv_opt2_512_local = 0.0, t_sqr_priv_opt2_512_local = 0.0;
-    if (!run_priv_opt2_512_local("ecm_mont_mul_priv_opt2_512_local_bench", true, t_mul_priv_opt2_512_local)) {
+    if (!run_priv_local_kernel("ecm_mont_mul_priv_opt2_512_local_bench", true, 16u,
+                               t_mul_priv_opt2_512_local)) {
         return false;
     }
-    if (!run_priv_opt2_512_local("ecm_mont_sqr_priv_opt2_512_local_bench", false, t_sqr_priv_opt2_512_local)) {
+    if (!run_priv_local_kernel("ecm_mont_sqr_priv_opt2_512_local_bench", false, 16u,
+                               t_sqr_priv_opt2_512_local)) {
         return false;
+    }
+
+    double t_mul_priv_unroll32 = 0.0, t_sqr_priv_unroll32 = 0.0;
+    double t_mul_priv_unroll64 = 0.0, t_sqr_priv_unroll64 = 0.0;
+    double t_mul_priv_unroll64_4096 = 0.0, t_sqr_priv_unroll64_4096 = 0.0;
+    if (!run_priv_unroll_kernel("ecm_mont_mul_priv_unroll32_bench", true, WORDS, t_mul_priv_unroll32)) {
+        return false;
+    }
+    if (!run_priv_unroll_kernel("ecm_mont_sqr_priv_unroll32_bench", false, WORDS, t_sqr_priv_unroll32)) {
+        return false;
+    }
+    if (!run_priv_unroll_kernel("ecm_mont_mul_priv_unroll64_bench", true, WORDS, t_mul_priv_unroll64)) {
+        return false;
+    }
+    if (!run_priv_unroll_kernel("ecm_mont_sqr_priv_unroll64_bench", false, WORDS, t_sqr_priv_unroll64)) {
+        return false;
+    }
+    if (WORDS == 128u) {
+        if (!run_priv_unroll_kernel("ecm_mont_mul_priv_unroll64_4096_bench", true, 128u,
+                                    t_mul_priv_unroll64_4096)) {
+            return false;
+        }
+        if (!run_priv_unroll_kernel("ecm_mont_sqr_priv_unroll64_4096_bench", false, 128u,
+                                    t_sqr_priv_unroll64_4096)) {
+            return false;
+        }
     }
 
     {
@@ -696,6 +728,26 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         std::cout << "mont_sqr_priv_opt2_512_local: " << t_sqr_priv_opt2_512_local << " ms, "
                   << (op_count / (t_sqr_priv_opt2_512_local / 1000.0)) << " ops/s"
                   << " (vs opt: " << (t_sqr_priv_opt / t_sqr_priv_opt2_512_local) << "x)" << std::endl;
+    }
+    std::cout << "mont_mul_priv_unroll32:  " << t_mul_priv_unroll32 << " ms, "
+              << (op_count / (t_mul_priv_unroll32 / 1000.0)) << " ops/s"
+              << " (vs opt: " << (t_mul_priv_opt / t_mul_priv_unroll32) << "x)" << std::endl;
+    std::cout << "mont_sqr_priv_unroll32:  " << t_sqr_priv_unroll32 << " ms, "
+              << (op_count / (t_sqr_priv_unroll32 / 1000.0)) << " ops/s"
+              << " (vs opt: " << (t_sqr_priv_opt / t_sqr_priv_unroll32) << "x)" << std::endl;
+    std::cout << "mont_mul_priv_unroll64:  " << t_mul_priv_unroll64 << " ms, "
+              << (op_count / (t_mul_priv_unroll64 / 1000.0)) << " ops/s"
+              << " (vs opt: " << (t_mul_priv_opt / t_mul_priv_unroll64) << "x)" << std::endl;
+    std::cout << "mont_sqr_priv_unroll64:  " << t_sqr_priv_unroll64 << " ms, "
+              << (op_count / (t_sqr_priv_unroll64 / 1000.0)) << " ops/s"
+              << " (vs opt: " << (t_sqr_priv_opt / t_sqr_priv_unroll64) << "x)" << std::endl;
+    if (WORDS == 128u) {
+        std::cout << "mont_mul_priv_unroll64_4096: " << t_mul_priv_unroll64_4096 << " ms, "
+                  << (op_count / (t_mul_priv_unroll64_4096 / 1000.0)) << " ops/s"
+                  << " (vs generic64: " << (t_mul_priv_unroll64 / t_mul_priv_unroll64_4096) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_unroll64_4096: " << t_sqr_priv_unroll64_4096 << " ms, "
+                  << (op_count / (t_sqr_priv_unroll64_4096 / 1000.0)) << " ops/s"
+                  << " (vs generic64: " << (t_sqr_priv_unroll64 / t_sqr_priv_unroll64_4096) << "x)" << std::endl;
     }
 
     if (use_wg) {
