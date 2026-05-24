@@ -229,6 +229,32 @@ static inline void cgbn_mont_mul_wg_local_core(
         }
         barrier(CLK_LOCAL_MEM_FENCE);
     }
+    if (tid == 0u) {
+        int ge = (t_hi != 0u || t[limbs] != 0u) ? 1 : 0;
+        if (!ge) {
+            for (int i = (int)limbs - 1; i >= 0; --i) {
+                if (t[(uint)i] > N[(uint)i]) {
+                    ge = 1;
+                    break;
+                }
+                if (t[(uint)i] < N[(uint)i]) {
+                    ge = 0;
+                    break;
+                }
+            }
+        }
+        if (ge) {
+            ulong borrow = 0ul;
+            for (uint i = 0u; i < limbs; ++i) {
+                ulong tv = (ulong)t[i];
+                ulong nv = (ulong)N[i];
+                ulong w = tv - nv - borrow;
+                t[i] = (uint)w;
+                borrow = (tv < nv + borrow) ? 1ul : 0ul;
+            }
+        }
+    }
+    barrier(CLK_LOCAL_MEM_FENCE);
 #endif
 
     for (uint i = tid; i < limbs; i += TPI) {
@@ -305,7 +331,7 @@ __kernel void cgbn_mont_mul_wg(
 
 
 
-// Work-group parallel Montgomery squaring
+// Work-group parallel Montgomery squaring (same local layout as mul; core is mul(a,a)).
 __kernel void cgbn_mont_sqr_wg(
     __global const uint *a,
     __global const uint *n,
@@ -315,37 +341,34 @@ __kernel void cgbn_mont_sqr_wg(
     __local uint *local_mem)
 {
     uint gid = get_global_id(0);
-    uint lid = get_local_id(0);
-    
     uint instance = gid / TPI;
     uint tid = gid % TPI;
     uint limbs_per_thread = limbs / TPI;
     uint base = instance * limbs;
-    
+
     __local uint *t = local_mem;
-    __local uint *A = t + MONT_WG_SCRATCH_WORDS;
-    __local uint *N = A + MAX_LIMBS;
-    
+    __local uint *B = t + MONT_WG_SCRATCH_WORDS;
+    __local uint *N = B + MAX_LIMBS;
+    __local uint *A = N + MAX_LIMBS;
+
     if (limbs == 0u || limbs > MAX_LIMBS || (limbs % TPI) != 0u) {
         return;
     }
-    
-    // Initialize t (all threads participate)
+
     for (uint i = tid; i <= limbs; i += TPI) {
         if (i <= MAX_LIMBS) t[i] = 0u;
     }
     barrier(CLK_LOCAL_MEM_FENCE);
-    
-    // Load A and N (distributed)
+
     for (uint i = tid; i < limbs; i += TPI) {
         A[i] = a[base + i];
+        B[i] = A[i];
         N[i] = n[base + i];
     }
     barrier(CLK_LOCAL_MEM_FENCE);
-    
-    cgbn_mont_sqr_wg_local_core(t, A, N, np0, limbs, tid, t);
 
-    // Write results (distributed)
+    cgbn_mont_mul_wg_local_core(t, A, B, N, np0, limbs, tid, t);
+
     for (uint i = tid * limbs_per_thread; i < (tid + 1u) * limbs_per_thread; ++i) {
         out[base + i] = t[i];
     }

@@ -88,6 +88,23 @@ target_link_libraries(opencl_ecm_addsub
     "D:/code/vcpkg/installed/x64-windows/lib/gmp.lib"
 )
 
+add_executable(opencl_ecm_montsqr
+    src/opencl_ecm_montsqr_bench.cpp
+)
+
+target_include_directories(opencl_ecm_montsqr PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+target_compile_definitions(opencl_ecm_montsqr PRIVATE BUILD_OPENCL_ECM_MONTSQR_MAIN=1)
+
+target_link_libraries(opencl_ecm_montsqr
+    OpenSSL::Crypto
+    OpenSSL::SSL
+    cgbn_opencl
+    "D:/code/vcpkg/installed/x64-windows/lib/gmp.lib"
+)
+
 add_executable(opencl_asm_selftest
     src/cl_probe.cpp
     src/opencl_asm_selftest.cpp

@@ -170,6 +170,13 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         std::cerr << "Failed to load mont_wg sources" << std::endl;
         return false;
     }
+    {
+        const std::string include_line = "#include \"mont_wg.cl\"";
+        size_t inc_pos = mont_wg_bench_src.find(include_line);
+        if (inc_pos != std::string::npos) {
+            mont_wg_bench_src.erase(inc_pos, include_line.size());
+        }
+    }
     std::string src;
     bool asm_enabled = false;
     if (addsub_only) {
@@ -211,14 +218,9 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             }
         }
     } else if (use_wg) {
-        const std::string include_line = "#include \"mont_wg.cl\"";
-        size_t inc_pos = mont_wg_bench_src.find(include_line);
-        if (inc_pos != std::string::npos) {
-            mont_wg_bench_src.erase(inc_pos, include_line.size());
-        }
-        src = mont_wg_src + "\n" + mont_wg_bench_src + "\n" + mont_priv + "\n" + bench_src;
+        src = mont_wg_src + "\n" + mont_priv + "\n" + bench_src + "\n" + mont_wg_bench_src;
     } else {
-        src = mont_wg_bench_src + "\n" + mont_priv + "\n" + bench_src;
+        src = mont_priv + "\n" + bench_src + "\n" + mont_wg_bench_src;
     }
     cl_int buildErr = CL_SUCCESS;
     int wg_impl = 4;
@@ -842,7 +844,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     }
     std::cout << std::endl;
     if (t_add_mod_unroll > 0.0) {
-        std::cout << "mp_add_mod_fused_unroll: " << t_add_mod_unroll << " ms, "
+        std::cout << "mp_add_mod_fused_unroll:               " << t_add_mod_unroll << " ms, "
                   << (op_count / (t_add_mod_unroll / 1000.0)) << " ops/s (vs fused: "
                   << (t_add_mod / t_add_mod_unroll) << "x";
         if (!bench_unroll_only) {
@@ -851,32 +853,51 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         std::cout << ")" << std::endl;
     }
     if (t_add_mod_unroll_priv > 0.0) {
-        std::cout << "mp_add_mod_fused_unroll_priv: " << t_add_mod_unroll_priv << " ms, "
+        std::cout << "mp_add_mod_fused_unroll_priv:          " << t_add_mod_unroll_priv << " ms, "
                   << (op_count / (t_add_mod_unroll_priv / 1000.0)) << " ops/s (vs fused: "
-                  << (t_add_mod / t_add_mod_unroll_priv) << "x, vs unroll_global: "
+                  << (t_add_mod / t_add_mod_unroll_priv) << "x, vs unroll: "
                   << (t_add_mod_unroll / t_add_mod_unroll_priv) << "x)" << std::endl;
     }
     if (t_add_mod_unroll_asm > 0.0) {
-        std::cout << "mp_add_mod_fused_unroll_asm (fix=c ulong): " << t_add_mod_unroll_asm << " ms, "
-                  << (op_count / (t_add_mod_unroll_asm / 1000.0)) << " ops/s (vs unroll: "
-                  << (t_add_mod_unroll / t_add_mod_unroll_asm) << "x, vs fused: "
-                  << (t_add_mod / t_add_mod_unroll_asm) << "x)" << std::endl;
+        std::cout << "mp_add_mod_fused_unroll_asm_b8:        " << t_add_mod_unroll_asm << " ms, "
+                  << (op_count / (t_add_mod_unroll_asm / 1000.0)) << " ops/s (vs fused: "
+                  << (t_add_mod / t_add_mod_unroll_asm) << "x, vs unroll: "
+                  << (t_add_mod_unroll / t_add_mod_unroll_asm) << "x)" << std::endl;
     }
     if (t_add_mod_unroll_asm_asmfix > 0.0) {
-        std::cout << "mp_add_mod_fused_unroll_asm_asmfix (fix=v_add_co asm): "
+        std::cout << "mp_add_mod_fused_unroll_asm_fix_b8:    "
                   << t_add_mod_unroll_asm_asmfix << " ms, "
                   << (op_count / (t_add_mod_unroll_asm_asmfix / 1000.0)) << " ops/s (vs c fix: "
-                  << (t_add_mod_unroll_asm / t_add_mod_unroll_asm_asmfix) << "x)" << std::endl;
+                  << (t_add_mod_unroll_asm / t_add_mod_unroll_asm_asmfix) << "x, vs unroll: "
+                  << (t_add_mod_unroll / t_add_mod_unroll_asm_asmfix) << "x)" << std::endl;
     }
     if (t_add_mod_unroll_asm_soft > 0.0) {
-        std::cout << "mp_add_mod_fused_unroll_asm_soft (8-limb VCC): " << t_add_mod_unroll_asm_soft
-                  << " ms, " << (op_count / (t_add_mod_unroll_asm_soft / 1000.0)) << " ops/s (vs unroll_asm: "
-                  << (t_add_mod_unroll_asm / t_add_mod_unroll_asm_soft) << "x)" << std::endl;
+        std::cout << "mp_add_mod_fused_unroll_asm_soft_b8:   " << t_add_mod_unroll_asm_soft
+                  << " ms, " << (op_count / (t_add_mod_unroll_asm_soft / 1000.0)) << " ops/s (vs b8: "
+                  << (t_add_mod_unroll_asm / t_add_mod_unroll_asm_soft) << "x, vs unroll: "
+                  << (t_add_mod_unroll / t_add_mod_unroll_asm_soft) << "x)" << std::endl;
     }
     if (t_add_mod_unroll_asm_b16 > 0.0) {
-        std::cout << "mp_add_mod_fused_unroll_asm_b16 (16-limb block): " << t_add_mod_unroll_asm_b16
+        std::cout << "mp_add_mod_fused_unroll_asm_b16:       " << t_add_mod_unroll_asm_b16
                   << " ms, " << (op_count / (t_add_mod_unroll_asm_b16 / 1000.0)) << " ops/s (vs b8: "
-                  << (t_add_mod_unroll_asm / t_add_mod_unroll_asm_b16) << "x)" << std::endl;
+                  << (t_add_mod_unroll_asm / t_add_mod_unroll_asm_b16) << "x, vs unroll: "
+                  << (t_add_mod_unroll / t_add_mod_unroll_asm_b16) << "x)" << std::endl;
+    }
+    if (t_add_mod_unroll_asm_soft_b16 > 0.0) {
+        std::cout << "mp_add_mod_fused_unroll_asm_soft_b16:  "
+                  << t_add_mod_unroll_asm_soft_b16 << " ms, "
+                  << (op_count / (t_add_mod_unroll_asm_soft_b16 / 1000.0)) << " ops/s (vs b16: "
+                  << (t_add_mod_unroll_asm_b16 / t_add_mod_unroll_asm_soft_b16) << "x, vs soft b8: "
+                  << (t_add_mod_unroll_asm_soft / t_add_mod_unroll_asm_soft_b16) << "x, vs unroll: "
+                  << (t_add_mod_unroll / t_add_mod_unroll_asm_soft_b16) << "x)" << std::endl;
+    }
+    if (t_add_mod_unroll_asm_b32 > 0.0) {
+        std::cout << "mp_add_mod_fused_unroll_asm_b32:       "
+                  << t_add_mod_unroll_asm_b32 << " ms, "
+                  << (op_count / (t_add_mod_unroll_asm_b32 / 1000.0)) << " ops/s (vs b16: "
+                  << (t_add_mod_unroll_asm_b16 / t_add_mod_unroll_asm_b32) << "x, vs b8: "
+                  << (t_add_mod_unroll_asm / t_add_mod_unroll_asm_b32) << "x, vs unroll: "
+                  << (t_add_mod_unroll / t_add_mod_unroll_asm_b32) << "x)" << std::endl;
     }
     if (!bench_unroll_only && t_add_mod_asm_b16 > 0.0) {
         std::cout << "mp_add_mod_fused_asm_b16 (512b block16 chain): " << t_add_mod_asm_b16 << " ms, "
@@ -886,21 +907,6 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         std::cout << "mp_add_mod_fused_asm_b16_vccsoft (512b VCC switch): " << t_add_mod_asm_b16_vccsoft
                   << " ms, " << (op_count / (t_add_mod_asm_b16_vccsoft / 1000.0)) << " ops/s (vs b16 chain: "
                   << (t_add_mod_asm_b16 / t_add_mod_asm_b16_vccsoft) << "x)" << std::endl;
-    }
-
-    if (t_add_mod_unroll_asm_soft_b16 > 0.0) {
-        std::cout << "mp_add_mod_fused_unroll_asm_soft_b16 (16-limb VCC): "
-                  << t_add_mod_unroll_asm_soft_b16 << " ms, "
-                  << (op_count / (t_add_mod_unroll_asm_soft_b16 / 1000.0)) << " ops/s (vs b16 chain: "
-                  << (t_add_mod_unroll_asm_b16 / t_add_mod_unroll_asm_soft_b16) << "x, vs soft b8: "
-                  << (t_add_mod_unroll_asm_soft / t_add_mod_unroll_asm_soft_b16) << "x)" << std::endl;
-    }
-    if (t_add_mod_unroll_asm_b32 > 0.0) {
-        std::cout << "mp_add_mod_fused_unroll_asm_b32 (32-limb block, 4096 only): "
-                  << t_add_mod_unroll_asm_b32 << " ms, "
-                  << (op_count / (t_add_mod_unroll_asm_b32 / 1000.0)) << " ops/s (vs b16: "
-                  << (t_add_mod_unroll_asm_b16 / t_add_mod_unroll_asm_b32) << "x, vs b8: "
-                  << (t_add_mod_unroll_asm / t_add_mod_unroll_asm_b32) << "x)" << std::endl;
     }
     if (!bench_unroll_only && t_add_mod_asm8 > 0.0) {
         std::cout << "mp_add_mod_fused_asm8 (fix=c ulong): " << t_add_mod_asm8 << " ms, "
