@@ -154,9 +154,13 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         return false;
     }
 
-    std::string mont_priv = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv.cl");
+    std::string mont_priv = cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv.cl");
     std::string mont_priv_bench_src =
-        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv_bench.cl");
+        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_bench.cl");
+    std::string mont_priv_opt =
+        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_opt.cl");
+    std::string mont_priv_opt_bench_src =
+        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_opt_bench.cl");
     std::string bench_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_addsub_bench.cl");
     std::string mont_wg_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg.cl");
     std::string mont_wg_bench_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg_bench.cl");
@@ -164,8 +168,9 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         std::cerr << "Failed to load ecm_addsub_bench.cl" << std::endl;
         return false;
     }
-    if (!addsub_only && (mont_priv.empty() || mont_priv_bench_src.empty())) {
-        std::cerr << "Failed to load mont_priv.cl / mont_priv_bench.cl" << std::endl;
+    if (!addsub_only && (mont_priv.empty() || mont_priv_bench_src.empty() || mont_priv_opt.empty() ||
+                         mont_priv_opt_bench_src.empty())) {
+        std::cerr << "Failed to load mont_priv / mont_priv_opt kernel sources" << std::endl;
         return false;
     }
     if (!addsub_only && use_wg && (mont_wg_src.empty() || mont_wg_bench_src.empty())) {
@@ -186,6 +191,15 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             mont_priv_bench_src.erase(inc_pos, include_line.size());
         }
     }
+    {
+        const std::string include_line = "#include \"mont_priv_opt.cl\"";
+        size_t inc_pos = mont_priv_opt_bench_src.find(include_line);
+        if (inc_pos != std::string::npos) {
+            mont_priv_opt_bench_src.erase(inc_pos, include_line.size());
+        }
+    }
+    const std::string mont_priv_all = mont_priv + "\n" + mont_priv_opt + "\n" + mont_priv_bench_src + "\n" +
+                                      mont_priv_opt_bench_src;
     std::string src;
     bool asm_enabled = false;
     if (addsub_only) {
@@ -227,10 +241,9 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             }
         }
     } else if (use_wg) {
-        src = mont_wg_src + "\n" + mont_priv + "\n" + bench_src + "\n" + mont_wg_bench_src + "\n" +
-              mont_priv_bench_src;
+        src = mont_wg_src + "\n" + mont_priv_all + "\n" + bench_src + "\n" + mont_wg_bench_src;
     } else {
-        src = mont_priv + "\n" + bench_src + "\n" + mont_priv_bench_src;
+        src = mont_priv_all + "\n" + bench_src;
     }
     cl_int buildErr = CL_SUCCESS;
     int wg_impl = 4;
@@ -296,9 +309,23 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
 
     uint32_t inv = inv32_odd(n_words[0]);
     cl_uint np0 = 0u - inv;
+    cl_uint np0_host = np0;
     cl_uint limbs = WORDS;
     cl_uint iters = (cl_uint)kernel_iterations;
     size_t global = (size_t)instances;
+
+    cl_mem bufN_const = nullptr;
+    cl_mem bufNp0_const = nullptr;
+    if (!addsub_only) {
+        bufN_const = clCreateBuffer(ctx.ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                                    sizeof(uint32_t) * WORDS, n_words.data(), &err);
+        bufNp0_const = clCreateBuffer(ctx.ctx, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, sizeof(cl_uint),
+                                      &np0_host, &err);
+        if (err != CL_SUCCESS || bufN_const == nullptr || bufNp0_const == nullptr) {
+            std::cerr << "Failed to create constant buffers for mont_priv_opt: " << err << std::endl;
+            return false;
+        }
+    }
 
     const char *csv_path = std::getenv("ECM_BENCH_CSV");
     bool csv_enabled = (csv_path && *csv_path);
@@ -434,6 +461,46 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             if (csv_enabled) {
                 csv << kname << "," << ms_out << "," << ops_s << "," << priv_b << "," << loc_b
                     << "," << pref << "," << wg << "\n";
+            }
+        }
+        clReleaseKernel(k);
+        return ok;
+    };
+
+    auto run_priv_opt = [&](const char *kname, bool is_mul, double &ms_out) -> bool {
+        cl_int kerr = CL_SUCCESS;
+        cl_kernel k = clCreateKernel(program, kname, &kerr);
+        if (kerr != CL_SUCCESS) {
+            std::cerr << "Create kernel " << kname << " failed: " << kerr << std::endl;
+            return false;
+        }
+        clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+        if (is_mul) {
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
+            clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
+            clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+            clSetKernelArg(k, 6, sizeof(cl_uint), &iters);
+        } else {
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
+            clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+            clSetKernelArg(k, 5, sizeof(cl_uint), &iters);
+        }
+        bool ok = run_kernel(ctx.queue, k, global, launch_repeats, ms_out);
+        if (ok) {
+            size_t priv_b = 0, loc_b = 0, pref = 0, wg_sz = 0;
+            query_kernel_resources(k, ctx.device, priv_b, loc_b, pref, wg_sz);
+            double op_count_local =
+                (double)instances * (double)kernel_iterations * (double)launch_repeats;
+            double ops_s = op_count_local / (ms_out / 1000.0);
+            std::cout << "  [" << kname << "] private_mem=" << priv_b << "B local_mem=" << loc_b
+                      << "B pref_wg=" << pref << " max_wg=" << wg_sz << std::endl;
+            if (csv_enabled) {
+                csv << kname << "," << ms_out << "," << ops_s << "," << priv_b << "," << loc_b << ","
+                    << pref << "," << wg_sz << "\n";
             }
         }
         clReleaseKernel(k);
@@ -722,8 +789,8 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
            t_add_mod_unroll_asm_b32 = 0.0,
            t_add_mod_asm_b16 = 0.0, t_add_mod_asm_b16_vccsoft = 0.0, t_add_mod_asm8 = 0.0,
            t_add_mod_asm8_asmfix = 0.0, t_add_mod_asm8_vccsoft = 0.0,
-           t_sub_mod = 0.0, t_mul_priv = 0.0,
-           t_sqr_priv = 0.0;
+           t_sub_mod = 0.0, t_mul_priv = 0.0, t_sqr_priv = 0.0, t_mul_priv_opt = 0.0,
+           t_sqr_priv_opt = 0.0;
     std::map<int, double> t_lpt_ms;
     if (!bench_unroll_only) {
         if (!run_pure("ecm_mp_add_n", false, t_add_n)) return false;
@@ -826,6 +893,9 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         }
         clReleaseKernel(ks);
     }
+
+    if (!run_priv_opt("ecm_mont_mul_priv_opt_bench", true, t_mul_priv_opt)) return false;
+    if (!run_priv_opt("ecm_mont_sqr_priv_opt_bench", false, t_sqr_priv_opt)) return false;
     } // !addsub_only
 
     err = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
@@ -960,8 +1030,16 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                   << " ops/s" << std::endl;
     }
     if (!addsub_only) {
-    std::cout << "mont_mul_priv: " << t_mul_priv << " ms, " << (op_count / (t_mul_priv / 1000.0)) << " ops/s" << std::endl;
-    std::cout << "mont_sqr_priv: " << t_sqr_priv << " ms, " << (op_count / (t_sqr_priv / 1000.0)) << " ops/s" << std::endl;
+    std::cout << "mont_mul_priv:     " << t_mul_priv << " ms, " << (op_count / (t_mul_priv / 1000.0))
+              << " ops/s" << std::endl;
+    std::cout << "mont_mul_priv_opt: " << t_mul_priv_opt << " ms, "
+              << (op_count / (t_mul_priv_opt / 1000.0)) << " ops/s"
+              << " (vs priv: " << (t_mul_priv / t_mul_priv_opt) << "x)" << std::endl;
+    std::cout << "mont_sqr_priv:     " << t_sqr_priv << " ms, " << (op_count / (t_sqr_priv / 1000.0))
+              << " ops/s" << std::endl;
+    std::cout << "mont_sqr_priv_opt: " << t_sqr_priv_opt << " ms, "
+              << (op_count / (t_sqr_priv_opt / 1000.0)) << " ops/s"
+              << " (vs priv: " << (t_sqr_priv / t_sqr_priv_opt) << "x)" << std::endl;
 
     if (use_wg) {
         double t_mul_wg = 0.0, t_sqr_wg = 0.0;
@@ -1080,6 +1158,12 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     clReleaseMemObject(bufA);
     clReleaseMemObject(bufB);
     clReleaseMemObject(bufN);
+    if (bufN_const != nullptr) {
+        clReleaseMemObject(bufN_const);
+    }
+    if (bufNp0_const != nullptr) {
+        clReleaseMemObject(bufNp0_const);
+    }
     clReleaseMemObject(bufOut);
     clReleaseProgram(program);
     if (csv_enabled && csv.is_open()) csv.close();
