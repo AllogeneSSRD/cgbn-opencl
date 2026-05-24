@@ -105,13 +105,43 @@ cl_program build_program_from_source(context_t &ctx, const char *source, const c
 
 std::string load_text_file(const char *path) {
     std::ifstream ifs(path, std::ios::in | std::ios::binary);
-    if (!ifs) return std::string();
-    std::string content;
+    if (!ifs) {
+        return std::string();
+    }
     ifs.seekg(0, std::ios::end);
-    content.resize((size_t)ifs.tellg());
+    std::streampos end = ifs.tellg();
+    if (end <= 0) {
+        return std::string();
+    }
+    std::string content((size_t)end, '\0');
     ifs.seekg(0, std::ios::beg);
     ifs.read(&content[0], content.size());
     return content;
+}
+
+std::string load_kernel_file(const char *rel_path) {
+    if (rel_path == nullptr || *rel_path == '\0') {
+        return std::string();
+    }
+    const char *prefixes[] = {"", "../", "../../", "../../../", "../../../../"};
+    for (const char *pfx : prefixes) {
+        std::string path = std::string(pfx) + rel_path;
+        std::string content = load_text_file(path.c_str());
+        if (!content.empty()) {
+            return content;
+        }
+    }
+    if (const char *root = std::getenv("CGBN_KERNEL_ROOT")) {
+        if (*root) {
+            std::string path = std::string(root);
+            if (path.back() != '/' && path.back() != '\\') {
+                path += '/';
+            }
+            path += rel_path;
+            return load_text_file(path.c_str());
+        }
+    }
+    return std::string();
 }
 
 } // namespace opencl

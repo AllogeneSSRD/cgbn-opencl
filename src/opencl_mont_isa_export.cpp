@@ -72,20 +72,25 @@ int main(int argc, char **argv) {
     const uint32_t limbs = bits / 32;
     const std::string mont_priv =
         cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv.cl");
+    std::string mont_priv_bench_src =
+        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv_bench.cl");
     const std::string bench_src =
         cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_addsub_bench.cl");
     const std::string mont_wg_src =
         cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg.cl");
     std::string mont_wg_bench_src =
         cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg_bench.cl");
-    if (mont_priv.empty() || bench_src.empty() || mont_wg_src.empty() || mont_wg_bench_src.empty()) {
+    if (mont_priv.empty() || mont_priv_bench_src.empty() || bench_src.empty() || mont_wg_src.empty() ||
+        mont_wg_bench_src.empty()) {
         std::cerr << "Failed to load kernel sources." << std::endl;
         cgbn::opencl::destroy_context(ctx);
         return 1;
     }
 
     mont_wg_bench_src = strip_include_line(mont_wg_bench_src, "#include \"mont_wg.cl\"");
-    const std::string src = mont_wg_src + "\n" + mont_wg_bench_src + "\n" + mont_priv + "\n" + bench_src;
+    mont_priv_bench_src = strip_include_line(mont_priv_bench_src, "#include \"mont_priv.cl\"");
+    const std::string src = mont_wg_src + "\n" + mont_priv + "\n" + mont_wg_bench_src + "\n" +
+                            mont_priv_bench_src + "\n" + bench_src;
 
     char build_opts[128];
     snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DTPI=%d", limbs, tpi);

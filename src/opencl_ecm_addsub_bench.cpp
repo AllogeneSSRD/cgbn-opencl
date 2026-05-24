@@ -155,6 +155,8 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     }
 
     std::string mont_priv = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv.cl");
+    std::string mont_priv_bench_src =
+        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv_bench.cl");
     std::string bench_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_addsub_bench.cl");
     std::string mont_wg_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg.cl");
     std::string mont_wg_bench_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg_bench.cl");
@@ -162,8 +164,8 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         std::cerr << "Failed to load ecm_addsub_bench.cl" << std::endl;
         return false;
     }
-    if (!addsub_only && !use_wg && mont_priv.empty()) {
-        std::cerr << "Failed to load mont_priv.cl" << std::endl;
+    if (!addsub_only && (mont_priv.empty() || mont_priv_bench_src.empty())) {
+        std::cerr << "Failed to load mont_priv.cl / mont_priv_bench.cl" << std::endl;
         return false;
     }
     if (!addsub_only && use_wg && (mont_wg_src.empty() || mont_wg_bench_src.empty())) {
@@ -175,6 +177,13 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         size_t inc_pos = mont_wg_bench_src.find(include_line);
         if (inc_pos != std::string::npos) {
             mont_wg_bench_src.erase(inc_pos, include_line.size());
+        }
+    }
+    {
+        const std::string include_line = "#include \"mont_priv.cl\"";
+        size_t inc_pos = mont_priv_bench_src.find(include_line);
+        if (inc_pos != std::string::npos) {
+            mont_priv_bench_src.erase(inc_pos, include_line.size());
         }
     }
     std::string src;
@@ -218,9 +227,10 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             }
         }
     } else if (use_wg) {
-        src = mont_wg_src + "\n" + mont_priv + "\n" + bench_src + "\n" + mont_wg_bench_src;
+        src = mont_wg_src + "\n" + mont_priv + "\n" + bench_src + "\n" + mont_wg_bench_src + "\n" +
+              mont_priv_bench_src;
     } else {
-        src = mont_priv + "\n" + bench_src + "\n" + mont_wg_bench_src;
+        src = mont_priv + "\n" + bench_src + "\n" + mont_priv_bench_src;
     }
     cl_int buildErr = CL_SUCCESS;
     int wg_impl = 4;

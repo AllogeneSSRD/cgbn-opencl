@@ -27,6 +27,9 @@ cl_program build_program_from_source(context_t &ctx, const char *source, const c
 // Helper: load a text resource from disk (returns empty string on failure)
 std::string load_text_file(const char *path);
 
+// Load kernel source: tries rel_path from cwd, then ../.. prefixes (for build/Debug runs).
+std::string load_kernel_file(const char *rel_path);
+
 } // namespace opencl
 } // namespace cgbn
 

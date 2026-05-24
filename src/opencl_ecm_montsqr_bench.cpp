@@ -151,33 +151,35 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         return false;
     }
 
-    std::string mont_priv = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv.cl");
-    std::string bench_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_addsub_bench.cl");
-    std::string mont_wg_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg.cl");
-    std::string mont_wg_bench_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg_bench.cl");
-    if (bench_src.empty()) {
-        std::cerr << "Failed to load ecm_addsub_bench.cl" << std::endl;
-        return false;
-    }
-    if (mont_priv.empty()) {
-        std::cerr << "Failed to load mont_priv.cl" << std::endl;
+    std::string mont_priv =
+        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv.cl");
+    std::string mont_priv_bench_src =
+        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_bench.cl");
+    std::string mont_wg_src =
+        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_wg.cl");
+    std::string mont_wg_bench_src =
+        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_wg_bench.cl");
+    if (mont_priv.empty() || mont_priv_bench_src.empty()) {
+        std::cerr << "Failed to load mont_priv.cl / mont_priv_bench.cl" << std::endl;
         return false;
     }
     if (use_wg && (mont_wg_src.empty() || mont_wg_bench_src.empty())) {
         std::cerr << "Failed to load mont_wg sources" << std::endl;
         return false;
     }
-    const std::string include_line = "#include \"mont_wg.cl\"";
-    size_t inc_pos = mont_wg_bench_src.find(include_line);
-    if (inc_pos != std::string::npos) {
-        mont_wg_bench_src.erase(inc_pos, include_line.size());
-    }
-    // mont_wg_bench kernels call mont_mul_priv / mp_copy — definitions must appear first.
+    auto strip_include = [](std::string &s, const std::string &inc) {
+        size_t pos = s.find(inc);
+        if (pos != std::string::npos) {
+            s.erase(pos, inc.size());
+        }
+    };
+    strip_include(mont_priv_bench_src, "#include \"mont_priv.cl\"");
+    strip_include(mont_wg_bench_src, "#include \"mont_wg.cl\"");
     std::string src;
     if (use_wg) {
-        src = mont_wg_src + "\n" + mont_priv + "\n" + bench_src + "\n" + mont_wg_bench_src;
+        src = mont_wg_src + "\n" + mont_priv + "\n" + mont_wg_bench_src + "\n" + mont_priv_bench_src;
     } else {
-        src = mont_priv + "\n" + bench_src + "\n" + mont_wg_bench_src;
+        src = mont_priv + "\n" + mont_priv_bench_src;
     }
     cl_int buildErr = CL_SUCCESS;
     int wg_impl = 4;
@@ -530,6 +532,32 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
 
 #ifdef BUILD_OPENCL_ECM_MONTSQR_MAIN
 #include <cstdlib>
+#include <stdexcept>
+
+namespace {
+
+bool parse_cli_int(const char *s, const char *label, int &out) {
+    if (s == nullptr || *s == '\0') {
+        std::cerr << "Invalid " << label << ": (empty)" << std::endl;
+        return false;
+    }
+    try {
+        size_t consumed = 0;
+        long v = std::stol(s, &consumed);
+        if (consumed == 0 || s[consumed] != '\0') {
+            std::cerr << "Invalid " << label << ": \"" << s << "\"" << std::endl;
+            return false;
+        }
+        out = (int)v;
+        return true;
+    } catch (const std::exception &) {
+        std::cerr << "Invalid " << label << ": \"" << s << "\"" << std::endl;
+        return false;
+    }
+}
+
+} // namespace
+
 int main(int argc, char **argv) {
     int bits = 1024;
     int kernel_iterations = 1000;
@@ -540,12 +568,14 @@ int main(int argc, char **argv) {
     int device_index = -1;
     auto print_usage = [&]() {
         std::cout
-            << "Usage: opencl_ecm_montsqr [--bits <bits>] [--use-wg|--no-wg] [--tpi <tpi>] [-d|--device <index>] [kernel_iterations] [instances] [launch_repeats]\n"
+            << "Usage: opencl_ecm_montsqr [--bits <bits>] [--iterations <n>] [--use-wg|--no-wg] [--tpi <tpi>] [-d|--device <index>] [kernel_iterations] [instances] [launch_repeats]\n"
             << "  --bits <bits>            Benchmark bit width (multiple of 32, <= 8192)\n"
+            << "  --iterations <n>         Kernel loop count (alias for 1st positional arg)\n"
             << "  --use-wg / --no-wg       Select WG or private benchmark mode\n"
             << "  --tpi <tpi>              Threads per instance for WG mode\n"
             << "  -d, --device <index>     OpenCL device index (overrides default/env)\n"
-            << "  -h, --help               Show this help message\n";
+            << "  -h, --help               Show this help message\n"
+            << "  Set CGBN_KERNEL_ROOT to repo root if .cl files are not found.\n";
     };
     std::vector<std::string> pos;
     for (int i = 1; i < argc; ++i) {
@@ -555,7 +585,15 @@ int main(int argc, char **argv) {
             return EXIT_SUCCESS;
         }
         if (a == "--bits" && i + 1 < argc) {
-            bits = std::stoi(std::string(argv[++i]));
+            if (!parse_cli_int(argv[++i], "--bits", bits)) {
+                return EXIT_FAILURE;
+            }
+            continue;
+        }
+        if ((a == "--iterations" || a == "--iters") && i + 1 < argc) {
+            if (!parse_cli_int(argv[++i], a.c_str(), kernel_iterations)) {
+                return EXIT_FAILURE;
+            }
             continue;
         }
         if (a == "--use-wg") {
@@ -567,18 +605,32 @@ int main(int argc, char **argv) {
             continue;
         }
         if (a == "--tpi" && i + 1 < argc) {
-            tpi = std::stoi(std::string(argv[++i]));
+            if (!parse_cli_int(argv[++i], "--tpi", tpi)) {
+                return EXIT_FAILURE;
+            }
             continue;
         }
         if ((a == "-d" || a == "--device") && i + 1 < argc) {
-            device_index = std::stoi(std::string(argv[++i]));
+            if (!parse_cli_int(argv[++i], "--device", device_index)) {
+                return EXIT_FAILURE;
+            }
             continue;
+        }
+        if (!a.empty() && a[0] == '-') {
+            std::cerr << "Unknown option: " << a << " (use --help)" << std::endl;
+            return EXIT_FAILURE;
         }
         pos.push_back(a);
     }
-    if (pos.size() >= 1) kernel_iterations = std::stoi(pos[0]);
-    if (pos.size() >= 2) instances = std::stoi(pos[1]);
-    if (pos.size() >= 3) launch_repeats = std::stoi(pos[2]);
+    if (pos.size() >= 1 && !parse_cli_int(pos[0].c_str(), "kernel_iterations", kernel_iterations)) {
+        return EXIT_FAILURE;
+    }
+    if (pos.size() >= 2 && !parse_cli_int(pos[1].c_str(), "instances", instances)) {
+        return EXIT_FAILURE;
+    }
+    if (pos.size() >= 3 && !parse_cli_int(pos[2].c_str(), "launch_repeats", launch_repeats)) {
+        return EXIT_FAILURE;
+    }
     if (device_index >= 0) {
         const std::string dev = std::to_string(device_index);
 #ifdef _WIN32
