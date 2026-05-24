@@ -58,39 +58,46 @@ GMP：legacy / mask / fused / `fused_unroll` 均 **PASS**。
 
 ---
 
-## 分而治之（split2 / split4）
+## 分而治之（limbs per thread / lpt）
+
+### 参数
+
+- 核名：`ecm_mp_add_mod_fused_lpt{16|32|64}`（`lpt` = limbs per thread）
+- `work-group` 大小 = `MAX_LIMBS / lpt`（须整除；`lpt=64` 且总 limb=64 时退化为单 thread，不生成）
+- **`lpt=48`**：128 / 256 limb **不能整除 48**，4096/8192 bench 会显示 `n/a`
 
 ### 动机（RGA 资源）
 
-| 位宽 | 全展开 unroll | 问题 |
-|------|---------------|------|
-| 2048 / 64 limb | VGPR 163/256 | 无 spill |
-| 4096 / 128 limb | VGPR 256 + 15 spill | 顶满寄存器 |
-| 8192 / 256 limb | VGPR 256 + 562 spill，ICache 37KB/32KB | 严重 spill + 指令缓存溢出 |
+| 位宽 | 单 thread 全展开 | 问题 |
+|------|------------------|------|
+| 2048 / 64 limb | VGPR ~163 | 无 spill |
+| 4096 / 128 limb | VGPR 256 + 少量 spill | 顶满 |
+| 8192 / 256 limb | 大量 spill + ICache 超 32KB | 严重 |
 
-**思路**：一个 work-group = 一次 `mp_add_mod`；用 **2 或 4 个 thread** 各展开 **64 或 32 limb**，经 **LDS + barrier** 传递 `carry_add` / `carry_sub`（修正趟同样分块传 `c`）。每 thread 的标量规模与 2048-bit 单 thread 相当，降低 VGPR 压力。
-
-### 试验核
-
-- `ecm_mp_add_mod_fused_split2`：`local_size=2`，128→2×64，256→2×128
-- `ecm_mp_add_mod_fused_split4`：`local_size=4`，128→4×32，256→4×64
-
-代价：同一 wave 内 **顺序** 执行各 chunk（`if (lid==k)` + barrier），lane 利用率低于单 thread 全展开，但 **8192 上仍远快于单 thread 全展开**。
+每 thread 只展开 `lpt` 个 limb，经 LDS 传 `carry_add` / `carry_sub`（修正传 `c`）。
 
 ### 实测（890M，`1000×128×50`）
 
-| bits | fused 循环 | unroll 单 thread | split2 | split4 |
-|------|------------|------------------|--------|--------|
-| 4096 | 2.65M | **17.6M** | **17.8M** | **17.9M** |
-| 8192 | 1.38M | 3.50M（spill） | **10.3M** | **11.9M** |
+**4096-bit（128 limb）**
 
-4096：split 与 unroll 几乎持平（unroll 仅 15 spill，仍够快）。  
-**8192：split4 ≈ 3.4× unroll、≈ 8.6× fused 循环** — 分治主要解决大位宽 spill/ICache，而非 4096。
+| lpt | threads | ops/s | vs unroll |
+|-----|---------|-------|-----------|
+| 16 | 8 | 17.5M | 0.88× |
+| 32 | 4 | 19.0M | 0.96× |
+| 64 | 2 | **20.5M** | **~1.03×** |
+| 48 | — | n/a | — |
 
-GMP：split2 / split4 **PASS**。
+**8192-bit（256 limb）**
 
-### 是否适合 ECM stage1？
+| lpt | threads | ops/s | vs unroll |
+|-----|---------|-------|-----------|
+| 16 | 16 | 9.0M | 2.6× |
+| 32 | 8 | 9.0M | 2.6× |
+| 64 | 4 | **10.7M** | **~3.1×** |
+| 48 | — | n/a | — |
 
-- **4096**：可直接用单 thread 全展开或 split，收益接近。
-- **8192**：**split4 是更稳妥的展开策略**（每 chunk 64 limb ≈ 2048 资源画像）。
-- stage1 内 `double_add_v2` 还有大量其它 live range，需单独 profile；且 work-group 需与 Montgomery WG 的 TPI/barrier 协调，**暂不建议直接并入**。
+**2048-bit（64 limb）**：单 thread unroll 仍最快；`lpt16/32` 略慢于 unroll（多 barrier 开销）。
+
+趋势：**位宽越大，优先更大 lpt（64）**；过小 lpt（16）增加 barrier 次数，8192 上与 lpt32 几乎持平但仍慢于 lpt64。
+
+GMP：已生成的各 `lpt*` 核 **PASS**。

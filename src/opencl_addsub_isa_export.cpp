@@ -69,16 +69,34 @@ int main(int argc, char **argv) {
     }
 
     const uint32_t limbs = (uint32_t)bits / 32u;
-    const std::string bench_src =
+    std::string bench_src =
         cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_addsub_bench.cl");
     if (bench_src.empty()) {
         std::cerr << "Failed to load ecm_addsub_bench.cl" << std::endl;
         cgbn::opencl::destroy_context(ctx);
         return 1;
     }
+    if (limbs == 128u || limbs == 8u) {
+        const std::string unroll_src =
+            cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mp_addmod_unroll_generated.cl");
+        const std::string asm_base =
+            cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mp_addmod_asm_fused.cl");
+        const std::string asm_gen =
+            cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mp_addmod_asm_fused_generated.cl");
+        if (!unroll_src.empty()) bench_src += "\n" + unroll_src;
+        if (!asm_base.empty() && !asm_gen.empty()) {
+            bench_src += "\n" + asm_base + "\n" + asm_gen;
+        }
+    }
 
-    char build_opts[64];
-    snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u", limbs);
+    char build_opts[96];
+    if (limbs == 128u) {
+        snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DMP_ADDMOD_ASM_ENABLE=1", limbs);
+    } else if (limbs == 8u) {
+        snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DMP_ADDMOD_ASM_ENABLE=1", limbs);
+    } else {
+        snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u", limbs);
+    }
     cl_int buildErr = CL_SUCCESS;
     cl_program program = cgbn::opencl::build_program_from_source(ctx, bench_src.c_str(), build_opts, buildErr);
     if (program == nullptr || buildErr != CL_SUCCESS) {
@@ -110,6 +128,8 @@ int main(int argc, char **argv) {
         "ecm_mp_add_mod_fused",
         "ecm_mp_add_mod_legacy",
         "ecm_mp_add_mod_mask",
+        "ecm_mp_add_mod_fused_unroll",
+        "ecm_mp_add_mod_fused_unroll_asm",
         "ecm_mp_sub_mod",
     };
     for (const char *kname : kernels) {
