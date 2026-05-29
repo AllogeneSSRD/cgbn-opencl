@@ -185,20 +185,6 @@ static int print_nth_batch(int n) {
             (n % 10000 == 0));
 }
 
-static std::string format_eta_hms(double seconds) {
-    if (!(seconds >= 0.0)) {
-        return "?:??:??";
-    }
-    uint64_t sec = (uint64_t)(seconds + 0.5);
-    uint64_t h = sec / 3600ull;
-    uint64_t m = (sec % 3600ull) / 60ull;
-    uint64_t s = sec % 60ull;
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "%02llu:%02llu:%02llu",
-                  (unsigned long long)h, (unsigned long long)m, (unsigned long long)s);
-    return std::string(buf);
-}
-
 static void print_opencl_device_info(int device_index, double init_ms) {
     if (!g_ctx_ready) {
         return;
@@ -910,18 +896,23 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
                     .count();
             double progress =
                 (s_num_bits > 0u) ? ((double)s_partial / (double)s_num_bits) : 0.0;
-            std::string eta_text = "?:??:??";
+            const double progress_pct = 100.0 * progress;
             if (progress > 1e-9) {
                 double total_s = elapsed_s / progress;
                 double remain_s = std::max(0.0, total_s - elapsed_s);
-                eta_text = format_eta_hms(remain_s);
+                double total_ms = total_s * 1000.0;
+                double per_curve_ms = (curves > 0u) ? (total_ms / (double)curves) : 0.0;
+                ecm_ts_fprintf(stderr,
+                               "GPU: Computing %llu bits/call, %llu/%llu (%.1f%%), "
+                               "ETA %.0f + %.0f = %.0f seconds (~%.0f ms/curves)\n",
+                               (unsigned long long)this_batch, (unsigned long long)s_partial,
+                               (unsigned long long)s_num_bits, progress_pct,
+                               remain_s, elapsed_s, total_s, per_curve_ms);
+            } else {
+                ecm_ts_fprintf(stderr, "GPU: Computing %llu bits/call, %llu/%llu (%.1f%%)\n",
+                               (unsigned long long)this_batch, (unsigned long long)s_partial,
+                               (unsigned long long)s_num_bits, progress_pct);
             }
-            ecm_ts_fprintf(stderr, "GPU: Computing %llu bits/call, %llu/%llu (%.1f%%)\n",
-                           (unsigned long long)this_batch, (unsigned long long)s_partial,
-                           (unsigned long long)s_num_bits,
-                           100.0 * (double)s_partial / (double)s_num_bits);
-            ecm_ts_fprintf(stderr, "GPU: progress elapsed=%s eta=%s\n",
-                           format_eta_hms(elapsed_s).c_str(), eta_text.c_str());
         }
     }
 
