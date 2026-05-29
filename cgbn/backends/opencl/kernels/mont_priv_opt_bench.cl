@@ -293,3 +293,129 @@ __kernel void ecm_mont_sqr_priv_unroll64_4096_bench(__global const uint *a, __co
         }
     }
 }
+
+__kernel void ecm_mont_mul_priv_unroll64_4096_nod_bench(__global const uint *a, __global const uint *b,
+                                                         __constant uint *n, __global uint *out,
+                                                         __constant uint *np0_ptr, uint limbs,
+                                                         uint iterations) {
+    if (limbs != MONT_FIXED_4096_LIMBS) return;
+    uint gid = get_global_id(0), base = gid * limbs, np0 = np0_ptr[0];
+    for (uint it = 0u; it < iterations; ++it) {
+        if (it == 0u) {
+            mont_mul_priv_unroll64_4096_nod_body(out, a, b, n, base, np0);
+        } else {
+            mont_mul_priv_unroll64_4096_nod_body(out, out, b, n, base, np0);
+        }
+    }
+}
+
+__kernel void ecm_mont_sqr_priv_unroll64_4096_nod_bench(__global const uint *a, __constant uint *n,
+                                                         __global uint *out, __constant uint *np0_ptr,
+                                                         uint limbs, uint iterations) {
+    if (limbs != MONT_FIXED_4096_LIMBS) return;
+    uint gid = get_global_id(0), base = gid * limbs, np0 = np0_ptr[0];
+    for (uint it = 0u; it < iterations; ++it) {
+        if (it == 0u) {
+            mont_sqr_priv_unroll64_4096_nod_body(out, a, n, base, np0);
+        } else {
+            mont_mul_priv_unroll64_4096_nod_body(out, out, out, n, base, np0);
+        }
+    }
+}
+
+__kernel void ecm_mont_mul_priv_unroll64_4096_mt2_bench(__global const uint *a, __global const uint *b,
+                                                         __constant uint *n, __global uint *out,
+                                                         __constant uint *np0_ptr, uint limbs,
+                                                         uint iterations, __local uint *local_mem) {
+    if (limbs != MONT_FIXED_4096_LIMBS || get_local_size(0) != 2u) return;
+    uint gid = get_group_id(0), base = gid * limbs, np0 = np0_ptr[0];
+    uint lid = get_local_id(0);
+    for (uint it = 0u; it < iterations; ++it) {
+        if (it == 0u) {
+            mont_mul_priv_unroll64_4096_mt2_body(out, a, b, n, base, np0, local_mem, lid);
+        } else {
+            mont_mul_priv_unroll64_4096_mt2_body(out, out, b, n, base, np0, local_mem, lid);
+        }
+    }
+}
+
+__kernel void ecm_mont_sqr_priv_unroll64_4096_mt2_bench(__global const uint *a, __constant uint *n,
+                                                         __global uint *out, __constant uint *np0_ptr,
+                                                         uint limbs, uint iterations, __local uint *local_mem) {
+    if (limbs != MONT_FIXED_4096_LIMBS || get_local_size(0) != 2u) return;
+    uint gid = get_group_id(0), base = gid * limbs, np0 = np0_ptr[0];
+    uint lid = get_local_id(0);
+    for (uint it = 0u; it < iterations; ++it) {
+        if (it == 0u) {
+            mont_sqr_priv_unroll64_4096_mt2_body(out, a, n, base, np0, local_mem, lid);
+        } else {
+            mont_mul_priv_unroll64_4096_mt2_body(out, out, out, n, base, np0, local_mem, lid);
+        }
+    }
+}
+
+__kernel void ecm_mont_mul_priv_unroll64_4096_mt2_weak_bench(__global const uint *a, __global const uint *b,
+                                                              __constant uint *n, __global uint *out,
+                                                              __constant uint *np0_ptr, uint limbs,
+                                                              uint iterations, __local uint *local_mem) {
+    if (limbs != MONT_FIXED_4096_LIMBS || get_local_size(0) != 2u) return;
+    uint gid = get_group_id(0), base = gid * limbs, np0 = np0_ptr[0];
+    uint lid = get_local_id(0);
+    for (uint it = 0u; it < iterations; ++it) {
+        if (it == 0u) {
+            mont_mul_priv_unroll64_4096_mt2_weak_body(out, a, b, n, base, np0, local_mem, lid);
+        } else {
+            mont_mul_priv_unroll64_4096_mt2_weak_body(out, out, b, n, base, np0, local_mem, lid);
+        }
+    }
+}
+
+__kernel void ecm_mont_sqr_priv_unroll64_4096_mt2_weak_bench(__global const uint *a, __constant uint *n,
+                                                              __global uint *out, __constant uint *np0_ptr,
+                                                              uint limbs, uint iterations, __local uint *local_mem) {
+    if (limbs != MONT_FIXED_4096_LIMBS || get_local_size(0) != 2u) return;
+    uint gid = get_group_id(0), base = gid * limbs, np0 = np0_ptr[0];
+    uint lid = get_local_id(0);
+    for (uint it = 0u; it < iterations; ++it) {
+        if (it == 0u) {
+            mont_sqr_priv_unroll64_4096_mt2_weak_body(out, a, n, base, np0, local_mem, lid);
+        } else {
+            mont_mul_priv_unroll64_4096_mt2_weak_body(out, out, out, n, base, np0, local_mem, lid);
+        }
+    }
+}
+
+__kernel void ecm_mont_mul_priv_unroll64_4096_l2_bench(__global const uint *a, __global const uint *b,
+                                                        __constant uint *n, __global uint *out,
+                                                        __constant uint *np0_ptr, uint limbs,
+                                                        uint iterations, uint total_instances) {
+    if (limbs != MONT_FIXED_4096_LIMBS || get_local_size(0) != 2u) return;
+    uint gid2 = get_group_id(0) * 2u + get_local_id(0);
+    if (gid2 >= total_instances) return;
+    uint base = gid2 * limbs;
+    uint np0 = np0_ptr[0];
+    for (uint it = 0u; it < iterations; ++it) {
+        if (it == 0u) {
+            mont_mul_priv_unroll64_4096_body(out, a, b, n, base, np0);
+        } else {
+            mont_mul_priv_unroll64_4096_body(out, out, b, n, base, np0);
+        }
+    }
+}
+
+__kernel void ecm_mont_sqr_priv_unroll64_4096_l2_bench(__global const uint *a, __constant uint *n,
+                                                        __global uint *out, __constant uint *np0_ptr,
+                                                        uint limbs, uint iterations, uint total_instances) {
+    if (limbs != MONT_FIXED_4096_LIMBS || get_local_size(0) != 2u) return;
+    uint gid2 = get_group_id(0) * 2u + get_local_id(0);
+    if (gid2 >= total_instances) return;
+    uint base = gid2 * limbs;
+    uint np0 = np0_ptr[0];
+    for (uint it = 0u; it < iterations; ++it) {
+        if (it == 0u) {
+            mont_sqr_priv_unroll64_4096_body(out, a, n, base, np0);
+        } else {
+            mont_mul_priv_unroll64_4096_body(out, out, out, n, base, np0);
+        }
+    }
+}

@@ -51,6 +51,22 @@ bool run_kernel(cl_command_queue q, cl_kernel k, size_t global, int repeats, dou
     return true;
 }
 
+bool run_kernel_with_local(cl_command_queue q, cl_kernel k, size_t global, size_t local,
+                           int repeats, double &ms) {
+    auto t0 = std::chrono::high_resolution_clock::now();
+    for (int i = 0; i < repeats; ++i) {
+        cl_int err = clEnqueueNDRangeKernel(q, k, 1, nullptr, &global, &local, 0, nullptr, nullptr);
+        if (err != CL_SUCCESS) {
+            std::cerr << "Enqueue failed: " << err << std::endl;
+            return false;
+        }
+    }
+    clFinish(q);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    return true;
+}
+
 uint32_t inv32_odd(uint32_t x) {
     uint64_t y = 1;
     for (int i = 0; i < 5; ++i) {
@@ -106,6 +122,7 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     }
     const uint32_t BITS = (uint32_t)bits;
     const uint32_t WORDS = BITS / 32;
+    constexpr uint32_t FIXED_4096_WORDS = 128u;
 
     std::cout << "ECM montgomery square microbench: " << BITS
               << "-bit, kernel_iterations=" << kernel_iterations
@@ -450,6 +467,112 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         return ok;
     };
 
+    auto run_priv_unroll_mt2_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
+                                          double &ms_out) -> bool {
+        cl_int kerr = CL_SUCCESS;
+        cl_kernel k = clCreateKernel(program, kname, &kerr);
+        if (kerr != CL_SUCCESS) {
+            std::cerr << "Create kernel " << kname << " failed: " << kerr << std::endl;
+            return false;
+        }
+        if (WORDS != required_words) {
+            clReleaseKernel(k);
+            ms_out = 0.0;
+            return true;
+        }
+        clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+        if (is_mul) {
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
+            clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
+            clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+            clSetKernelArg(k, 6, sizeof(cl_uint), &iters);
+            size_t local_mem_size = ((size_t)FIXED_4096_WORDS + 2u + (size_t)FIXED_4096_WORDS +
+                                     (size_t)FIXED_4096_WORDS + 3u) * sizeof(uint32_t);
+            clSetKernelArg(k, 7, local_mem_size, nullptr);
+        } else {
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
+            clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+            clSetKernelArg(k, 5, sizeof(cl_uint), &iters);
+            size_t local_mem_size = ((size_t)FIXED_4096_WORDS + 2u + (size_t)FIXED_4096_WORDS +
+                                     (size_t)FIXED_4096_WORDS + 3u) * sizeof(uint32_t);
+            clSetKernelArg(k, 6, local_mem_size, nullptr);
+        }
+        size_t local = 2u;
+        size_t global_mt2 = (size_t)instances * local;
+        bool ok = run_kernel_with_local(ctx.queue, k, global_mt2, local, launch_repeats, ms_out);
+        if (ok) {
+            size_t priv_b = 0, loc_b = 0, pref = 0, wg_sz = 0;
+            query_kernel_resources(k, ctx.device, priv_b, loc_b, pref, wg_sz);
+            double op_count_local =
+                (double)instances * (double)kernel_iterations * (double)launch_repeats;
+            double ops_s = op_count_local / (ms_out / 1000.0);
+            std::cout << "  [" << kname << "] private_mem=" << priv_b << "B local_mem=" << loc_b
+                      << "B pref_wg=" << pref << " max_wg=" << wg_sz << std::endl;
+            if (csv_enabled) {
+                csv << kname << "," << ms_out << "," << ops_s << "," << priv_b << "," << loc_b << ","
+                    << pref << "," << wg_sz << "\n";
+            }
+        }
+        clReleaseKernel(k);
+        return ok;
+    };
+
+    auto run_priv_unroll_l2_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
+                                         double &ms_out) -> bool {
+        cl_int kerr = CL_SUCCESS;
+        cl_kernel k = clCreateKernel(program, kname, &kerr);
+        if (kerr != CL_SUCCESS) {
+            std::cerr << "Create kernel " << kname << " failed: " << kerr << std::endl;
+            return false;
+        }
+        if (WORDS != required_words) {
+            clReleaseKernel(k);
+            ms_out = 0.0;
+            return true;
+        }
+        cl_uint total_instances = (cl_uint)instances;
+        clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+        if (is_mul) {
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
+            clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
+            clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+            clSetKernelArg(k, 6, sizeof(cl_uint), &iters);
+            clSetKernelArg(k, 7, sizeof(cl_uint), &total_instances);
+        } else {
+            clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
+            clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+            clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
+            clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+            clSetKernelArg(k, 5, sizeof(cl_uint), &iters);
+            clSetKernelArg(k, 6, sizeof(cl_uint), &total_instances);
+        }
+        size_t local = 2u;
+        size_t groups = ((size_t)instances + local - 1u) / local;
+        size_t global_l2 = groups * local;
+        bool ok = run_kernel_with_local(ctx.queue, k, global_l2, local, launch_repeats, ms_out);
+        if (ok) {
+            size_t priv_b = 0, loc_b = 0, pref = 0, wg_sz = 0;
+            query_kernel_resources(k, ctx.device, priv_b, loc_b, pref, wg_sz);
+            double op_count_local =
+                (double)instances * (double)kernel_iterations * (double)launch_repeats;
+            double ops_s = op_count_local / (ms_out / 1000.0);
+            std::cout << "  [" << kname << "] private_mem=" << priv_b << "B local_mem=" << loc_b
+                      << "B pref_wg=" << pref << " max_wg=" << wg_sz << std::endl;
+            if (csv_enabled) {
+                csv << kname << "," << ms_out << "," << ops_s << "," << priv_b << "," << loc_b << ","
+                    << pref << "," << wg_sz << "\n";
+            }
+        }
+        clReleaseKernel(k);
+        return ok;
+    };
+
     auto run_named_wg = [&](const char *kname, bool is_mul, double &ms_out) -> bool {
         cl_int kerr = CL_SUCCESS;
         cl_kernel k = clCreateKernel(program, kname, &kerr);
@@ -582,6 +705,10 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     double t_mul_priv_unroll32 = 0.0, t_sqr_priv_unroll32 = 0.0;
     double t_mul_priv_unroll64 = 0.0, t_sqr_priv_unroll64 = 0.0;
     double t_mul_priv_unroll64_4096 = 0.0, t_sqr_priv_unroll64_4096 = 0.0;
+    double t_mul_priv_unroll64_4096_nod = 0.0, t_sqr_priv_unroll64_4096_nod = 0.0;
+    double t_mul_priv_unroll64_4096_mt2 = 0.0, t_sqr_priv_unroll64_4096_mt2 = 0.0;
+    double t_mul_priv_unroll64_4096_mt2_weak = 0.0, t_sqr_priv_unroll64_4096_mt2_weak = 0.0;
+    double t_mul_priv_unroll64_4096_l2 = 0.0, t_sqr_priv_unroll64_4096_l2 = 0.0;
     if (!run_priv_unroll_kernel("ecm_mont_mul_priv_unroll32_bench", true, WORDS, t_mul_priv_unroll32)) {
         return false;
     }
@@ -601,6 +728,38 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         }
         if (!run_priv_unroll_kernel("ecm_mont_sqr_priv_unroll64_4096_bench", false, 128u,
                                     t_sqr_priv_unroll64_4096)) {
+            return false;
+        }
+        if (!run_priv_unroll_kernel("ecm_mont_mul_priv_unroll64_4096_nod_bench", true, 128u,
+                                    t_mul_priv_unroll64_4096_nod)) {
+            return false;
+        }
+        if (!run_priv_unroll_kernel("ecm_mont_sqr_priv_unroll64_4096_nod_bench", false, 128u,
+                                    t_sqr_priv_unroll64_4096_nod)) {
+            return false;
+        }
+        if (!run_priv_unroll_mt2_kernel("ecm_mont_mul_priv_unroll64_4096_mt2_bench", true, 128u,
+                                        t_mul_priv_unroll64_4096_mt2)) {
+            return false;
+        }
+        if (!run_priv_unroll_mt2_kernel("ecm_mont_sqr_priv_unroll64_4096_mt2_bench", false, 128u,
+                                        t_sqr_priv_unroll64_4096_mt2)) {
+            return false;
+        }
+        if (!run_priv_unroll_mt2_kernel("ecm_mont_mul_priv_unroll64_4096_mt2_weak_bench", true, 128u,
+                                        t_mul_priv_unroll64_4096_mt2_weak)) {
+            return false;
+        }
+        if (!run_priv_unroll_mt2_kernel("ecm_mont_sqr_priv_unroll64_4096_mt2_weak_bench", false, 128u,
+                                        t_sqr_priv_unroll64_4096_mt2_weak)) {
+            return false;
+        }
+        if (!run_priv_unroll_l2_kernel("ecm_mont_mul_priv_unroll64_4096_l2_bench", true, 128u,
+                                       t_mul_priv_unroll64_4096_l2)) {
+            return false;
+        }
+        if (!run_priv_unroll_l2_kernel("ecm_mont_sqr_priv_unroll64_4096_l2_bench", false, 128u,
+                                       t_sqr_priv_unroll64_4096_l2)) {
             return false;
         }
     }
@@ -748,6 +907,30 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         std::cout << "mont_sqr_priv_unroll64_4096: " << t_sqr_priv_unroll64_4096 << " ms, "
                   << (op_count / (t_sqr_priv_unroll64_4096 / 1000.0)) << " ops/s"
                   << " (vs generic64: " << (t_sqr_priv_unroll64 / t_sqr_priv_unroll64_4096) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_unroll64_4096_nod: " << t_mul_priv_unroll64_4096_nod << " ms, "
+                  << (op_count / (t_mul_priv_unroll64_4096_nod / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_mul_priv_unroll64_4096 / t_mul_priv_unroll64_4096_nod) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_unroll64_4096_nod: " << t_sqr_priv_unroll64_4096_nod << " ms, "
+                  << (op_count / (t_sqr_priv_unroll64_4096_nod / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_sqr_priv_unroll64_4096 / t_sqr_priv_unroll64_4096_nod) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_unroll64_4096_mt2: " << t_mul_priv_unroll64_4096_mt2 << " ms, "
+                  << (op_count / (t_mul_priv_unroll64_4096_mt2 / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_mul_priv_unroll64_4096 / t_mul_priv_unroll64_4096_mt2) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_unroll64_4096_mt2: " << t_sqr_priv_unroll64_4096_mt2 << " ms, "
+                  << (op_count / (t_sqr_priv_unroll64_4096_mt2 / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_sqr_priv_unroll64_4096 / t_sqr_priv_unroll64_4096_mt2) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_unroll64_4096_mt2_weak: " << t_mul_priv_unroll64_4096_mt2_weak << " ms, "
+                  << (op_count / (t_mul_priv_unroll64_4096_mt2_weak / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_mul_priv_unroll64_4096 / t_mul_priv_unroll64_4096_mt2_weak) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_unroll64_4096_mt2_weak: " << t_sqr_priv_unroll64_4096_mt2_weak << " ms, "
+                  << (op_count / (t_sqr_priv_unroll64_4096_mt2_weak / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_sqr_priv_unroll64_4096 / t_sqr_priv_unroll64_4096_mt2_weak) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_unroll64_4096_l2: " << t_mul_priv_unroll64_4096_l2 << " ms, "
+                  << (op_count / (t_mul_priv_unroll64_4096_l2 / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_mul_priv_unroll64_4096 / t_mul_priv_unroll64_4096_l2) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_unroll64_4096_l2: " << t_sqr_priv_unroll64_4096_l2 << " ms, "
+                  << (op_count / (t_sqr_priv_unroll64_4096_l2 / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_sqr_priv_unroll64_4096 / t_sqr_priv_unroll64_4096_l2) << "x)" << std::endl;
     }
 
     if (use_wg) {
