@@ -38,11 +38,9 @@ static cgbn::opencl::context_t g_ctx;
 static bool g_ctx_ready = false;
 static cl_program g_ecm_program = nullptr;
 static cl_kernel g_ecm_kernel = nullptr;
-static cl_kernel g_ecm_kernel_wg = nullptr;
 static uint32_t g_kernel_limbs = 0;
 static uint32_t g_kernel_tpi = 0;
 static bool g_device_info_printed = false;
-static int g_kernel_impl4_unroll = -1;
 
 static int selected_device_index_from_env() {
     const char *v = std::getenv("CGBN_OPENCL_DEVICE_INDEX");
@@ -72,25 +70,6 @@ static uint32_t requested_tpi_from_env() {
 
 static bool is_power_of_two_u32(uint32_t x) {
     return x != 0u && (x & (x - 1u)) == 0u;
-}
-
-static int selected_wg_impl_from_env() {
-    constexpr int kDefaultWgImpl = 4;
-    int wg_impl = kDefaultWgImpl;
-    if (const char *v = std::getenv("ECM_MONT_WG_IMPL")) {
-        wg_impl = std::atoi(v);
-    }
-    if (wg_impl == 2 || wg_impl == 3) {
-        ecm_ts_fprintf(stderr,
-                       "OpenCL: WG_IMPL=%d removed (only 0/1/4 supported), fallback to WG_IMPL=%d\n",
-                       wg_impl, kDefaultWgImpl);
-        wg_impl = kDefaultWgImpl;
-    } else if (wg_impl != 0 && wg_impl != 1 && wg_impl != 4) {
-        ecm_ts_fprintf(stderr, "OpenCL: invalid ECM_MONT_WG_IMPL=%d, fallback to %d\n", wg_impl,
-                       kDefaultWgImpl);
-        wg_impl = kDefaultWgImpl;
-    }
-    return wg_impl;
 }
 
 static uint32_t choose_effective_tpi(uint32_t limbs) {
@@ -199,8 +178,11 @@ static void emit_ops_profile(const ecm_ops_profile_counts_t &c, uint32_t curves,
 
 
 static int print_nth_batch(int n) {
-    return ((n < 3) || (n < 30 && n % 10 == 0) || (n < 500 && n % 100 == 0) ||
-            (n < 5000 && n % 1000 == 0) || (n % 10000 == 0));
+    return ((n < 3) ||
+            (n < 30 && n % 5 == 0) ||
+            (n < 500 && n % 50 == 0) ||
+            (n < 5000 && n % 500 == 0) ||
+            (n % 10000 == 0));
 }
 
 static void print_opencl_device_info(int device_index, double init_ms) {
@@ -238,30 +220,6 @@ static void print_opencl_device_info(int device_index, double init_ms) {
             (unsigned long)local_mem, max_wg, (unsigned long)max_mem_alloc);
     ecm_ts_fprintf(stdout, "GPU: Selection and initialization of the device took %.0fms\n", init_ms);
     fflush(stdout);
-}
-
-static std::string opencl_device_vendor_string(cl_device_id device) {
-    char vendor[256] = {0};
-    clGetDeviceInfo(device, CL_DEVICE_VENDOR, sizeof(vendor) - 1, vendor, nullptr);
-    return std::string(vendor);
-}
-
-static int selected_impl4_unroll_for_device(cl_device_id device) {
-    if (const char *v = std::getenv("ECM_MONT_WG_IMPL4_UNROLL")) {
-        int parsed = std::atoi(v);
-        if (parsed == 1 || parsed == 2) {
-            return parsed;
-        }
-        ecm_ts_fprintf(stderr, "OpenCL: invalid ECM_MONT_WG_IMPL4_UNROLL=%d, fallback to auto\n", parsed);
-    }
-    std::string vendor = opencl_device_vendor_string(device);
-    std::string upper = vendor;
-    std::transform(upper.begin(), upper.end(), upper.begin(),
-                   [](unsigned char c) { return (char)std::toupper(c); });
-    if (upper.find("NVIDIA") != std::string::npos) {
-        return 1;
-    }
-    return 2;
 }
 
 // Uniform sigma in [1, UINT32_MAX - curves] for ECM_PARAM_BATCH_32BITS_D.
@@ -679,9 +637,7 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
         }
         g_ctx_ready = true;
     }
-    const int impl4_unroll = selected_impl4_unroll_for_device(g_ctx.device);
-    if (g_ecm_kernel && g_kernel_limbs == limbs && g_kernel_tpi == tpi &&
-        g_kernel_impl4_unroll == impl4_unroll) {
+    if (g_ecm_kernel && g_kernel_limbs == limbs && g_kernel_tpi == tpi) {
         if (device_init_ms) {
             *device_init_ms = 0.0;
         }
@@ -693,10 +649,6 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
         clReleaseKernel(g_ecm_kernel);
         g_ecm_kernel = nullptr;
     }
-    if (g_ecm_kernel_wg) {
-        clReleaseKernel(g_ecm_kernel_wg);
-        g_ecm_kernel_wg = nullptr;
-    }
     if (g_ecm_program) {
         clReleaseProgram(g_ecm_program);
         g_ecm_program = nullptr;
@@ -704,34 +656,14 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
     g_device_info_printed = false;
 
     std::string mont_priv =
-        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv.cl");
-    std::string mont_wg =
-        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg.cl");
+        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv_opt.cl");
     std::string ecm_src =
         cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_stage1.cl");
-    if (mont_priv.empty() || mont_wg.empty() || ecm_src.empty()) {
+    if (mont_priv.empty() || ecm_src.empty()) {
         ecm_ts_fprintf(stderr, "OpenCL: failed to load kernel sources (run from project root)\n");
         return -1;
     }
-
-    // Some OpenCL drivers compile from a temporary location and do not resolve
-    // relative #include paths reliably. Inline mont_wg.cl explicitly.
-    const std::string include_line = "#include \"mont_wg.cl\"";
-    size_t inc_pos = ecm_src.find(include_line);
-    if (inc_pos != std::string::npos) {
-        size_t erase_len = include_line.size();
-        if (inc_pos + erase_len < ecm_src.size() &&
-            (ecm_src[inc_pos + erase_len] == '\n' || ecm_src[inc_pos + erase_len] == '\r')) {
-            while (inc_pos + erase_len < ecm_src.size() &&
-                   (ecm_src[inc_pos + erase_len] == '\n' || ecm_src[inc_pos + erase_len] == '\r')) {
-                ++erase_len;
-            }
-        }
-        ecm_src.erase(inc_pos, erase_len);
-    }
-    std::string src = mont_wg + "\n" + mont_priv + "\n" + ecm_src;
-
-    int wg_impl = selected_wg_impl_from_env();
+    std::string src = mont_priv + "\n" + ecm_src;
     int stage1_force_normalize = 1;
     int add_mod_fused_unroll = 2;
     if (const char *v = std::getenv("ECM_STAGE1_FORCE_NORMALIZE")) stage1_force_normalize = std::atoi(v);
@@ -743,9 +675,8 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
     }
     char opts[256];
     snprintf(opts, sizeof(opts),
-             "-DMAX_LIMBS=%u -DTPI=%u -DMONT_WG_IMPL=%d -DMONT_WG_IMPL4_UNROLL=%d "
-             "-DECM_STAGE1_FORCE_NORMALIZE=%d -DMP_ADD_MOD_FUSED_UNROLL=%d",
-             limbs, tpi, wg_impl, impl4_unroll, stage1_force_normalize, add_mod_fused_unroll);
+             "-DMAX_LIMBS=%u -DTPI=%u -DECM_STAGE1_FORCE_NORMALIZE=%d -DMP_ADD_MOD_FUSED_UNROLL=%d",
+             limbs, tpi, stage1_force_normalize, add_mod_fused_unroll);
 
     cl_int buildErr = CL_SUCCESS;
     g_ecm_program = cgbn::opencl::build_program_from_source(g_ctx, src.c_str(), opts, buildErr);
@@ -760,14 +691,8 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
         ecm_ts_fprintf(stderr, "OpenCL: kernel_double_add not found (%d)\n", err);
         return -1;
     }
-    g_ecm_kernel_wg = clCreateKernel(g_ecm_program, "kernel_double_add_wg", &err);
-    if (err != CL_SUCCESS) {
-        ecm_ts_fprintf(stderr, "OpenCL: kernel_double_add_wg not found (%d)\n", err);
-        return -1;
-    }
     g_kernel_limbs = limbs;
     g_kernel_tpi = tpi;
-    g_kernel_impl4_unroll = impl4_unroll;
     auto t_init1 = std::chrono::high_resolution_clock::now();
     double init_ms =
         std::chrono::duration<double, std::milli>(t_init1 - t_init0).count();
@@ -779,8 +704,8 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
         g_device_info_printed = true;
     }
     ocl_log_verbose(verbose,
-                    "OpenCL: built kernel MAX_LIMBS=%u TPI=%u WG_IMPL=%d IMPL4_UNROLL=%d ADDMOD_UNROLL=%d NORM=%d (%.0fms)\n",
-                    limbs, tpi, wg_impl, impl4_unroll, add_mod_fused_unroll, stage1_force_normalize, init_ms);
+                    "OpenCL: built kernel MAX_LIMBS=%u TPI=%u ADDMOD_UNROLL=%d NORM=%d (%.0fms)\n",
+                    limbs, tpi, add_mod_fused_unroll, stage1_force_normalize, init_ms);
     return 0;
 }
 
@@ -855,6 +780,17 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             "GPU: CGBN<%u,%u> kernel, %zu-bit N, %u curves, sigma=%u-%u, s=%llu bits, np0=0x%08x\n",
             BITS, tpi, n_log2, curves, sigma, sigma + curves - 1,
             (unsigned long long)s_num_bits, np0);
+    const char *mont_mul_op = (limbs == 16u) ? "mont_mul_priv_unroll_only_512"
+                             : (limbs == 128u) ? "mont_mul_priv_unroll64_4096"
+                                               : "mont_mul_priv_unroll32";
+    const char *mont_sqr_op = (limbs == 16u) ? "mont_sqr_priv_unroll_only_512"
+                             : (limbs == 128u) ? "mont_sqr_priv_unroll64_4096"
+                                               : "mont_sqr_priv_unroll32";
+    const char *addmod_op = (limbs == 128u) ? "mp_add_mod_fused_unroll_asm_b32(path)"
+                                            : "mp_add_mod_fused_unroll(default)";
+    ecm_ts_fprintf(stdout,
+            "GPU: stage1 operators: mul=%s, sqr=%s, addmod=%s\n",
+            mont_mul_op, mont_sqr_op, addmod_op);
     if (device_init_ms > 0.0) {
         ecm_ts_fprintf(stdout, "GPU: kernel compile/build for this limb size took %.0fms\n",
                 device_init_ms);
@@ -873,7 +809,6 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         return ECM_ERROR;
     }
 
-    const bool use_mont_wg = !env_flag_enabled("ECM_DISABLE_MONT_WG");
     opencl_dump_begin(g_dump_ctx, verbose);
 
     const bool sync_each_batch = g_dump_ctx.enabled || env_flag_enabled("ECM_SYNC_EACH_BATCH");
@@ -904,7 +839,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         cl_uint np0_arg = np0;
         cl_uint limbs_arg = limbs;
 
-        cl_kernel active_kernel = use_mont_wg ? g_ecm_kernel_wg : g_ecm_kernel;
+        cl_kernel active_kernel = g_ecm_kernel;
         err = clSetKernelArg(active_kernel, 0, sizeof(cl_mem), &gpu_s_bits);
         err |= clSetKernelArg(active_kernel, 1, sizeof(cl_ulong), &s_num_bits_arg);
         err |= clSetKernelArg(active_kernel, 2, sizeof(cl_ulong), &s_start_arg);
@@ -914,26 +849,15 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         err |= clSetKernelArg(active_kernel, 6, sizeof(cl_uint), &sigma_arg);
         err |= clSetKernelArg(active_kernel, 7, sizeof(cl_uint), &np0_arg);
         err |= clSetKernelArg(active_kernel, 8, sizeof(cl_uint), &limbs_arg);
-        if (use_mont_wg) {
-            // kernel_double_add_wg local words:
-            // 12*limbs state + MONT_WG_SCRATCH_WORDS + swapped flag
-            int wg_impl_runtime = selected_wg_impl_from_env();
-            size_t mont_scratch_words =
-                (wg_impl_runtime == 0) ? (size_t)(limbs + 1u) : (size_t)(3u * limbs + 1u);
-            size_t wg_local_words = (size_t)(12u * limbs) + mont_scratch_words + 1u;
-            size_t wg_local_bytes = wg_local_words * sizeof(uint32_t);
-            err |= clSetKernelArg(active_kernel, 9, wg_local_bytes, nullptr);
-        }
         if (err != CL_SUCCESS) {
             ecm_ts_fprintf(stderr, "clSetKernelArg failed\n");
             break;
         }
 
-        size_t global = use_mont_wg ? (size_t)curves * (size_t)tpi : (size_t)curves;
-        size_t local = use_mont_wg ? (size_t)tpi : 0u;
+        size_t global = (size_t)curves;
         auto t0 = std::chrono::high_resolution_clock::now();
         err = clEnqueueNDRangeKernel(g_ctx.queue, active_kernel, 1, nullptr, &global,
-                                     use_mont_wg ? &local : nullptr, 0, nullptr, nullptr);
+                                     nullptr, 0, nullptr, nullptr);
         if (err == CL_SUCCESS && sync_each_batch) {
             clFinish(g_ctx.queue);
             err = clEnqueueReadBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data, 0,
