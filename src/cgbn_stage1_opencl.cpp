@@ -179,10 +179,24 @@ static void emit_ops_profile(const ecm_ops_profile_counts_t &c, uint32_t curves,
 
 static int print_nth_batch(int n) {
     return ((n < 3) ||
-            (n < 30 && n % 5 == 0) ||
-            (n < 500 && n % 50 == 0) ||
-            (n < 5000 && n % 500 == 0) ||
+            (n < 30 && n % 10 == 0) ||
+            (n < 500 && n % 100 == 0) ||
+            (n < 5000 && n % 1000 == 0) ||
             (n % 10000 == 0));
+}
+
+static std::string format_eta_hms(double seconds) {
+    if (!(seconds >= 0.0)) {
+        return "?:??:??";
+    }
+    uint64_t sec = (uint64_t)(seconds + 0.5);
+    uint64_t h = sec / 3600ull;
+    uint64_t m = (sec % 3600ull) / 60ull;
+    uint64_t s = sec % 60ull;
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%02llu:%02llu:%02llu",
+                  (unsigned long long)h, (unsigned long long)m, (unsigned long long)s);
+    return std::string(buf);
 }
 
 static void print_opencl_device_info(int device_index, double init_ms) {
@@ -824,12 +838,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
                                    sigma, curves, BITS, tpi, dump_rows.data(), limbs);
         }
 
-        if (verbose >= 1 && print_nth_batch(batches_complete)) {
-            ecm_ts_fprintf(stderr, "GPU: Computing %llu bits/call, %llu/%llu (%.1f%%)\n",
-                    (unsigned long long)this_batch, (unsigned long long)s_partial,
-                    (unsigned long long)s_num_bits,
-                    100.0 * (double)s_partial / (double)s_num_bits);
-        }
+        const bool should_log_batch = (verbose >= 1 && print_nth_batch(batches_complete));
 
         cl_ulong s_num_bits_arg = (cl_ulong)s_num_bits;
         cl_ulong s_start_arg = (cl_ulong)s_partial;
@@ -858,19 +867,21 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         auto t0 = std::chrono::high_resolution_clock::now();
         err = clEnqueueNDRangeKernel(g_ctx.queue, active_kernel, 1, nullptr, &global,
                                      nullptr, 0, nullptr, nullptr);
-        if (err == CL_SUCCESS && sync_each_batch) {
+        if (err == CL_SUCCESS && (sync_each_batch || should_log_batch)) {
             clFinish(g_ctx.queue);
-            err = clEnqueueReadBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data, 0,
-                                      nullptr, nullptr);
-            if (err == CL_SUCCESS) {
-                curves_from_montgomery(data, curves, limbs, N, np0);
-                dump_opencl_state_rows(g_dump_ctx, "end", batches_complete + 1,
-                                       s_partial + this_batch, this_batch, sigma, curves, BITS,
-                                       tpi, data, limbs);
-                if (s_partial + this_batch < s_num_bits) {
-                    curves_to_montgomery(data, curves, limbs, N, BITS);
-                    err = clEnqueueWriteBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data,
-                                               0, nullptr, nullptr);
+            if (sync_each_batch) {
+                err = clEnqueueReadBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data, 0,
+                                          nullptr, nullptr);
+                if (err == CL_SUCCESS) {
+                    curves_from_montgomery(data, curves, limbs, N, np0);
+                    dump_opencl_state_rows(g_dump_ctx, "end", batches_complete + 1,
+                                           s_partial + this_batch, this_batch, sigma, curves, BITS,
+                                           tpi, data, limbs);
+                    if (s_partial + this_batch < s_num_bits) {
+                        curves_to_montgomery(data, curves, limbs, N, BITS);
+                        err = clEnqueueWriteBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data,
+                                                   0, nullptr, nullptr);
+                    }
                 }
             }
         }
@@ -891,6 +902,27 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
 
         s_partial += this_batch;
         batches_complete++;
+
+        if (should_log_batch) {
+            double elapsed_s =
+                std::chrono::duration<double>(std::chrono::high_resolution_clock::now() -
+                                              t_global_start)
+                    .count();
+            double progress =
+                (s_num_bits > 0u) ? ((double)s_partial / (double)s_num_bits) : 0.0;
+            std::string eta_text = "?:??:??";
+            if (progress > 1e-9) {
+                double total_s = elapsed_s / progress;
+                double remain_s = std::max(0.0, total_s - elapsed_s);
+                eta_text = format_eta_hms(remain_s);
+            }
+            ecm_ts_fprintf(stderr, "GPU: Computing %llu bits/call, %llu/%llu (%.1f%%)\n",
+                           (unsigned long long)this_batch, (unsigned long long)s_partial,
+                           (unsigned long long)s_num_bits,
+                           100.0 * (double)s_partial / (double)s_num_bits);
+            ecm_ts_fprintf(stderr, "GPU: progress elapsed=%s eta=%s\n",
+                           format_eta_hms(elapsed_s).c_str(), eta_text.c_str());
+        }
     }
 
     if (err == CL_SUCCESS && !sync_each_batch) {
