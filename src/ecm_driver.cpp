@@ -3,17 +3,21 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <numeric>
 #include <cmath>
 #include <cstdlib>
 #include <cctype>
 #include <ctime>
 #include <fstream>
+#include <cstdio>
 #include <sys/stat.h>
 
 #ifdef _WIN32
 #include <io.h>
 #include <windows.h>
+#include <process.h>
 #define access _access
+#define getpid _getpid
 #else
 #include <unistd.h>
 #endif
@@ -366,6 +370,247 @@ static std::string mpz_to_dec_string(const mpz_t v) {
     return out;
 }
 
+struct PrimePowerBound {
+    uint32_t p;
+    uint32_t exp;
+};
+
+static bool build_primes_up_to_B1(double B1, std::vector<uint32_t> &primes) {
+    primes.clear();
+    if (B1 < 2.0) {
+        return true;
+    }
+    const uint64_t limit64 = (uint64_t)std::floor(B1 + 0.0001);
+    if (limit64 < 2 || limit64 > 5000000000ULL) {
+        return false;
+    }
+    const uint32_t limit = (uint32_t)limit64;
+    std::vector<char> sieve((size_t)limit + 1u, 1);
+    sieve[0] = sieve[1] = 0;
+    for (uint32_t p = 2; (uint64_t)p * (uint64_t)p <= limit; ++p) {
+        if (!sieve[p]) continue;
+        for (uint64_t q = (uint64_t)p * (uint64_t)p; q <= limit; q += p) {
+            sieve[(size_t)q] = 0;
+        }
+    }
+
+    for (uint32_t p = 2; p <= limit; ++p) {
+        if (!sieve[p]) continue;
+        primes.push_back(p);
+    }
+    return true;
+}
+
+static std::vector<PrimePowerBound> factor_by_small_primes(
+    const mpz_t n, const std::vector<uint32_t> &primes) {
+    std::vector<PrimePowerBound> out;
+    mpz_t work;
+    mpz_init_set(work, n);
+    for (uint32_t p : primes) {
+        uint32_t exp = 0;
+        while (mpz_divisible_ui_p(work, p) != 0) {
+            mpz_fdiv_q_ui(work, work, p);
+            ++exp;
+        }
+        if (exp > 0) {
+            out.push_back({p, exp});
+        }
+    }
+    mpz_clear(work);
+    return out;
+}
+
+static std::string format_group_order_smooth(const std::vector<PrimePowerBound> &parts) {
+    std::ostringstream oss;
+    oss << "[ ";
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i != 0) oss << ", ";
+        oss << "<" << parts[i].p << ", " << parts[i].exp << ">";
+    }
+    oss << " ]";
+    return oss.str();
+}
+
+static std::string get_gp_executable() {
+    auto normalize_cmd_path = [](std::string s) -> std::string {
+        trim(s);
+        // Remove any outer single/double quotes repeatedly.
+        while (s.size() >= 2 &&
+               ((s.front() == '"' && s.back() == '"') ||
+                (s.front() == '\'' && s.back() == '\''))) {
+            s = s.substr(1, s.size() - 2);
+            trim(s);
+        }
+        // Also strip stray quote characters at either side.
+        while (!s.empty() && (s.front() == '"' || s.front() == '\'')) {
+            s.erase(s.begin());
+        }
+        while (!s.empty() && (s.back() == '"' || s.back() == '\'')) {
+            s.pop_back();
+        }
+        // gp path should not contain quote characters; strip any residual ones.
+        s.erase(std::remove(s.begin(), s.end(), '"'), s.end());
+        s.erase(std::remove(s.begin(), s.end(), '\''), s.end());
+        return s;
+    };
+
+    const char *ecm_gp = std::getenv("ECM_GP_BIN");
+    if (ecm_gp && *ecm_gp) {
+        return normalize_cmd_path(std::string(ecm_gp));
+    }
+    const char *pari_gp = std::getenv("PARI_GP_BIN");
+    if (pari_gp && *pari_gp) {
+        return normalize_cmd_path(std::string(pari_gp));
+    }
+    return "gp";
+}
+
+static bool compute_group_order_pari_for_sigma3(mpz_t order_out, const mpz_t p,
+                                                uint32_t sigma, std::string *err) {
+    char tmp_file[L_tmpnam];
+    if (std::tmpnam(tmp_file) == nullptr) {
+        if (err) *err = "failed to create temporary script path";
+        return false;
+    }
+    // tmpnam on Windows can return paths that are awkward for cmd parsing.
+    // Put the temporary script in the current workspace with a simple filename.
+    std::string base(tmp_file);
+    for (char &c : base) {
+        if (c == '\\' || c == '/' || c == ':' || c == '.' || c == ' ') {
+            c = '_';
+        }
+    }
+    const std::string script_path = "ecm_go_tmp_" + base + ".gp";
+    std::ofstream gpfile(script_path, std::ios::out | std::ios::trunc);
+    if (!gpfile.is_open()) {
+        if (err) *err = "failed to open temporary gp script";
+        return false;
+    }
+
+    const std::string p_dec = mpz_to_dec_string(p);
+    gpfile << "p = " << p_dec << ";\n";
+    gpfile << "s = " << sigma << ";\n";
+    gpfile << "A = Mod(4*s, p) / Mod(2^32, p) - 2;\n";
+    gpfile << "b = 4*A + 10;\n";
+    gpfile << "E = ellinit([0, b*A, 0, b^2, 0]);\n";
+    gpfile << "print(lift(ellcard(E)));\n";
+    gpfile << "quit();\n";
+    gpfile.close();
+
+    std::string output;
+    const std::string gp_exe = get_gp_executable();
+#ifdef _WIN32
+    SECURITY_ATTRIBUTES sa;
+    sa.nLength = sizeof(sa);
+    sa.lpSecurityDescriptor = nullptr;
+    sa.bInheritHandle = TRUE;
+    HANDLE child_stdout_read = nullptr;
+    HANDLE child_stdout_write = nullptr;
+    if (!CreatePipe(&child_stdout_read, &child_stdout_write, &sa, 0)) {
+        remove(script_path.c_str());
+        if (err) *err = "CreatePipe failed for gp output";
+        return false;
+    }
+    if (!SetHandleInformation(child_stdout_read, HANDLE_FLAG_INHERIT, 0)) {
+        CloseHandle(child_stdout_read);
+        CloseHandle(child_stdout_write);
+        remove(script_path.c_str());
+        if (err) *err = "SetHandleInformation failed for gp output";
+        return false;
+    }
+
+    STARTUPINFOA si;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdOutput = child_stdout_write;
+    si.hStdError = child_stdout_write;
+
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&pi, sizeof(pi));
+    std::string cmdline = "\"" + gp_exe + "\" -q -f \"" + script_path + "\"";
+    std::vector<char> cmdline_buf(cmdline.begin(), cmdline.end());
+    cmdline_buf.push_back('\0');
+
+    BOOL ok = CreateProcessA(
+        gp_exe.c_str(),
+        cmdline_buf.data(),
+        nullptr,
+        nullptr,
+        TRUE,
+        CREATE_NO_WINDOW,
+        nullptr,
+        nullptr,
+        &si,
+        &pi);
+    CloseHandle(child_stdout_write);
+    if (!ok) {
+        DWORD code = GetLastError();
+        CloseHandle(child_stdout_read);
+        remove(script_path.c_str());
+        if (err) *err = "CreateProcess(gp) failed, code=" + std::to_string((unsigned long)code) +
+                        ", exe=" + gp_exe;
+        return false;
+    }
+
+    char buffer[256];
+    DWORD nread = 0;
+    while (ReadFile(child_stdout_read, buffer, sizeof(buffer) - 1, &nread, nullptr) && nread > 0) {
+        buffer[nread] = '\0';
+        output += buffer;
+    }
+    CloseHandle(child_stdout_read);
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD rc = 0;
+    GetExitCodeProcess(pi.hProcess, &rc);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+#else
+    const std::string cmd = "\"" + gp_exe + "\" -q -f \"" + script_path + "\"";
+    FILE *pipe = popen(cmd.c_str(), "r");
+    if (!pipe) {
+        remove(script_path.c_str());
+        if (err) *err = "failed to launch gp executable: " + gp_exe;
+        return false;
+    }
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        output += buffer;
+    }
+    int rc = pclose(pipe);
+#endif
+    remove(script_path.c_str());
+    if ((long)rc != 0) {
+        if (err) *err = "gp execution failed: " + gp_exe;
+        return false;
+    }
+
+    std::istringstream iss(output);
+    std::string line;
+    std::string last_int;
+    while (std::getline(iss, line)) {
+        trim(line);
+        if (line.empty()) continue;
+        bool ok = true;
+        size_t start = (line[0] == '-') ? 1 : 0;
+        if (start == line.size()) ok = false;
+        for (size_t i = start; ok && i < line.size(); ++i) {
+            if (!std::isdigit((unsigned char)line[i])) ok = false;
+        }
+        if (ok) last_int = line;
+    }
+    if (last_int.empty()) {
+        if (err) *err = "gp returned no integer ellcard output";
+        return false;
+    }
+    if (mpz_set_str(order_out, last_int.c_str(), 10) != 0) {
+        if (err) *err = "failed to parse gp ellcard integer";
+        return false;
+    }
+    return true;
+}
+
 static std::string build_saved_n_expr(const std::string &original_expr, const mpz_t N,
                                       uint32_t curves, mpz_t *factors, int *array_found) {
     std::string expr = original_expr.empty() ? mpz_to_dec_string(N) : original_expr;
@@ -502,6 +747,7 @@ int main(int argc, char **argv){
     bool sigma_fixed = false;
     uint32_t fixed_sigma = 0;
     int gpu_device_index = 0;
+    bool print_group_order = false;
     std::string savefilename;
     bool saveappend = false;
     // parse args simple
@@ -543,6 +789,10 @@ int main(int argc, char **argv){
             saveappend = true;
             continue;
         }
+        if(a == "--go") {
+            print_group_order = true;
+            continue;
+        }
         pos.push_back(a);
     }
 
@@ -550,7 +800,8 @@ int main(int argc, char **argv){
     std::cout << "  mode: " << (use_gpu ? "gpu" : "cpu-stub")
               << ", gpucurves=" << gpucurves
               << ", gpuckpt_ms=" << gpuckpt_ms
-              << ", device=" << gpu_device_index << std::endl;
+              << ", device=" << gpu_device_index
+              << ", group_order=" << (print_group_order ? "on" : "off") << std::endl;
     if(!pos.empty()){
         std::cout << "  B1=" << pos[0];
         if(pos.size() >= 2){
@@ -562,7 +813,7 @@ int main(int argc, char **argv){
 #ifdef _WIN32
     if(_isatty(_fileno(stdin))) {
         std::cout << "This driver expects N on stdin. Example:" << std::endl;
-        std::cout << "  echo '(2^991-1)' | .\\build\\Debug\\ecm.exe -v -gpu -gpucurves 384 1e6 0" << std::endl;
+        std::cout << "  echo '(2^991-1)' | .\\build\\Debug\\ecm.exe -v --go -gpu -gpucurves 384 1e6 0" << std::endl;
         return 1;
     }
 #endif
@@ -674,6 +925,14 @@ int main(int argc, char **argv){
     mpz_init(batch_d);
     gpu_compute_batch_d(batch_d, firstsigma, N);
 
+    std::vector<uint32_t> go_primes;
+    if (print_group_order) {
+        if (!build_primes_up_to_B1(B1, go_primes)) {
+            std::cerr << "Failed to build primes for --go (invalid B1 range)" << std::endl;
+            return 1;
+        }
+    }
+
     std::cout << "Using B1=" << B1 << ", B2=" << B2
               << ", sigma=" << ECM_PARAM_BATCH_32BITS_D << ":" << firstsigma
               << "-" << lastsigma << " (" << curves << " curves)" << std::endl;
@@ -696,6 +955,26 @@ int main(int argc, char **argv){
             char *s = mpz_get_str(NULL,10,factors[i]);
             std::cout << "factor["<<i<<"]="<< s <<"\n";
             free(s);
+            if (print_group_order) {
+                uint32_t sigma_curve = firstsigma + i;
+                if (mpz_probab_prime_p(factors[i], 25) <= 0) {
+                    std::cout << "  go_factor[" << i << "]=[ ] (factor is not prime, skip #E(F_p))\n";
+                    continue;
+                }
+                mpz_t go;
+                mpz_init(go);
+                std::string err;
+                if (!compute_group_order_pari_for_sigma3(go, factors[i], sigma_curve, &err)) {
+                    std::cout << "  go_factor[" << i << "]=[ ] (gp error: " << err << ")\n";
+                    mpz_clear(go);
+                    continue;
+                }
+                auto go_parts = factor_by_small_primes(go, go_primes);
+                std::cout << "  go[" << i << "]=" << mpz_to_dec_string(go) << "\n";
+                std::cout << "  go_factor[" << i << "]="
+                          << format_group_order_smooth(go_parts) << "\n";
+                mpz_clear(go);
+            }
         }
     }
     std::string n_expr_save = build_saved_n_expr(nline, N, curves, factors, array_found);
