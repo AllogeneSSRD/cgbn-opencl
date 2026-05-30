@@ -105,6 +105,11 @@ target_link_libraries(opencl_ecm_montsqr
     "D:/code/vcpkg/installed/x64-windows/lib/gmp.lib"
 )
 
+if(MSVC)
+    # NVIDIA OpenCL JIT of mont_priv_opt.cl can overflow the default 1MB thread stack.
+    target_link_options(opencl_ecm_montsqr PRIVATE "/STACK:16777216")
+endif()
+
 add_executable(opencl_asm_selftest
     src/cl_probe.cpp
     src/opencl_asm_selftest.cpp

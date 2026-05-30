@@ -93,6 +93,23 @@ std::string read_device_vendor(cl_device_id dev) {
     return std::string(vendor);
 }
 
+bool is_amd_gpu_device(cl_device_id dev, cl_platform_id platform) {
+    char pname[256] = {0};
+    char dname[256] = {0};
+    if (platform) {
+        clGetPlatformInfo(platform, CL_PLATFORM_NAME, sizeof(pname), pname, nullptr);
+    }
+    clGetDeviceInfo(dev, CL_DEVICE_NAME, sizeof(dname), dname, nullptr);
+    std::string p = pname;
+    std::string d = dname;
+    std::transform(p.begin(), p.end(), p.begin(),
+                   [](unsigned char c) { return (char)std::toupper(c); });
+    std::transform(d.begin(), d.end(), d.begin(),
+                   [](unsigned char c) { return (char)std::toupper(c); });
+    return p.find("AMD") != std::string::npos || d.find("AMD") != std::string::npos ||
+           d.find("GFX") != std::string::npos || d.find("RADEON") != std::string::npos;
+}
+
 int resolve_impl4_unroll(cl_device_id dev) {
     if (const char *v = std::getenv("ECM_MONT_WG_IMPL4_UNROLL")) {
         int parsed = std::atoi(v);
@@ -177,10 +194,10 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     std::string mont_mul_manual_src = cgbn::opencl::load_kernel_file(
         "cgbn/backends/opencl/kernels/mont_mul_unroll_only_512_manual_generated.cl");
     std::string mont_mul_asm_fused_src =
-        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_mul_asm_fused.cl");
-    std::string mont_mul_asm_block8_src = cgbn::opencl::load_text_file(
+        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_mul_asm_fused.cl");
+    std::string mont_mul_asm_block8_src = cgbn::opencl::load_kernel_file(
         "cgbn/backends/opencl/kernels/mont_mul_asm_block8_generated.cl");
-    std::string mont_mul_asm_src = cgbn::opencl::load_text_file(
+    std::string mont_mul_asm_src = cgbn::opencl::load_kernel_file(
         "cgbn/backends/opencl/kernels/mont_mul_asm_512_generated.cl");
     std::string mont_priv_opt_bench_src =
         cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_opt_bench.cl");
@@ -198,7 +215,8 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
                      "tools/gen_mont_mul_unroll_only_512_manual.py\n";
     }
     bool mont_mul_asm_enabled = false;
-    if (WORDS == 16u) {
+    const bool amd_gpu = is_amd_gpu_device(ctx.device, ctx.platform);
+    if (WORDS == 16u && amd_gpu) {
         if (mont_mul_asm_fused_src.empty() || mont_mul_asm_block8_src.empty() ||
             mont_mul_asm_src.empty()) {
             std::cerr << "Warning: mont_mul_asm*.cl missing; run tools/gen_mont_mul_asm_512.py and "
@@ -206,6 +224,8 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         } else {
             mont_mul_asm_enabled = true;
         }
+    } else if (WORDS == 16u && !amd_gpu) {
+        std::cout << "Note: mont_mul_asm bench skipped (AMD GPU only)\n";
     }
     if (use_wg && (mont_wg_src.empty() || mont_wg_bench_src.empty())) {
         std::cerr << "Failed to load mont_wg sources" << std::endl;
@@ -260,6 +280,9 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     }
     std::cout << "WG build opts: impl=" << wg_impl
               << " impl4_unroll=" << impl4_unroll << std::endl;
+    std::cout << "OpenCL: compiling kernels (large source; may take minutes on NVIDIA)..."
+              << std::endl;
+    std::cout.flush();
     cl_program program = cgbn::opencl::build_program_from_source(
         ctx, src.c_str(), build_opts, buildErr);
     if (program == nullptr || buildErr != CL_SUCCESS) {
@@ -500,8 +523,9 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         return ok;
     };
 
-    auto run_priv_unroll_mt2_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
-                                          double &ms_out) -> bool {
+    auto run_priv_unroll_mtn_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
+                                         size_t local_size, size_t meta_words,
+                                         double &ms_out) -> bool {
         cl_int kerr = CL_SUCCESS;
         cl_kernel k = clCreateKernel(program, kname, &kerr);
         if (kerr != CL_SUCCESS) {
@@ -514,6 +538,8 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
             return true;
         }
         clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+        size_t local_mem_size = ((size_t)FIXED_4096_WORDS + 2u + (size_t)FIXED_4096_WORDS +
+                                 (size_t)FIXED_4096_WORDS + meta_words) * sizeof(uint32_t);
         if (is_mul) {
             clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
             clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
@@ -521,8 +547,6 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
             clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
             clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
             clSetKernelArg(k, 6, sizeof(cl_uint), &iters);
-            size_t local_mem_size = ((size_t)FIXED_4096_WORDS + 2u + (size_t)FIXED_4096_WORDS +
-                                     (size_t)FIXED_4096_WORDS + 3u) * sizeof(uint32_t);
             clSetKernelArg(k, 7, local_mem_size, nullptr);
         } else {
             clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
@@ -530,13 +554,10 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
             clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
             clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
             clSetKernelArg(k, 5, sizeof(cl_uint), &iters);
-            size_t local_mem_size = ((size_t)FIXED_4096_WORDS + 2u + (size_t)FIXED_4096_WORDS +
-                                     (size_t)FIXED_4096_WORDS + 3u) * sizeof(uint32_t);
             clSetKernelArg(k, 6, local_mem_size, nullptr);
         }
-        size_t local = 2u;
-        size_t global_mt2 = (size_t)instances * local;
-        bool ok = run_kernel_with_local(ctx.queue, k, global_mt2, local, launch_repeats, ms_out);
+        size_t global_mtn = (size_t)instances * local_size;
+        bool ok = run_kernel_with_local(ctx.queue, k, global_mtn, local_size, launch_repeats, ms_out);
         if (ok) {
             size_t priv_b = 0, loc_b = 0, pref = 0, wg_sz = 0;
             query_kernel_resources(k, ctx.device, priv_b, loc_b, pref, wg_sz);
@@ -554,8 +575,20 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         return ok;
     };
 
-    auto run_priv_unroll_l2_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
-                                         double &ms_out) -> bool {
+    auto run_priv_unroll_mt2_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
+                                          double &ms_out) -> bool {
+        return run_priv_unroll_mtn_kernel(kname, is_mul, required_words, 2u, 3u, ms_out);
+    };
+
+    constexpr size_t FIPS512_MT_LOCAL_U32 = 16u + 16u + 32u * 2u + 17u;
+    constexpr size_t FIPS512_CS_LOCAL_U32 = 16u + 16u + 8u * 34u + 34u;
+    constexpr size_t FIPS512_CS16_LOCAL_U32 = 16u + 16u + 16u * 34u + 34u;
+    constexpr size_t FIPS4096_MT_LOCAL_U32 = 128u + 128u + 256u * 2u + 129u;
+    constexpr size_t FIPS4096_CS_LOCAL_U32 = 128u + 128u + 8u * 258u + 258u;
+    constexpr size_t FIPS4096_CS16_LOCAL_U32 = 128u + 128u + 16u * 258u + 258u;
+
+    auto run_priv_fips_mt_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
+                                       size_t local_size, size_t local_u32, double &ms_out) -> bool {
         cl_int kerr = CL_SUCCESS;
         cl_kernel k = clCreateKernel(program, kname, &kerr);
         if (kerr != CL_SUCCESS) {
@@ -567,8 +600,8 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
             ms_out = 0.0;
             return true;
         }
-        cl_uint total_instances = (cl_uint)instances;
         clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+        size_t local_mem_size = local_u32 * sizeof(uint32_t);
         if (is_mul) {
             clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
             clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
@@ -576,19 +609,17 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
             clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
             clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
             clSetKernelArg(k, 6, sizeof(cl_uint), &iters);
-            clSetKernelArg(k, 7, sizeof(cl_uint), &total_instances);
+            clSetKernelArg(k, 7, local_mem_size, nullptr);
         } else {
             clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
             clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
             clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
             clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
             clSetKernelArg(k, 5, sizeof(cl_uint), &iters);
-            clSetKernelArg(k, 6, sizeof(cl_uint), &total_instances);
+            clSetKernelArg(k, 6, local_mem_size, nullptr);
         }
-        size_t local = 2u;
-        size_t groups = ((size_t)instances + local - 1u) / local;
-        size_t global_l2 = groups * local;
-        bool ok = run_kernel_with_local(ctx.queue, k, global_l2, local, launch_repeats, ms_out);
+        size_t global_fips = (size_t)instances * local_size;
+        bool ok = run_kernel_with_local(ctx.queue, k, global_fips, local_size, launch_repeats, ms_out);
         if (ok) {
             size_t priv_b = 0, loc_b = 0, pref = 0, wg_sz = 0;
             query_kernel_resources(k, ctx.device, priv_b, loc_b, pref, wg_sz);
@@ -730,6 +761,59 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         return false;
     }
 
+    double t_mul_priv_fips512 = 0.0, t_sqr_priv_fips512 = 0.0;
+    double t_mul_priv_fips512_mt4 = 0.0, t_sqr_priv_fips512_mt4 = 0.0;
+    double t_mul_priv_fips512_mt8 = 0.0, t_sqr_priv_fips512_mt8 = 0.0;
+    double t_mul_priv_fips512_mt16 = 0.0, t_sqr_priv_fips512_mt16 = 0.0;
+    double t_mul_priv_fips512_mt8_cs = 0.0, t_sqr_priv_fips512_mt8_cs = 0.0;
+    double t_mul_priv_fips512_mt16_cs = 0.0, t_sqr_priv_fips512_mt16_cs = 0.0;
+    if (!run_priv_unroll_kernel("ecm_mont_mul_priv_fips512_bench", true, 16u, t_mul_priv_fips512)) {
+        return false;
+    }
+    if (!run_priv_unroll_kernel("ecm_mont_sqr_priv_fips512_bench", false, 16u, t_sqr_priv_fips512)) {
+        return false;
+    }
+    if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips512_mt4_bench", true, 16u, 4u,
+                                 FIPS512_MT_LOCAL_U32, t_mul_priv_fips512_mt4)) {
+        return false;
+    }
+    if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips512_mt4_bench", false, 16u, 4u,
+                                 FIPS512_MT_LOCAL_U32, t_sqr_priv_fips512_mt4)) {
+        return false;
+    }
+    if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips512_mt8_bench", true, 16u, 8u,
+                                 FIPS512_MT_LOCAL_U32, t_mul_priv_fips512_mt8)) {
+        return false;
+    }
+    if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips512_mt8_bench", false, 16u, 8u,
+                                 FIPS512_MT_LOCAL_U32, t_sqr_priv_fips512_mt8)) {
+        return false;
+    }
+    if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips512_mt16_bench", true, 16u, 16u,
+                                 FIPS512_MT_LOCAL_U32, t_mul_priv_fips512_mt16)) {
+        return false;
+    }
+    if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips512_mt16_bench", false, 16u, 16u,
+                                 FIPS512_MT_LOCAL_U32, t_sqr_priv_fips512_mt16)) {
+        return false;
+    }
+    if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips512_mt8_cs_bench", true, 16u, 8u,
+                                 FIPS512_CS_LOCAL_U32, t_mul_priv_fips512_mt8_cs)) {
+        return false;
+    }
+    if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips512_mt8_cs_bench", false, 16u, 8u,
+                                 FIPS512_CS_LOCAL_U32, t_sqr_priv_fips512_mt8_cs)) {
+        return false;
+    }
+    if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips512_mt16_cs_bench", true, 16u, 16u,
+                                 FIPS512_CS16_LOCAL_U32, t_mul_priv_fips512_mt16_cs)) {
+        return false;
+    }
+    if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips512_mt16_cs_bench", false, 16u, 16u,
+                                 FIPS512_CS16_LOCAL_U32, t_sqr_priv_fips512_mt16_cs)) {
+        return false;
+    }
+
     double t_mul_priv_local_only_512 = 0.0, t_sqr_priv_local_only_512 = 0.0;
     if (!run_priv_local_kernel("ecm_mont_mul_priv_local_only_512_bench", true, 16u,
                                t_mul_priv_local_only_512)) {
@@ -755,7 +839,14 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     double t_mul_priv_unroll64_4096_nod = 0.0, t_sqr_priv_unroll64_4096_nod = 0.0;
     double t_mul_priv_unroll64_4096_mt2 = 0.0, t_sqr_priv_unroll64_4096_mt2 = 0.0;
     double t_mul_priv_unroll64_4096_mt2_weak = 0.0, t_sqr_priv_unroll64_4096_mt2_weak = 0.0;
-    double t_mul_priv_unroll64_4096_l2 = 0.0, t_sqr_priv_unroll64_4096_l2 = 0.0;
+    double t_mul_priv_unroll64_4096_mt4 = 0.0, t_sqr_priv_unroll64_4096_mt4 = 0.0;
+    double t_mul_priv_unroll64_4096_mt8 = 0.0, t_sqr_priv_unroll64_4096_mt8 = 0.0;
+    double t_mul_priv_fips4096 = 0.0, t_sqr_priv_fips4096 = 0.0;
+    double t_mul_priv_fips4096_mt4 = 0.0, t_sqr_priv_fips4096_mt4 = 0.0;
+    double t_mul_priv_fips4096_mt8 = 0.0, t_sqr_priv_fips4096_mt8 = 0.0;
+    double t_mul_priv_fips4096_mt16 = 0.0, t_sqr_priv_fips4096_mt16 = 0.0;
+    double t_mul_priv_fips4096_mt8_cs = 0.0, t_sqr_priv_fips4096_mt8_cs = 0.0;
+    double t_mul_priv_fips4096_mt16_cs = 0.0, t_sqr_priv_fips4096_mt16_cs = 0.0;
     if (!run_priv_unroll_kernel("ecm_mont_mul_priv_unroll32_bench", true, WORDS, t_mul_priv_unroll32)) {
         return false;
     }
@@ -801,12 +892,66 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
                                         t_sqr_priv_unroll64_4096_mt2_weak)) {
             return false;
         }
-        if (!run_priv_unroll_l2_kernel("ecm_mont_mul_priv_unroll64_4096_l2_bench", true, 128u,
-                                       t_mul_priv_unroll64_4096_l2)) {
+        if (!run_priv_unroll_mtn_kernel("ecm_mont_mul_priv_unroll64_4096_mt4_bench", true, 128u, 4u, 5u,
+                                        t_mul_priv_unroll64_4096_mt4)) {
             return false;
         }
-        if (!run_priv_unroll_l2_kernel("ecm_mont_sqr_priv_unroll64_4096_l2_bench", false, 128u,
-                                       t_sqr_priv_unroll64_4096_l2)) {
+        if (!run_priv_unroll_mtn_kernel("ecm_mont_sqr_priv_unroll64_4096_mt4_bench", false, 128u, 4u, 5u,
+                                        t_sqr_priv_unroll64_4096_mt4)) {
+            return false;
+        }
+        if (!run_priv_unroll_mtn_kernel("ecm_mont_mul_priv_unroll64_4096_mt8_bench", true, 128u, 8u, 9u,
+                                        t_mul_priv_unroll64_4096_mt8)) {
+            return false;
+        }
+        if (!run_priv_unroll_mtn_kernel("ecm_mont_sqr_priv_unroll64_4096_mt8_bench", false, 128u, 8u, 9u,
+                                        t_sqr_priv_unroll64_4096_mt8)) {
+            return false;
+        }
+        if (!run_priv_unroll_kernel("ecm_mont_mul_priv_fips4096_bench", true, 128u, t_mul_priv_fips4096)) {
+            return false;
+        }
+        if (!run_priv_unroll_kernel("ecm_mont_sqr_priv_fips4096_bench", false, 128u, t_sqr_priv_fips4096)) {
+            return false;
+        }
+        if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips4096_mt4_bench", true, 128u, 4u,
+                                     FIPS4096_MT_LOCAL_U32, t_mul_priv_fips4096_mt4)) {
+            return false;
+        }
+        if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips4096_mt4_bench", false, 128u, 4u,
+                                     FIPS4096_MT_LOCAL_U32, t_sqr_priv_fips4096_mt4)) {
+            return false;
+        }
+        if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips4096_mt8_bench", true, 128u, 8u,
+                                     FIPS4096_MT_LOCAL_U32, t_mul_priv_fips4096_mt8)) {
+            return false;
+        }
+        if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips4096_mt8_bench", false, 128u, 8u,
+                                     FIPS4096_MT_LOCAL_U32, t_sqr_priv_fips4096_mt8)) {
+            return false;
+        }
+        if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips4096_mt16_bench", true, 128u, 16u,
+                                     FIPS4096_MT_LOCAL_U32, t_mul_priv_fips4096_mt16)) {
+            return false;
+        }
+        if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips4096_mt16_bench", false, 128u, 16u,
+                                     FIPS4096_MT_LOCAL_U32, t_sqr_priv_fips4096_mt16)) {
+            return false;
+        }
+        if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips4096_mt8_cs_bench", true, 128u, 8u,
+                                     FIPS4096_CS_LOCAL_U32, t_mul_priv_fips4096_mt8_cs)) {
+            return false;
+        }
+        if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips4096_mt8_cs_bench", false, 128u, 8u,
+                                     FIPS4096_CS_LOCAL_U32, t_sqr_priv_fips4096_mt8_cs)) {
+            return false;
+        }
+        if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips4096_mt16_cs_bench", true, 128u, 16u,
+                                     FIPS4096_CS16_LOCAL_U32, t_mul_priv_fips4096_mt16_cs)) {
+            return false;
+        }
+        if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips4096_mt16_cs_bench", false, 128u, 16u,
+                                     FIPS4096_CS16_LOCAL_U32, t_sqr_priv_fips4096_mt16_cs)) {
             return false;
         }
     }
@@ -870,6 +1015,415 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
 
         if (!run_verify_kernel("ecm_mont_mul_priv_bench", true, false, out_base)) return false;
         if (!run_verify_kernel("ecm_mont_mul_priv_opt_bench", true, true, out_opt)) return false;
+        if (WORDS == 16u) {
+            std::vector<uint32_t> out_sqr512(WORDS), out_sqr_mul512(WORDS);
+            auto run_sqr_fixed_verify = [&](const char *kname, std::vector<uint32_t> &out_buf) -> bool {
+                cl_int kerr = CL_SUCCESS;
+                cl_kernel k = clCreateKernel(program, kname, &kerr);
+                if (kerr != CL_SUCCESS) {
+                    std::cerr << "Create verify kernel " << kname << " failed: " << kerr << std::endl;
+                    return false;
+                }
+                clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+                clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
+                clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
+                clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+                clSetKernelArg(k, 5, sizeof(cl_uint), &verify_iters);
+                size_t g = 1;
+                cl_int err2 = clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(k);
+                if (err2 != CL_SUCCESS) {
+                    std::cerr << "Enqueue verify " << kname << " failed: " << err2 << std::endl;
+                    return false;
+                }
+                err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                           out_buf.data(), 0, nullptr, nullptr);
+                return err2 == CL_SUCCESS;
+            };
+            if (!run_sqr_fixed_verify("ecm_mont_sqr_priv_unroll_only_512_bench", out_sqr512)) return false;
+            {
+                cl_int kerr = CL_SUCCESS;
+                cl_kernel k = clCreateKernel(program, "ecm_mont_mul_priv_unroll_only_512_bench", &kerr);
+                if (kerr != CL_SUCCESS) return false;
+                clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+                clSetKernelArg(k, 1, sizeof(cl_mem), &bufA);
+                clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
+                clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
+                clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+                clSetKernelArg(k, 6, sizeof(cl_uint), &verify_iters);
+                size_t g = 1;
+                cl_int err2 = clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(k);
+                if (err2 != CL_SUCCESS) return false;
+                err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                           out_sqr_mul512.data(), 0, nullptr, nullptr);
+                if (err2 != CL_SUCCESS) return false;
+            }
+            bool match_sqr_mul = true;
+            for (size_t i = 0; i < WORDS; ++i) {
+                if (out_sqr512[i] != out_sqr_mul512[i]) {
+                    match_sqr_mul = false;
+                    break;
+                }
+            }
+            std::cout << "  [sqr_unroll_only_512 vs mul(a,a)] " << (match_sqr_mul ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            if (!match_sqr_mul) return false;
+
+            std::vector<uint32_t> out_fips512(WORDS);
+            auto run_fips512_verify = [&](const char *kname, bool is_mul, size_t local_sz,
+                                          size_t local_u32, std::vector<uint32_t> &out_buf) -> bool {
+                cl_int kerr = CL_SUCCESS;
+                cl_kernel k = clCreateKernel(program, kname, &kerr);
+                if (kerr != CL_SUCCESS) return false;
+                clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+                if (local_sz == 0u) {
+                    if (is_mul) {
+                        clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+                        clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
+                        clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+                        clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
+                        clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+                        clSetKernelArg(k, 6, sizeof(cl_uint), &verify_iters);
+                    } else {
+                        clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
+                        clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+                        clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
+                        clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+                        clSetKernelArg(k, 5, sizeof(cl_uint), &verify_iters);
+                    }
+                } else {
+                    clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
+                    clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+                    clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
+                    clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+                    clSetKernelArg(k, 5, sizeof(cl_uint), &verify_iters);
+                    clSetKernelArg(k, 6, local_u32 * sizeof(uint32_t), nullptr);
+                }
+                size_t g = (local_sz == 0u) ? 1u : local_sz;
+                size_t ls = local_sz;
+                cl_int err2 = (local_sz == 0u)
+                    ? clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr)
+                    : clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, &ls, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(k);
+                if (err2 != CL_SUCCESS) return false;
+                err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                           out_buf.data(), 0, nullptr, nullptr);
+                return err2 == CL_SUCCESS;
+            };
+            if (!run_fips512_verify("ecm_mont_mul_priv_fips512_bench", true, 0u, 0u, out_fips512)) return false;
+            std::vector<uint32_t> out_unroll_mul512(WORDS);
+            {
+                cl_int kerr = CL_SUCCESS;
+                cl_kernel k = clCreateKernel(program, "ecm_mont_mul_priv_unroll_only_512_bench", &kerr);
+                if (kerr != CL_SUCCESS) return false;
+                clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+                clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+                clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
+                clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
+                clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+                clSetKernelArg(k, 6, sizeof(cl_uint), &verify_iters);
+                size_t g = 1;
+                cl_int err2 = clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(k);
+                if (err2 != CL_SUCCESS) return false;
+                err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                           out_unroll_mul512.data(), 0, nullptr, nullptr);
+                if (err2 != CL_SUCCESS) return false;
+            }
+            bool match_fips512 = true;
+            for (size_t i = 0; i < WORDS; ++i) {
+                if (out_fips512[i] != out_unroll_mul512[i]) {
+                    match_fips512 = false;
+                    break;
+                }
+            }
+            std::cout << "  [fips512 vs unroll_only_512] " << (match_fips512 ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            if (!match_fips512) return false;
+
+            std::vector<uint32_t> out_fips512_sqr(WORDS);
+            if (!run_fips512_verify("ecm_mont_sqr_priv_fips512_bench", false, 0u, 0u, out_fips512_sqr)) {
+                return false;
+            }
+
+            std::vector<uint32_t> out_fips_mt4(WORDS), out_fips_mt8(WORDS), out_fips_mt16(WORDS),
+                out_fips_cs(WORDS), out_fips_cs16(WORDS);
+            if (!run_fips512_verify("ecm_mont_sqr_priv_fips512_mt4_bench", false, 4u, FIPS512_MT_LOCAL_U32,
+                                    out_fips_mt4)) {
+                return false;
+            }
+            if (!run_fips512_verify("ecm_mont_sqr_priv_fips512_mt8_bench", false, 8u, FIPS512_MT_LOCAL_U32,
+                                    out_fips_mt8)) {
+                return false;
+            }
+            if (!run_fips512_verify("ecm_mont_sqr_priv_fips512_mt16_bench", false, 16u, FIPS512_MT_LOCAL_U32,
+                                    out_fips_mt16)) {
+                return false;
+            }
+            if (!run_fips512_verify("ecm_mont_sqr_priv_fips512_mt8_cs_bench", false, 8u, FIPS512_CS_LOCAL_U32,
+                                    out_fips_cs)) {
+                return false;
+            }
+            if (!run_fips512_verify("ecm_mont_sqr_priv_fips512_mt16_cs_bench", false, 16u,
+                                    FIPS512_CS16_LOCAL_U32, out_fips_cs16)) {
+                return false;
+            }
+            bool match_fips_mt4 = true, match_fips_mt8 = true, match_fips_mt16 = true;
+            bool match_fips_cs = true, match_fips_cs16 = true;
+            for (size_t i = 0; i < WORDS; ++i) {
+                if (out_fips_mt4[i] != out_fips512_sqr[i]) match_fips_mt4 = false;
+                if (out_fips_mt8[i] != out_fips512_sqr[i]) match_fips_mt8 = false;
+                if (out_fips_mt16[i] != out_fips512_sqr[i]) match_fips_mt16 = false;
+                if (out_fips_cs[i] != out_fips512_sqr[i]) match_fips_cs = false;
+                if (out_fips_cs16[i] != out_fips512_sqr[i]) match_fips_cs16 = false;
+            }
+            std::cout << "  [fips512_mt4 vs fips512] " << (match_fips_mt4 ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            std::cout << "  [fips512_mt8 vs fips512] " << (match_fips_mt8 ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            std::cout << "  [fips512_mt16 vs fips512] " << (match_fips_mt16 ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            std::cout << "  [fips512_mt8_cs vs fips512] " << (match_fips_cs ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            std::cout << "  [fips512_mt16_cs vs fips512] " << (match_fips_cs16 ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            if (!match_fips_mt4 || !match_fips_mt8 || !match_fips_mt16 || !match_fips_cs ||
+                !match_fips_cs16) {
+                return false;
+            }
+        }
+        if (WORDS == 128u) {
+            std::vector<uint32_t> out_sqr4096(WORDS), out_sqr_mul4096(WORDS);
+            auto run_sqr4096_verify = [&](const char *kname, std::vector<uint32_t> &out_buf) -> bool {
+                cl_int kerr = CL_SUCCESS;
+                cl_kernel k = clCreateKernel(program, kname, &kerr);
+                if (kerr != CL_SUCCESS) return false;
+                clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+                clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
+                clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
+                clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+                clSetKernelArg(k, 5, sizeof(cl_uint), &verify_iters);
+                size_t g = 1;
+                cl_int err2 = clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(k);
+                if (err2 != CL_SUCCESS) return false;
+                err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                           out_buf.data(), 0, nullptr, nullptr);
+                return err2 == CL_SUCCESS;
+            };
+            if (!run_sqr4096_verify("ecm_mont_sqr_priv_unroll64_4096_bench", out_sqr4096)) return false;
+            {
+                cl_int kerr = CL_SUCCESS;
+                cl_kernel k = clCreateKernel(program, "ecm_mont_mul_priv_unroll64_4096_bench", &kerr);
+                if (kerr != CL_SUCCESS) return false;
+                clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+                clSetKernelArg(k, 1, sizeof(cl_mem), &bufA);
+                clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
+                clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
+                clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+                clSetKernelArg(k, 6, sizeof(cl_uint), &verify_iters);
+                size_t g = 1;
+                cl_int err2 = clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(k);
+                if (err2 != CL_SUCCESS) return false;
+                err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                           out_sqr_mul4096.data(), 0, nullptr, nullptr);
+                if (err2 != CL_SUCCESS) return false;
+            }
+            bool match_sqr4096 = true;
+            for (size_t i = 0; i < WORDS; ++i) {
+                if (out_sqr4096[i] != out_sqr_mul4096[i]) {
+                    match_sqr4096 = false;
+                    break;
+                }
+            }
+            std::cout << "  [sqr_unroll64_4096 vs mul(a,a)] " << (match_sqr4096 ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            if (!match_sqr4096) return false;
+
+            auto run_mt4096_verify = [&](const char *kname, size_t local_sz, size_t meta_words,
+                                         std::vector<uint32_t> &out_buf) -> bool {
+                cl_int kerr = CL_SUCCESS;
+                cl_kernel k = clCreateKernel(program, kname, &kerr);
+                if (kerr != CL_SUCCESS) return false;
+                clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+                clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
+                clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
+                clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+                clSetKernelArg(k, 5, sizeof(cl_uint), &verify_iters);
+                size_t local_mem_size = ((size_t)FIXED_4096_WORDS + 2u + (size_t)FIXED_4096_WORDS +
+                                         (size_t)FIXED_4096_WORDS + meta_words) * sizeof(uint32_t);
+                clSetKernelArg(k, 6, local_mem_size, nullptr);
+                size_t g = local_sz;
+                cl_int err2 =
+                    clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, &local_sz, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(k);
+                if (err2 != CL_SUCCESS) return false;
+                err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                           out_buf.data(), 0, nullptr, nullptr);
+                return err2 == CL_SUCCESS;
+            };
+            std::vector<uint32_t> out_mt4(WORDS), out_mt8(WORDS);
+            if (!run_mt4096_verify("ecm_mont_sqr_priv_unroll64_4096_mt4_bench", 4u, 5u, out_mt4)) {
+                return false;
+            }
+            if (!run_mt4096_verify("ecm_mont_sqr_priv_unroll64_4096_mt8_bench", 8u, 9u, out_mt8)) {
+                return false;
+            }
+            bool match_mt4 = true, match_mt8 = true;
+            for (size_t i = 0; i < WORDS; ++i) {
+                if (out_mt4[i] != out_sqr4096[i]) match_mt4 = false;
+                if (out_mt8[i] != out_sqr4096[i]) match_mt8 = false;
+            }
+            std::cout << "  [sqr_unroll64_4096_mt4 vs baseline] "
+                      << (match_mt4 ? "MATCH" : "MISMATCH") << std::endl;
+            std::cout << "  [sqr_unroll64_4096_mt8 vs baseline] "
+                      << (match_mt8 ? "MATCH" : "MISMATCH") << std::endl;
+            if (!match_mt4 || !match_mt8) return false;
+
+            auto run_fips4096_verify = [&](const char *kname, bool is_mul, size_t local_sz,
+                                            size_t local_u32, std::vector<uint32_t> &out_buf) -> bool {
+                cl_int kerr = CL_SUCCESS;
+                cl_kernel k = clCreateKernel(program, kname, &kerr);
+                if (kerr != CL_SUCCESS) return false;
+                clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+                if (local_sz == 0u) {
+                    if (is_mul) {
+                        clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+                        clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
+                        clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+                        clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
+                        clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+                        clSetKernelArg(k, 6, sizeof(cl_uint), &verify_iters);
+                    } else {
+                        clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
+                        clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+                        clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
+                        clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+                        clSetKernelArg(k, 5, sizeof(cl_uint), &verify_iters);
+                    }
+                } else {
+                    clSetKernelArg(k, 1, sizeof(cl_mem), &bufN_const);
+                    clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
+                    clSetKernelArg(k, 3, sizeof(cl_mem), &bufNp0_const);
+                    clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+                    clSetKernelArg(k, 5, sizeof(cl_uint), &verify_iters);
+                    clSetKernelArg(k, 6, local_u32 * sizeof(uint32_t), nullptr);
+                }
+                size_t g = (local_sz == 0u) ? 1u : local_sz;
+                size_t ls = local_sz;
+                cl_int err2 = (local_sz == 0u)
+                    ? clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr)
+                    : clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, &ls, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(k);
+                if (err2 != CL_SUCCESS) return false;
+                err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                           out_buf.data(), 0, nullptr, nullptr);
+                return err2 == CL_SUCCESS;
+            };
+
+            std::vector<uint32_t> out_fips4096(WORDS);
+            if (!run_fips4096_verify("ecm_mont_mul_priv_fips4096_bench", true, 0u, 0u, out_fips4096)) {
+                return false;
+            }
+            std::vector<uint32_t> out_unroll_mul4096(WORDS);
+            {
+                cl_int kerr = CL_SUCCESS;
+                cl_kernel k = clCreateKernel(program, "ecm_mont_mul_priv_unroll64_4096_bench", &kerr);
+                if (kerr != CL_SUCCESS) return false;
+                clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+                clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+                clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
+                clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
+                clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+                clSetKernelArg(k, 6, sizeof(cl_uint), &verify_iters);
+                size_t g = 1;
+                cl_int err2 = clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(k);
+                if (err2 != CL_SUCCESS) return false;
+                err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                           out_unroll_mul4096.data(), 0, nullptr, nullptr);
+                if (err2 != CL_SUCCESS) return false;
+            }
+            bool match_fips4096 = true;
+            for (size_t i = 0; i < WORDS; ++i) {
+                if (out_fips4096[i] != out_unroll_mul4096[i]) {
+                    match_fips4096 = false;
+                    break;
+                }
+            }
+            std::cout << "  [fips4096 vs unroll64_4096] " << (match_fips4096 ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            if (!match_fips4096) return false;
+
+            std::vector<uint32_t> out_fips4096_sqr(WORDS);
+            if (!run_fips4096_verify("ecm_mont_sqr_priv_fips4096_bench", false, 0u, 0u, out_fips4096_sqr)) {
+                return false;
+            }
+
+            std::vector<uint32_t> out_fips4096_mt4(WORDS), out_fips4096_mt8(WORDS), out_fips4096_mt16(WORDS),
+                out_fips4096_cs(WORDS), out_fips4096_cs16(WORDS);
+            if (!run_fips4096_verify("ecm_mont_sqr_priv_fips4096_mt4_bench", false, 4u,
+                                     FIPS4096_MT_LOCAL_U32, out_fips4096_mt4)) {
+                return false;
+            }
+            if (!run_fips4096_verify("ecm_mont_sqr_priv_fips4096_mt8_bench", false, 8u,
+                                     FIPS4096_MT_LOCAL_U32, out_fips4096_mt8)) {
+                return false;
+            }
+            if (!run_fips4096_verify("ecm_mont_sqr_priv_fips4096_mt16_bench", false, 16u,
+                                     FIPS4096_MT_LOCAL_U32, out_fips4096_mt16)) {
+                return false;
+            }
+            if (!run_fips4096_verify("ecm_mont_sqr_priv_fips4096_mt8_cs_bench", false, 8u,
+                                     FIPS4096_CS_LOCAL_U32, out_fips4096_cs)) {
+                return false;
+            }
+            if (!run_fips4096_verify("ecm_mont_sqr_priv_fips4096_mt16_cs_bench", false, 16u,
+                                     FIPS4096_CS16_LOCAL_U32, out_fips4096_cs16)) {
+                return false;
+            }
+            bool match_fips4096_mt4 = true, match_fips4096_mt8 = true, match_fips4096_mt16 = true;
+            bool match_fips4096_cs = true, match_fips4096_cs16 = true;
+            for (size_t i = 0; i < WORDS; ++i) {
+                if (out_fips4096_mt4[i] != out_fips4096_sqr[i]) match_fips4096_mt4 = false;
+                if (out_fips4096_mt8[i] != out_fips4096_sqr[i]) match_fips4096_mt8 = false;
+                if (out_fips4096_mt16[i] != out_fips4096_sqr[i]) match_fips4096_mt16 = false;
+                if (out_fips4096_cs[i] != out_fips4096_sqr[i]) match_fips4096_cs = false;
+                if (out_fips4096_cs16[i] != out_fips4096_sqr[i]) match_fips4096_cs16 = false;
+            }
+            std::cout << "  [fips4096_mt4 vs fips4096] " << (match_fips4096_mt4 ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            std::cout << "  [fips4096_mt8 vs fips4096] " << (match_fips4096_mt8 ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            std::cout << "  [fips4096_mt16 vs fips4096] " << (match_fips4096_mt16 ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            std::cout << "  [fips4096_mt8_cs vs fips4096] " << (match_fips4096_cs ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            std::cout << "  [fips4096_mt16_cs vs fips4096] " << (match_fips4096_cs16 ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            if (!match_fips4096_mt4 || !match_fips4096_mt8 || !match_fips4096_mt16 ||
+                !match_fips4096_cs || !match_fips4096_cs16) {
+                return false;
+            }
+        }
         if (WORDS == 16u && !mont_mul_manual_src.empty()) {
             std::vector<uint32_t> out_unroll512(WORDS), out_manual(WORDS), out_asm(WORDS);
             auto run_fixed_verify = [&](const char *kname, std::vector<uint32_t> &out_buf) -> bool {
@@ -987,7 +1541,47 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         }
         std::cout << "mont_sqr_priv_unroll_only_512: " << t_sqr_priv_unroll_only_512 << " ms, "
                   << (op_count / (t_sqr_priv_unroll_only_512 / 1000.0)) << " ops/s"
-                  << " (vs opt: " << (t_sqr_priv_opt / t_sqr_priv_unroll_only_512) << "x)" << std::endl;
+                  << " (vs opt: " << (t_sqr_priv_opt / t_sqr_priv_unroll_only_512) << "x"
+                  << ", vs mul_unroll_only_512: "
+                  << (t_mul_priv_unroll_only_512 / t_sqr_priv_unroll_only_512) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips512: " << t_mul_priv_fips512 << " ms, "
+                  << (op_count / (t_mul_priv_fips512 / 1000.0)) << " ops/s"
+                  << " (vs unroll_only_512: "
+                  << (t_mul_priv_unroll_only_512 / t_mul_priv_fips512) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips512: " << t_sqr_priv_fips512 << " ms, "
+                  << (op_count / (t_sqr_priv_fips512 / 1000.0)) << " ops/s"
+                  << " (vs fips512_mul: "
+                  << (t_mul_priv_fips512 / t_sqr_priv_fips512) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips512_mt4: " << t_mul_priv_fips512_mt4 << " ms, "
+                  << (op_count / (t_mul_priv_fips512_mt4 / 1000.0)) << " ops/s"
+                  << " (vs fips512: " << (t_mul_priv_fips512 / t_mul_priv_fips512_mt4) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips512_mt4: " << t_sqr_priv_fips512_mt4 << " ms, "
+                  << (op_count / (t_sqr_priv_fips512_mt4 / 1000.0)) << " ops/s"
+                  << " (vs fips512: " << (t_sqr_priv_fips512 / t_sqr_priv_fips512_mt4) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips512_mt8: " << t_mul_priv_fips512_mt8 << " ms, "
+                  << (op_count / (t_mul_priv_fips512_mt8 / 1000.0)) << " ops/s"
+                  << " (vs fips512: " << (t_mul_priv_fips512 / t_mul_priv_fips512_mt8) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips512_mt8: " << t_sqr_priv_fips512_mt8 << " ms, "
+                  << (op_count / (t_sqr_priv_fips512_mt8 / 1000.0)) << " ops/s"
+                  << " (vs fips512: " << (t_sqr_priv_fips512 / t_sqr_priv_fips512_mt8) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips512_mt16: " << t_mul_priv_fips512_mt16 << " ms, "
+                  << (op_count / (t_mul_priv_fips512_mt16 / 1000.0)) << " ops/s"
+                  << " (vs fips512: " << (t_mul_priv_fips512 / t_mul_priv_fips512_mt16) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips512_mt16: " << t_sqr_priv_fips512_mt16 << " ms, "
+                  << (op_count / (t_sqr_priv_fips512_mt16 / 1000.0)) << " ops/s"
+                  << " (vs fips512: " << (t_sqr_priv_fips512 / t_sqr_priv_fips512_mt16) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips512_mt8_cs: " << t_mul_priv_fips512_mt8_cs << " ms, "
+                  << (op_count / (t_mul_priv_fips512_mt8_cs / 1000.0)) << " ops/s"
+                  << " (vs fips512: " << (t_mul_priv_fips512 / t_mul_priv_fips512_mt8_cs) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips512_mt8_cs: " << t_sqr_priv_fips512_mt8_cs << " ms, "
+                  << (op_count / (t_sqr_priv_fips512_mt8_cs / 1000.0)) << " ops/s"
+                  << " (vs fips512: " << (t_sqr_priv_fips512 / t_sqr_priv_fips512_mt8_cs) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips512_mt16_cs: " << t_mul_priv_fips512_mt16_cs << " ms, "
+                  << (op_count / (t_mul_priv_fips512_mt16_cs / 1000.0)) << " ops/s"
+                  << " (vs fips512: " << (t_mul_priv_fips512 / t_mul_priv_fips512_mt16_cs) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips512_mt16_cs: " << t_sqr_priv_fips512_mt16_cs << " ms, "
+                  << (op_count / (t_sqr_priv_fips512_mt16_cs / 1000.0)) << " ops/s"
+                  << " (vs fips512: " << (t_sqr_priv_fips512 / t_sqr_priv_fips512_mt16_cs) << "x)" << std::endl;
         std::cout << "mont_mul_priv_local_only_512:  " << t_mul_priv_local_only_512 << " ms, "
                   << (op_count / (t_mul_priv_local_only_512 / 1000.0)) << " ops/s"
                   << " (vs opt: " << (t_mul_priv_opt / t_mul_priv_local_only_512) << "x)" << std::endl;
@@ -1019,7 +1613,9 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
                   << " (vs generic64: " << (t_mul_priv_unroll64 / t_mul_priv_unroll64_4096) << "x)" << std::endl;
         std::cout << "mont_sqr_priv_unroll64_4096: " << t_sqr_priv_unroll64_4096 << " ms, "
                   << (op_count / (t_sqr_priv_unroll64_4096 / 1000.0)) << " ops/s"
-                  << " (vs generic64: " << (t_sqr_priv_unroll64 / t_sqr_priv_unroll64_4096) << "x)" << std::endl;
+                  << " (vs generic64: " << (t_sqr_priv_unroll64 / t_sqr_priv_unroll64_4096) << "x"
+                  << ", vs mul_unroll64_4096: "
+                  << (t_mul_priv_unroll64_4096 / t_sqr_priv_unroll64_4096) << "x)" << std::endl;
         std::cout << "mont_mul_priv_unroll64_4096_nod: " << t_mul_priv_unroll64_4096_nod << " ms, "
                   << (op_count / (t_mul_priv_unroll64_4096_nod / 1000.0)) << " ops/s"
                   << " (vs unroll64_4096: " << (t_mul_priv_unroll64_4096 / t_mul_priv_unroll64_4096_nod) << "x)" << std::endl;
@@ -1038,12 +1634,54 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         std::cout << "mont_sqr_priv_unroll64_4096_mt2_weak: " << t_sqr_priv_unroll64_4096_mt2_weak << " ms, "
                   << (op_count / (t_sqr_priv_unroll64_4096_mt2_weak / 1000.0)) << " ops/s"
                   << " (vs unroll64_4096: " << (t_sqr_priv_unroll64_4096 / t_sqr_priv_unroll64_4096_mt2_weak) << "x)" << std::endl;
-        std::cout << "mont_mul_priv_unroll64_4096_l2: " << t_mul_priv_unroll64_4096_l2 << " ms, "
-                  << (op_count / (t_mul_priv_unroll64_4096_l2 / 1000.0)) << " ops/s"
-                  << " (vs unroll64_4096: " << (t_mul_priv_unroll64_4096 / t_mul_priv_unroll64_4096_l2) << "x)" << std::endl;
-        std::cout << "mont_sqr_priv_unroll64_4096_l2: " << t_sqr_priv_unroll64_4096_l2 << " ms, "
-                  << (op_count / (t_sqr_priv_unroll64_4096_l2 / 1000.0)) << " ops/s"
-                  << " (vs unroll64_4096: " << (t_sqr_priv_unroll64_4096 / t_sqr_priv_unroll64_4096_l2) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_unroll64_4096_mt4: " << t_mul_priv_unroll64_4096_mt4 << " ms, "
+                  << (op_count / (t_mul_priv_unroll64_4096_mt4 / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_mul_priv_unroll64_4096 / t_mul_priv_unroll64_4096_mt4) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_unroll64_4096_mt4: " << t_sqr_priv_unroll64_4096_mt4 << " ms, "
+                  << (op_count / (t_sqr_priv_unroll64_4096_mt4 / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_sqr_priv_unroll64_4096 / t_sqr_priv_unroll64_4096_mt4) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_unroll64_4096_mt8: " << t_mul_priv_unroll64_4096_mt8 << " ms, "
+                  << (op_count / (t_mul_priv_unroll64_4096_mt8 / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_mul_priv_unroll64_4096 / t_mul_priv_unroll64_4096_mt8) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_unroll64_4096_mt8: " << t_sqr_priv_unroll64_4096_mt8 << " ms, "
+                  << (op_count / (t_sqr_priv_unroll64_4096_mt8 / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_sqr_priv_unroll64_4096 / t_sqr_priv_unroll64_4096_mt8) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips4096: " << t_mul_priv_fips4096 << " ms, "
+                  << (op_count / (t_mul_priv_fips4096 / 1000.0)) << " ops/s"
+                  << " (vs unroll64_4096: " << (t_mul_priv_unroll64_4096 / t_mul_priv_fips4096) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips4096: " << t_sqr_priv_fips4096 << " ms, "
+                  << (op_count / (t_sqr_priv_fips4096 / 1000.0)) << " ops/s"
+                  << " (vs fips4096_mul: " << (t_mul_priv_fips4096 / t_sqr_priv_fips4096) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips4096_mt4: " << t_mul_priv_fips4096_mt4 << " ms, "
+                  << (op_count / (t_mul_priv_fips4096_mt4 / 1000.0)) << " ops/s"
+                  << " (vs fips4096: " << (t_mul_priv_fips4096 / t_mul_priv_fips4096_mt4) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips4096_mt4: " << t_sqr_priv_fips4096_mt4 << " ms, "
+                  << (op_count / (t_sqr_priv_fips4096_mt4 / 1000.0)) << " ops/s"
+                  << " (vs fips4096: " << (t_sqr_priv_fips4096 / t_sqr_priv_fips4096_mt4) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips4096_mt8: " << t_mul_priv_fips4096_mt8 << " ms, "
+                  << (op_count / (t_mul_priv_fips4096_mt8 / 1000.0)) << " ops/s"
+                  << " (vs fips4096: " << (t_mul_priv_fips4096 / t_mul_priv_fips4096_mt8) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips4096_mt8: " << t_sqr_priv_fips4096_mt8 << " ms, "
+                  << (op_count / (t_sqr_priv_fips4096_mt8 / 1000.0)) << " ops/s"
+                  << " (vs fips4096: " << (t_sqr_priv_fips4096 / t_sqr_priv_fips4096_mt8) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips4096_mt16: " << t_mul_priv_fips4096_mt16 << " ms, "
+                  << (op_count / (t_mul_priv_fips4096_mt16 / 1000.0)) << " ops/s"
+                  << " (vs fips4096: " << (t_mul_priv_fips4096 / t_mul_priv_fips4096_mt16) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips4096_mt16: " << t_sqr_priv_fips4096_mt16 << " ms, "
+                  << (op_count / (t_sqr_priv_fips4096_mt16 / 1000.0)) << " ops/s"
+                  << " (vs fips4096: " << (t_sqr_priv_fips4096 / t_sqr_priv_fips4096_mt16) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips4096_mt8_cs: " << t_mul_priv_fips4096_mt8_cs << " ms, "
+                  << (op_count / (t_mul_priv_fips4096_mt8_cs / 1000.0)) << " ops/s"
+                  << " (vs fips4096: " << (t_mul_priv_fips4096 / t_mul_priv_fips4096_mt8_cs) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips4096_mt8_cs: " << t_sqr_priv_fips4096_mt8_cs << " ms, "
+                  << (op_count / (t_sqr_priv_fips4096_mt8_cs / 1000.0)) << " ops/s"
+                  << " (vs fips4096: " << (t_sqr_priv_fips4096 / t_sqr_priv_fips4096_mt8_cs) << "x)" << std::endl;
+        std::cout << "mont_mul_priv_fips4096_mt16_cs: " << t_mul_priv_fips4096_mt16_cs << " ms, "
+                  << (op_count / (t_mul_priv_fips4096_mt16_cs / 1000.0)) << " ops/s"
+                  << " (vs fips4096: " << (t_mul_priv_fips4096 / t_mul_priv_fips4096_mt16_cs) << "x)" << std::endl;
+        std::cout << "mont_sqr_priv_fips4096_mt16_cs: " << t_sqr_priv_fips4096_mt16_cs << " ms, "
+                  << (op_count / (t_sqr_priv_fips4096_mt16_cs / 1000.0)) << " ops/s"
+                  << " (vs fips4096: " << (t_sqr_priv_fips4096 / t_sqr_priv_fips4096_mt16_cs) << "x)" << std::endl;
     }
 
     if (use_wg) {

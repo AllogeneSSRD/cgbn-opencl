@@ -358,7 +358,8 @@ static void curves_from_montgomery(uint32_t *data, uint32_t curves, uint32_t lim
 
 static int selftest_opencl_mont_mul(const mpz_t N, uint32_t bits, uint32_t np0) {
     const uint32_t limbs = bits / 32;
-    std::string mont_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont.cl");
+    std::string mont_src =
+        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont.cl");
     if (mont_src.empty()) {
         return -1;
     }
@@ -655,15 +656,14 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
     }
     g_device_info_printed = false;
 
-    std::string mont_priv =
-        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_priv_opt.cl");
     std::string ecm_src =
-        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_stage1.cl");
-    if (mont_priv.empty() || ecm_src.empty()) {
-        ecm_ts_fprintf(stderr, "OpenCL: failed to load kernel sources (run from project root)\n");
+        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/ecm_stage1.cl");
+    if (ecm_src.empty()) {
+        ecm_ts_fprintf(stderr,
+                       "OpenCL: failed to load ecm_stage1.cl (set CGBN_KERNEL_ROOT or run from project root)\n");
         return -1;
     }
-    std::string src = mont_priv + "\n" + ecm_src;
+    std::string src = ecm_src;
     int stage1_force_normalize = 1;
     int add_mod_fused_unroll = 2;
     if (const char *v = std::getenv("ECM_STAGE1_FORCE_NORMALIZE")) stage1_force_normalize = std::atoi(v);
