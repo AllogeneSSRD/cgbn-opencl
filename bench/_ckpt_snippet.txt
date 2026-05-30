@@ -1,0 +1,246 @@
+﻿typedef struct {
+  uint32_t magic;            // Magic number for validation
+  uint32_t version;          // Checkpoint format version
+  uint64_t s_partial;        // Current bit progress
+  uint64_t s_num_bits;       // Total bits to process
+  int32_t batches_complete;  // Number of completed batches
+  uint32_t curves;           // Number of curves
+  uint32_t sigma;            // Starting sigma value
+  uint32_t BITS;             // Kernel bit size
+  uint32_t TPI;              // Threads per instance (needed for kernel selection)
+  size_t data_size;          // Size of GPU data
+  time_t timestamp;          // When checkpoint was created
+} checkpoint_header_t;
+
+/**
+ * Get checkpoint filename for given N (more readable format)
+ * Uses bit length and first/last few hex chars as identifier
+ */
+static
+char* get_checkpoint_filename(const mpz_t N) {
+  static char filename[512];
+  
+  size_t nbits = mpz_sizeinbase(N, 2);
+  
+  // Get first and last few chars of N in hex for unique identifier.
+  // Use GMP-allocated buffer to avoid stack overflow for large N.
+  char *N_str = mpz_get_str(NULL, 16, N);
+  if (N_str == NULL) {
+    snprintf(filename, sizeof(filename), ".ecm_ckpt_%zu_alloc_fail.dat", nbits);
+    return filename;
+  }
+
+  size_t len = strlen(N_str);
+  char first_hex[16] = {0};
+  char last_hex[16] = {0};
+  
+  // First 8 chars (or less if N is small)
+  strncpy(first_hex, N_str, (len >= 8) ? 8 : len);
+  // Last 8 chars
+  if (len > 8) {
+    strncpy(last_hex, N_str + len - 8, 8);
+  }
+  
+  // Format: .ecm_ckpt_<nbits>_<first8>_<last8>.dat
+  // Example: .ecm_ckpt_127_7fffffff_ffffffff.dat (much more readable than full hex)
+  if (len > 8 && last_hex[0] != '\0') {
+    snprintf(filename, sizeof(filename), ".ecm_ckpt_%zu_%s_%s.dat", nbits, first_hex, last_hex);
+  } else {
+    snprintf(filename, sizeof(filename), ".ecm_ckpt_%zu_%s.dat", nbits, first_hex);
+  }
+
+  free(N_str);
+  
+  return filename;
+}
+
+/**
+ * Save checkpoint to file
+ */
+static
+int save_checkpoint(const char *filename, 
+                    const checkpoint_header_t *header,
+                    const uint32_t *data, 
+                    size_t data_size) {
+  FILE *f = fopen(filename, "wb");
+  if (!f) {
+    outputf(OUTPUT_ALWAYS, "Warning: Could not open checkpoint file '%s' for writing\n", filename);
+    return ECM_ERROR;
+  }
+  
+  // Write header
+  if (fwrite(header, sizeof(checkpoint_header_t), 1, f) != 1) {
+    outputf(OUTPUT_ERROR, "Error writing checkpoint header\n");
+    fclose(f);
+    return ECM_ERROR;
+  }
+  
+  // Write data
+  if (fwrite(data, 1, data_size, f) != data_size) {
+    outputf(OUTPUT_ERROR, "Error writing checkpoint data\n");
+    fclose(f);
+    return ECM_ERROR;
+  }
+  
+  fclose(f);
+  outputf(OUTPUT_VERBOSE, "Checkpoint saved: s_partial=%lu/%lu (%.1f%%)\n", 
+          header->s_partial, header->s_num_bits, 
+          100.0 * header->s_partial / header->s_num_bits);
+  return ECM_NO_FACTOR_FOUND;
+}
+
+/**
+ * Load checkpoint from file if it exists
+ * Returns 0 if successful, -1 if file doesn't exist or is invalid
+ */
+static
+int load_checkpoint(const char *filename,
+                    checkpoint_header_t *header,
+                    uint32_t **data_ptr,
+                    size_t *data_size_ptr) {
+  FILE *f = fopen(filename, "rb");
+  if (!f) {
+    // File doesn't exist - this is normal on first run
+    return -1;
+  }
+  
+  // Read and validate header
+  checkpoint_header_t temp_header;
+  if (fread(&temp_header, sizeof(checkpoint_header_t), 1, f) != 1) {
+    outputf(OUTPUT_ALWAYS, "Warning: Could not read checkpoint header\n");
+    fclose(f);
+    return -1;
+  }
+  
+  if (temp_header.magic != CHECKPOINT_MAGIC) {
+    outputf(OUTPUT_ALWAYS, "Warning: Checkpoint file has invalid magic number\n");
+    fclose(f);
+    return -1;
+  }
+  
+  if (temp_header.version != CHECKPOINT_VERSION) {
+    outputf(OUTPUT_ALWAYS, "Warning: Checkpoint version mismatch (expected %d, got %d)\n", 
+            CHECKPOINT_VERSION, temp_header.version);
+    fclose(f);
+    return -1;
+  }
+  
+  // Allocate memory for data
+  uint32_t *data = (uint32_t*) malloc(temp_header.data_size);
+  if (!data) {
+    outputf(OUTPUT_ERROR, "Error: Could not allocate memory for checkpoint data\n");
+    fclose(f);
+    return -1;
+  }
+  
+  // Read data
+  if (fread(data, 1, temp_header.data_size, f) != temp_header.data_size) {
+    outputf(OUTPUT_ALWAYS, "Warning: Could not read checkpoint data completely\n");
+    free(data);
+    fclose(f);
+    return -1;
+  }
+  
+  fclose(f);
+  
+  *header = temp_header;
+  *data_ptr = data;
+  *data_size_ptr = temp_header.data_size;
+  
+  time_t now = time(NULL);
+  time_t age = now - temp_header.timestamp;
+  outputf(OUTPUT_NORMAL, "Checkpoint loaded: s_partial=%lu/%lu (%.1f%%), age=%ld seconds\n", 
+          temp_header.s_partial, temp_header.s_num_bits,
+          100.0 * temp_header.s_partial / temp_header.s_num_bits, age);
+  
+  return ECM_NO_FACTOR_FOUND;
+}
+
+static
+FILE* open_dump_csv(const char *filename) {
+  FILE *f = fopen(filename, "w");
+  if (!f) {
+    outputf(OUTPUT_ALWAYS, "Warning: Could not open dump file '%s' for writing\n", filename);
+    return NULL;
+  }
+
+  fprintf(f,
+          "stage,batch_index,s_partial,batch_size,sigma,curve_index,BITS,TPI,word0,word1,word2,word3,word4\n");
+  return f;
+}
+
+static
+void dump_curve_state_csv(FILE *f,
+                          const char *stage,
+                          int batch_index,
+                          uint64_t s_partial,
+                          uint64_t batch_size,
+                          uint32_t sigma,
+                          uint32_t BITS,
+                          uint32_t TPI,
+                          const uint32_t *data,
+                          uint32_t curves,
+                          size_t limbs_per) {
+  if (!f) {
+    return;
+  }
+
+  for (uint32_t i = 0; i < curves; i++) {
+    const uint32_t *datum = data + (5 * i * limbs_per);
+    fprintf(f, "%s,%d,%lu,%lu,%u,%u,%u,%u,", stage, batch_index, s_partial, batch_size, sigma, i, BITS, TPI);
+    for (uint32_t word = 0; word < 5; word++) {
+      if (word != 0) {
+        fputc(',', f);
+      }
+      fputs("0x", f);
+      const uint32_t *field = datum + (word * limbs_per);
+      for (size_t limb = limbs_per; limb > 0; limb--) {
+        fprintf(f, "%08x", field[limb - 1]);
+      }
+    }
+    fputc('\n', f);
+  }
+
+  fflush(f);
+}
+
+int cgbn_ecm_stage1(mpz_t *factors, int *array_found,
+             const mpz_t N, const mpz_t s,
+             uint32_t curves, uint32_t *sigma_ptr,
+             unsigned long checkpoint_interval_ms,
+             float *gputime, int verbose)
+{
+  uint32_t sigma = *sigma_ptr;
+  assert( sigma > 0 );
+  assert( ((uint64_t) sigma + curves) <= 0xFFFFFFFF ); // no overflow
+
+  uint64_t s_num_bits;
+  uint32_t *s_bits = allocate_and_set_s_bits(s, &s_num_bits);
+  if (s_num_bits >= 4000000000)
+      outputf (OUTPUT_ALWAYS, "GPU: Very Large B1! Check magnitute of B1.\n");
+
+  if (s_num_bits >= 100000000)
+      outputf (OUTPUT_NORMAL, "GPU: Large B1, S = %'lu bits = %d MB\n",
+               s_num_bits, s_num_bits >> 23);
+  assert( s_bits != NULL );
+
+  cudaEvent_t global_start, batch_start, stop;
+  CUDA_CHECK(cudaEventCreate (&global_start));
+  CUDA_CHECK(cudaEventCreate (&batch_start));
+  CUDA_CHECK(cudaEventCreate (&stop));
+  CUDA_CHECK(cudaEventRecord (global_start));
+
+  // Copy s_bits
+  uint32_t *gpu_s_bits;
+  uint32_t s_words = (s_num_bits + 31) / 32;
+  CUDA_CHECK(cudaMalloc((void **)&gpu_s_bits, sizeof(uint32_t) * s_words));
+  CUDA_CHECK(cudaMemcpy(gpu_s_bits, s_bits, sizeof(uint32_t) * s_words, cudaMemcpyHostToDevice));
+
+  cgbn_error_report_t *report;
+  // create a cgbn_error_report for CGBN to report back errors
+  CUDA_CHECK(cgbn_error_report_alloc(&report));
+
+  size_t    data_size;
+  uint32_t *data, *gpu_data;
+
+  uint32_t  BITS = 0;        // kernel bi

@@ -1,0 +1,120 @@
+﻿    IPB = TPB / TPI;
+    BLOCK_COUNT = (curves + IPB - 1) / IPB;
+    outputf(OUTPUT_VERBOSE, "Checkpoint: restored BITS=%d, TPI=%d, BLOCK_COUNT=%lu\n", BITS, TPI, BLOCK_COUNT);
+  }
+
+  /* np0 is -(N^-1 mod 2**32), used for montgomery representation */
+  uint32_t np0 = find_np0(N);
+
+  // Copy data
+  outputf (OUTPUT_VERBOSE, "Copying %'lu bytes of curves data to GPU\n", data_size);
+  CUDA_CHECK(cudaMalloc((void **)&gpu_data, data_size));
+  CUDA_CHECK(cudaMemcpy(gpu_data, data, data_size, cudaMemcpyHostToDevice));
+
+  outputf (OUTPUT_VERBOSE,
+          "CGBN<%d, %d> running kernel<%d block x %d threads> input number is %d bits\n",
+          BITS, TPI, BLOCK_COUNT, TPB, n_log2);
+
+  /* Start with small batches and increase till timing is ~100ms */
+  uint64_t batch_size = 200;
+  
+  /* gputime and batch_time are measured in ms */
+  float batch_time = 0;
+  
+  /* Track time for checkpoint saving */
+  float last_checkpoint_time = 0;
+
+  // if (checkpoint_interval_ms > 86400000) { // > 1 day, treat as disabled
+  //   checkpoint_interval_ms = 86400000; // 1 day max
+  // }
+
+  if (checkpoint_interval_ms > 0) {
+    outputf(OUTPUT_NORMAL, "Checkpoint autosave interval: %lu ms (%.2f min)\n",
+            checkpoint_interval_ms, checkpoint_interval_ms / 1000.0 / 60.0);
+  } else {
+    outputf(OUTPUT_NORMAL, "Checkpoint autosave disabled\n");
+  }
+
+  if (dump_enable != 0) {
+    dump_file = open_dump_csv(dump_filename);
+    if (dump_file != NULL) {
+      dump_host = (uint32_t*) malloc(data_size);
+      if (dump_host == NULL) {
+        outputf(OUTPUT_ALWAYS, "Warning: Could not allocate host buffer for dump.csv\n");
+        fclose(dump_file);
+        dump_file = NULL;
+      } else {
+        outputf(OUTPUT_VERBOSE, "GPU dump enabled: writing kernel call states to %s\n", dump_filename);
+      }
+    }
+  }
+
+  while (s_partial < s_num_bits) {
+    /* decrease batch_size for final batch if needed */
+    batch_size = std::min(s_num_bits - s_partial, batch_size);
+
+    /* print ETA with lessing frequently, 5 early + 5 per 10s + 5 per 100s + every 1000s */
+    if (print_nth_batch (batches_complete)) {
+      outputf (OUTPUT_VERBOSE, "Computing %d bits/call, %lu/%lu (%.1f%%)",
+          batch_size, s_partial, s_num_bits, 100.0 * s_partial / s_num_bits);
+      if (batches_complete < 2 || *gputime < 1000) {
+        outputf (OUTPUT_VERBOSE, "\n");
+      } else {
+        float estimated_total = (*gputime) * ((float) s_num_bits) / s_partial;
+        float eta = estimated_total - (*gputime);
+        outputf (OUTPUT_VERBOSE, ", ETA %.f + %.f = %.f seconds (~%.f ms/curves)\n",
+                eta / 1000, *gputime / 1000, estimated_total / 1000,
+                estimated_total / curves);
+      }
+    }
+
+    CUDA_CHECK(cudaEventRecord (batch_start));
+
+    if (dump_file != NULL && dump_host != NULL) {
+      CUDA_CHECK(cudaMemcpy(dump_host, gpu_data, data_size, cudaMemcpyDeviceToHost));
+      dump_curve_state_csv(dump_file, "begin", batches_complete, s_partial, batch_size,
+                           sigma, BITS, TPI, dump_host, curves, BITS / 32);
+    }
+
+    /* Call CUDA Kernel. */
+    assert (kernel != NULL);
+    (*kernel)<<<BLOCK_COUNT, TPB>>>(report, s_num_bits, s_partial, batch_size, gpu_s_bits, gpu_data, curves, sigma, np0);
+
+    s_partial += batch_size;
+    batches_complete++;
+
+    /* error report uses managed memory, sync the device and check for cgbn errors */
+    CUDA_CHECK(cudaDeviceSynchronize());
+    if (report->_error)
+      outputf (OUTPUT_ERROR, "\n\nerror: %d\n", report->_error);
+    CGBN_CHECK(report);
+
+    if (dump_file != NULL && dump_host != NULL) {
+      CUDA_CHECK(cudaMemcpy(dump_host, gpu_data, data_size, cudaMemcpyDeviceToHost));
+      dump_curve_state_csv(dump_file, "end", batches_complete, s_partial, batch_size,
+                           sigma, BITS, TPI, dump_host, curves, BITS / 32);
+    }
+
+    CUDA_CHECK(cudaEventRecord (stop));
+    CUDA_CHECK(cudaEventSynchronize (stop));
+    cudaEventElapsedTime (&batch_time, batch_start, stop);
+    cudaEventElapsedTime (gputime, global_start, stop);
+    /* Adjust batch_size to aim for 100ms */
+    if (batch_time < 80) {
+      batch_size = 11*batch_size/10;
+    } else if (batch_time > 120) {
+      batch_size = max(100ul, 9*batch_size / 10);
+    }
+    
+    // ========== CHECKPOINT SAVING ==========
+    if (checkpoint_interval_ms > 0 &&
+      (*gputime - last_checkpoint_time) >= checkpoint_interval_ms) {
+      // Copy data back from GPU temporarily for checkpoint
+      CUDA_CHECK(cudaMemcpy(data, gpu_data, data_size, cudaMemcpyDeviceToHost));
+      
+      checkpoint_header_t header;
+      header.magic = CHECKPOINT_MAGIC;
+      header.version = CHECKPOINT_VERSION;
+      header.s_partial = s_partial;
+      header.s_num_bits = s_num_bits;
+      header.batches_complete = batches_complete;

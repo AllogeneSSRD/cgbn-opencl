@@ -35,8 +35,11 @@ add_executable(ecm
     src/cl_probe.cpp
     src/ecm_driver.cpp
     src/ecm_params_init.cpp
+    src/opencl_ecm_checkpoint.cpp
     src/opencl_ecm_debug_utils.cpp
     src/opencl_ecm_log.cpp
+    src/opencl_ecm_mont.cpp
+    src/opencl_ecm_selftest.cpp
 )
 
 target_include_directories(ecm PRIVATE

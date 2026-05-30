@@ -743,7 +743,8 @@ int main(int argc, char **argv){
     bool verbose = false;
     bool use_gpu = false;
     uint32_t gpucurves = 0;
-    unsigned long gpuckpt_ms = ECM_DEFAULT_GPU_CHECKPOINT_INTERVAL_MS;
+    double gpuckpt_seconds = -1.0;
+    bool gpuckpt_set = false;
     bool sigma_fixed = false;
     uint32_t fixed_sigma = 0;
     int gpu_device_index = 0;
@@ -757,7 +758,16 @@ int main(int argc, char **argv){
         if(a == "-v") { verbose = true; continue; }
         if(a == "-gpu") { use_gpu = true; continue; }
         if(a == "-gpucurves" && i+1<argc){ gpucurves = (uint32_t)std::stoul(argv[++i]); continue; }
-        if(a == "-gpuckpt" && i+1<argc){ gpuckpt_ms = (unsigned long) std::stoul(argv[++i]); continue; }
+        if(a == "-gpuckpt" && i+1<argc){
+            try {
+                gpuckpt_seconds = std::stod(argv[++i]);
+                gpuckpt_set = true;
+            } catch (...) {
+                std::cerr << "Invalid -gpuckpt value, expected number of seconds" << std::endl;
+                return 1;
+            }
+            continue;
+        }
         if(a == "-d" && i+1<argc){
             try {
                 gpu_device_index = std::stoi(argv[++i]);
@@ -796,10 +806,26 @@ int main(int argc, char **argv){
         pos.push_back(a);
     }
 
+    unsigned long gpuckpt_ms = ECM_DEFAULT_GPU_CHECKPOINT_INTERVAL_MS;
+    if (gpuckpt_set) {
+        const double val_ms = gpuckpt_seconds * 1000.0;
+        if (val_ms != val_ms) {
+            std::cerr << "Error, invalid -gpuckpt value (NaN)" << std::endl;
+            return 1;
+        }
+        if (val_ms <= 0.0) {
+            gpuckpt_ms = 0;
+        } else if (val_ms >= (double)ULONG_MAX) {
+            gpuckpt_ms = ULONG_MAX;
+        } else {
+            gpuckpt_ms = (unsigned long)std::llround(val_ms);
+        }
+    }
+
     std::cout << "ecm driver starting" << std::endl;
     std::cout << "  mode: " << (use_gpu ? "gpu" : "cpu-stub")
               << ", gpucurves=" << gpucurves
-              << ", gpuckpt_ms=" << gpuckpt_ms
+              << ", gpuckpt=" << (gpuckpt_ms == 0 ? 0.0 : gpuckpt_ms / 1000.0) << "s"
               << ", device=" << gpu_device_index
               << ", group_order=" << (print_group_order ? "on" : "off") << std::endl;
     if(!pos.empty()){
