@@ -174,6 +174,14 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_bench.cl");
     std::string mont_priv_opt =
         cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_opt.cl");
+    std::string mont_mul_manual_src = cgbn::opencl::load_kernel_file(
+        "cgbn/backends/opencl/kernels/mont_mul_unroll_only_512_manual_generated.cl");
+    std::string mont_mul_asm_fused_src =
+        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_mul_asm_fused.cl");
+    std::string mont_mul_asm_block8_src = cgbn::opencl::load_text_file(
+        "cgbn/backends/opencl/kernels/mont_mul_asm_block8_generated.cl");
+    std::string mont_mul_asm_src = cgbn::opencl::load_text_file(
+        "cgbn/backends/opencl/kernels/mont_mul_asm_512_generated.cl");
     std::string mont_priv_opt_bench_src =
         cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_opt_bench.cl");
     std::string mont_wg_src =
@@ -184,6 +192,20 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         mont_priv_opt_bench_src.empty()) {
         std::cerr << "Failed to load mont_priv / mont_priv_opt kernel sources" << std::endl;
         return false;
+    }
+    if (WORDS == 16u && mont_mul_manual_src.empty()) {
+        std::cerr << "Warning: mont_mul_unroll_only_512_manual_generated.cl missing; run "
+                     "tools/gen_mont_mul_unroll_only_512_manual.py\n";
+    }
+    bool mont_mul_asm_enabled = false;
+    if (WORDS == 16u) {
+        if (mont_mul_asm_fused_src.empty() || mont_mul_asm_block8_src.empty() ||
+            mont_mul_asm_src.empty()) {
+            std::cerr << "Warning: mont_mul_asm*.cl missing; run tools/gen_mont_mul_asm_512.py and "
+                         "tools/gen_mont_mul_asm_block8.py\n";
+        } else {
+            mont_mul_asm_enabled = true;
+        }
     }
     if (use_wg && (mont_wg_src.empty() || mont_wg_bench_src.empty())) {
         std::cerr << "Failed to load mont_wg sources" << std::endl;
@@ -198,8 +220,12 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     strip_include(mont_priv_bench_src, "#include \"mont_priv.cl\"");
     strip_include(mont_priv_opt_bench_src, "#include \"mont_priv_opt.cl\"");
     strip_include(mont_wg_bench_src, "#include \"mont_wg.cl\"");
-    const std::string mont_priv_all = mont_priv + "\n" + mont_priv_opt + "\n" + mont_priv_bench_src + "\n" +
-                                      mont_priv_opt_bench_src;
+    const std::string mont_priv_all = mont_priv + "\n" + mont_priv_opt + "\n" + mont_mul_manual_src +
+                                      (mont_mul_asm_enabled
+                                           ? ("\n" + mont_mul_asm_fused_src + "\n" +
+                                              mont_mul_asm_block8_src + "\n" + mont_mul_asm_src)
+                                           : std::string()) +
+                                      "\n" + mont_priv_bench_src + "\n" + mont_priv_opt_bench_src;
     std::string src;
     if (use_wg) {
         src = mont_wg_src + "\n" + mont_priv_all + "\n" + mont_wg_bench_src;
@@ -222,9 +248,16 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         }
     }
     char build_opts[256];
-    snprintf(build_opts, sizeof(build_opts),
-             "-DMAX_LIMBS=%u -DTPI=%d -DMONT_WG_IMPL=%d -DMONT_WG_IMPL4_UNROLL=%d",
-             WORDS, tpi, wg_impl, impl4_unroll);
+    if (mont_mul_asm_enabled) {
+        snprintf(build_opts, sizeof(build_opts),
+                 "-DMAX_LIMBS=%u -DTPI=%d -DMONT_WG_IMPL=%d -DMONT_WG_IMPL4_UNROLL=%d "
+                 "-DMONT_MUL_ASM_ENABLE=1",
+                 WORDS, tpi, wg_impl, impl4_unroll);
+    } else {
+        snprintf(build_opts, sizeof(build_opts),
+                 "-DMAX_LIMBS=%u -DTPI=%d -DMONT_WG_IMPL=%d -DMONT_WG_IMPL4_UNROLL=%d",
+                 WORDS, tpi, wg_impl, impl4_unroll);
+    }
     std::cout << "WG build opts: impl=" << wg_impl
               << " impl4_unroll=" << impl4_unroll << std::endl;
     cl_program program = cgbn::opencl::build_program_from_source(
@@ -674,9 +707,23 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     if (!run_priv_opt("ecm_mont_sqr_priv_opt_bench", false, t_sqr_priv_opt)) return false;
 
     double t_mul_priv_unroll_only_512 = 0.0, t_sqr_priv_unroll_only_512 = 0.0;
+    double t_mul_priv_unroll_only_512_manual = 0.0;
+    double t_mul_priv_unroll_only_512_asm = 0.0;
     if (!run_priv_unroll_kernel("ecm_mont_mul_priv_unroll_only_512_bench", true, 16u,
                                 t_mul_priv_unroll_only_512)) {
         return false;
+    }
+    if (!mont_mul_manual_src.empty()) {
+        if (!run_priv_unroll_kernel("ecm_mont_mul_priv_unroll_only_512_manual_bench", true, 16u,
+                                    t_mul_priv_unroll_only_512_manual)) {
+            return false;
+        }
+    }
+    if (mont_mul_asm_enabled) {
+        if (!run_priv_unroll_kernel("ecm_mont_mul_priv_unroll_only_512_asm_bench", true, 16u,
+                                    t_mul_priv_unroll_only_512_asm)) {
+            return false;
+        }
     }
     if (!run_priv_unroll_kernel("ecm_mont_sqr_priv_unroll_only_512_bench", false, 16u,
                                 t_sqr_priv_unroll_only_512)) {
@@ -823,6 +870,60 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
 
         if (!run_verify_kernel("ecm_mont_mul_priv_bench", true, false, out_base)) return false;
         if (!run_verify_kernel("ecm_mont_mul_priv_opt_bench", true, true, out_opt)) return false;
+        if (WORDS == 16u && !mont_mul_manual_src.empty()) {
+            std::vector<uint32_t> out_unroll512(WORDS), out_manual(WORDS), out_asm(WORDS);
+            auto run_fixed_verify = [&](const char *kname, std::vector<uint32_t> &out_buf) -> bool {
+                cl_int kerr = CL_SUCCESS;
+                cl_kernel k = clCreateKernel(program, kname, &kerr);
+                if (kerr != CL_SUCCESS) {
+                    std::cerr << "Create verify kernel " << kname << " failed: " << kerr << std::endl;
+                    return false;
+                }
+                clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+                clSetKernelArg(k, 1, sizeof(cl_mem), &bufB);
+                clSetKernelArg(k, 2, sizeof(cl_mem), &bufN_const);
+                clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(k, 4, sizeof(cl_mem), &bufNp0_const);
+                clSetKernelArg(k, 5, sizeof(cl_uint), &limbs);
+                clSetKernelArg(k, 6, sizeof(cl_uint), &verify_iters);
+                size_t g = 1;
+                cl_int err2 = clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(k);
+                if (err2 != CL_SUCCESS) {
+                    std::cerr << "Enqueue verify " << kname << " failed: " << err2 << std::endl;
+                    return false;
+                }
+                err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                           out_buf.data(), 0, nullptr, nullptr);
+                return err2 == CL_SUCCESS;
+            };
+            if (!run_fixed_verify("ecm_mont_mul_priv_unroll_only_512_bench", out_unroll512)) return false;
+            if (!run_fixed_verify("ecm_mont_mul_priv_unroll_only_512_manual_bench", out_manual)) return false;
+            bool match_manual = true;
+            for (size_t i = 0; i < WORDS; ++i) {
+                if (out_manual[i] != out_unroll512[i]) {
+                    match_manual = false;
+                    break;
+                }
+            }
+            std::cout << "  [unroll_only_512 vs manual] " << (match_manual ? "MATCH" : "MISMATCH")
+                      << std::endl;
+            if (!match_manual) return false;
+            if (mont_mul_asm_enabled) {
+                if (!run_fixed_verify("ecm_mont_mul_priv_unroll_only_512_asm_bench", out_asm)) return false;
+                bool match_asm = true;
+                for (size_t i = 0; i < WORDS; ++i) {
+                    if (out_asm[i] != out_unroll512[i]) {
+                        match_asm = false;
+                        break;
+                    }
+                }
+                std::cout << "  [unroll_only_512 vs asm] " << (match_asm ? "MATCH" : "MISMATCH")
+                          << std::endl;
+                if (!match_asm) return false;
+            }
+        }
         bool mul_match = true;
         for (uint32_t i = 0; i < WORDS; ++i) {
             if (out_base[i] != out_opt[i]) {
@@ -872,6 +973,18 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         std::cout << "mont_mul_priv_unroll_only_512: " << t_mul_priv_unroll_only_512 << " ms, "
                   << (op_count / (t_mul_priv_unroll_only_512 / 1000.0)) << " ops/s"
                   << " (vs opt: " << (t_mul_priv_opt / t_mul_priv_unroll_only_512) << "x)" << std::endl;
+        if (!mont_mul_manual_src.empty()) {
+            std::cout << "mont_mul_priv_unroll_only_512_manual: " << t_mul_priv_unroll_only_512_manual
+                      << " ms, " << (op_count / (t_mul_priv_unroll_only_512_manual / 1000.0)) << " ops/s"
+                      << " (vs unroll_only_512: "
+                      << (t_mul_priv_unroll_only_512 / t_mul_priv_unroll_only_512_manual) << "x)" << std::endl;
+        }
+        if (mont_mul_asm_enabled) {
+            std::cout << "mont_mul_priv_unroll_only_512_asm: " << t_mul_priv_unroll_only_512_asm
+                      << " ms, " << (op_count / (t_mul_priv_unroll_only_512_asm / 1000.0)) << " ops/s"
+                      << " (vs unroll_only_512: "
+                      << (t_mul_priv_unroll_only_512 / t_mul_priv_unroll_only_512_asm) << "x)" << std::endl;
+        }
         std::cout << "mont_sqr_priv_unroll_only_512: " << t_sqr_priv_unroll_only_512 << " ms, "
                   << (op_count / (t_sqr_priv_unroll_only_512 / 1000.0)) << " ops/s"
                   << " (vs opt: " << (t_sqr_priv_opt / t_sqr_priv_unroll_only_512) << "x)" << std::endl;

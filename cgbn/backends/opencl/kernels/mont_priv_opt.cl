@@ -385,9 +385,14 @@ static inline void mont_mul_priv_unroll_only_512_body(
         borrow = (tv < nv + borrow) ? 1ul : 0ul;
     }
 
-    uint need_sub = (t[MONT_OPT2_FIXED_LIMBS] != 0u || t[MONT_OPT2_FIXED_LIMBS + 1u] != 0u) ? 1u : 0u;
-    need_sub = (borrow == 0u) ? 1u : need_sub;
-    uint mask = 0u - need_sub;
+    // uint need_sub = (t[MONT_OPT2_FIXED_LIMBS] != 0u || t[MONT_OPT2_FIXED_LIMBS + 1u] != 0u) ? 1u : 0u;
+    // need_sub = (borrow == 0u) ? 1u : need_sub;
+    // uint mask = 0u - need_sub;
+    uint any_high = (t[MONT_OPT2_FIXED_LIMBS] | t[MONT_OPT2_FIXED_LIMBS + 1u]) != 0u;    // 0 或 1
+    uint no_borrow = (borrow == 0u);          // 0 或 1
+    uint need_sub = any_high | no_borrow;     // 需要减法 -> 1
+    uint mask = 0u - need_sub;                // 0xFFFFFFFF 或 0
+
     #pragma unroll
     for (uint i = 0u; i < MONT_OPT2_FIXED_LIMBS; ++i) {
         out[base + i] = (D[i] & mask) | (t[i] & ~mask);

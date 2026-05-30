@@ -2,6 +2,7 @@
 .vscode/
 .github/
 .refactor/
+.opencl_cache
 test/bench
 test\bench
 build/
