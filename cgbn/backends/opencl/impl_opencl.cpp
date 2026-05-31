@@ -1,4 +1,5 @@
 #include "cgbn_opencl.h"
+#include <chrono>
 #include <cstring>
 #include <cstdlib>
 #include <fstream>
@@ -67,6 +68,13 @@ static bool cache_enabled() {
 
 static bool cache_verbose() {
     if (const char *v = std::getenv("CGBN_OPENCL_CACHE_VERBOSE")) {
+        return (*v == '1');
+    }
+    return false;
+}
+
+static bool compile_verbose() {
+    if (const char *v = std::getenv("CGBN_OPENCL_COMPILE_VERBOSE")) {
         return (*v == '1');
     }
     return false;
@@ -219,8 +227,10 @@ cl_program build_program_from_source(context_t &ctx, const char *source, const c
     const std::string cache_dir = cache_root_dir();
     const bool use_cache = cache_enabled();
     const bool verbose = cache_verbose();
+    const bool compile_log = compile_verbose();
 
     if (use_cache) {
+        const auto cache_t0 = std::chrono::steady_clock::now();
         ensure_cache_dir_exists(cache_dir);
         std::vector<unsigned char> bin;
         if (load_program_binary(cache_path, bin) && !bin.empty()) {
@@ -236,6 +246,12 @@ cl_program build_program_from_source(context_t &ctx, const char *source, const c
                 if (err == CL_SUCCESS) {
                     if (verbose) {
                         std::cerr << "OpenCL cache hit: " << cache_path << std::endl;
+                    }
+                    if (compile_log) {
+                        const double cache_ms = std::chrono::duration<double, std::milli>(
+                                                    std::chrono::steady_clock::now() - cache_t0)
+                                                    .count();
+                        std::cerr << "OpenCL cache load+build: " << cache_ms << " ms" << std::endl;
                     }
                     errcode = CL_SUCCESS;
                     return program;
@@ -259,7 +275,15 @@ cl_program build_program_from_source(context_t &ctx, const char *source, const c
         return nullptr;
     }
 
+    const auto build_t0 = std::chrono::steady_clock::now();
     err = clBuildProgram(program, 1, &ctx.device, options, NULL, NULL);
+    if (compile_log) {
+        const double build_ms = std::chrono::duration<double, std::milli>(
+                                    std::chrono::steady_clock::now() - build_t0)
+                                    .count();
+        std::cerr << "OpenCL clBuildProgram: " << build_ms << " ms"
+                  << " (src=" << src_len / 1024u << " KiB)" << std::endl;
+    }
     if (err != CL_SUCCESS) {
         size_t log_size = 0;
         clGetProgramBuildInfo(program, ctx.device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);

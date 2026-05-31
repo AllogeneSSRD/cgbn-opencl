@@ -107,6 +107,12 @@ def emit_kernel_128() -> str:
         asm_fused_block32(a_g + base + off, b_g + base + off, n_g + base + off,
                           out + base + off, ca, cs, &ca, &cs);
     }"""
+    loop_b64 = """    uint ca = 0u, cs = 1u;
+    for (uint blk = 0u; blk < 2u; ++blk) {
+        uint off = blk * 64u;
+        asm_fused_block64(a_g + base + off, b_g + base + off, n_g + base + off,
+                          out + base + off, ca, cs, &ca, &cs);
+    }"""
     loop_soft = loop_b8.replace("asm_fused_block8", "asm_fused_block8_vccsoft")
     loop_asmfix = loop_b8.replace("asm_fused_block8", "asm_fused_block8_asmfix")
     return f"""
@@ -164,6 +170,17 @@ __kernel void ecm_mp_add_mod_fused_unroll_asm_b32(
     uint base = get_global_id(0) * 128u;
 {loop_b32}
 }}
+
+#if MP_ADDMOD_ASM_B64
+__kernel void ecm_mp_add_mod_fused_unroll_asm_b64(
+    __global const uint *a_g, __global const uint *b_g, __global const uint *n_g,
+    __global uint *out, uint limbs)
+{{
+    if (limbs != 128u) return;
+    uint base = get_global_id(0) * 128u;
+{loop_b64}
+}}
+#endif
 #endif
 
 """

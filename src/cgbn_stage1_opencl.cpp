@@ -733,7 +733,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     const char *mont_sqr_op = (limbs == 16u) ? "mont_sqr_priv_unroll_only_512"
                              : (limbs == 128u) ? opencl_ecm_mont4096_path_name(sqr_path)
                                                : "mont_sqr_priv_unroll32";
-    const char *addmod_op = (limbs == 128u) ? "mp_add_mod_fused_unroll_asm_b32(path)"
+    const char *addmod_op = (limbs == 128u) ? "mp_add_mod_fused_unroll_b32_4096"
                                             : "mp_add_mod_fused_unroll(default)";
     ecm_ts_fprintf(stdout,
             "GPU: stage1 operators: mul=%s, sqr=%s, addmod=%s\n",

@@ -148,6 +148,22 @@ __kernel void ecm_mp_add_mod_fused_unroll_asm_b32(
                           out + base + off, ca, cs, &ca, &cs);
     }
 }
+
+#if MP_ADDMOD_ASM_B64
+__kernel void ecm_mp_add_mod_fused_unroll_asm_b64(
+    __global const uint *a_g, __global const uint *b_g, __global const uint *n_g,
+    __global uint *out, uint limbs)
+{
+    if (limbs != 128u) return;
+    uint base = get_global_id(0) * 128u;
+    uint ca = 0u, cs = 1u;
+    for (uint blk = 0u; blk < 2u; ++blk) {
+        uint off = blk * 64u;
+        asm_fused_block64(a_g + base + off, b_g + base + off, n_g + base + off,
+                          out + base + off, ca, cs, &ca, &cs);
+    }
+}
+#endif
 #endif
 
 #endif
