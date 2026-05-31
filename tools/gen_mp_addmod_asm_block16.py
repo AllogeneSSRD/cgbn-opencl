@@ -4,7 +4,7 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "cgbn/backends/opencl/kernels/mp_addmod_asm_block16_generated.cl"
+OUT = ROOT / "cgbn/backends/opencl/kernels/mp_addsub/generated/asm_block16.cl"
 
 N = 16
 

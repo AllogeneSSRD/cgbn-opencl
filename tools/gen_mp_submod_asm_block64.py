@@ -6,7 +6,7 @@ from pathlib import Path
 from mp_asm_block_gen import write_sub_block_file
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "cgbn/backends/opencl/kernels/mp_submod_asm_block64_generated.cl"
+OUT = ROOT / "cgbn/backends/opencl/kernels/mp_addsub/generated/asm_sub_block64.cl"
 
 
 def main() -> None:

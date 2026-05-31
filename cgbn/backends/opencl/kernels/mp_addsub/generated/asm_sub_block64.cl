@@ -2,10 +2,15 @@
 #if defined(MP_ADDMOD_ASM_ENABLE) && defined(__AMDGCN__)
 
 
-// 64-limb fused sub-mod block; streaming __global (4096-bit unroll).
+
+// 64-limb fused sub-mod block (global bench).
+
 static inline void asm_sub_fused_block64(__global const uint *a, __global const uint *b,
+
                                         __global const uint *n, __global uint *r, uint br_in,
+
                                         uint *br_out) {
+
     uint a0 = a[0];
     uint a1 = a[1];
     uint a2 = a[2];
@@ -199,11 +204,17 @@ static inline void asm_sub_fused_block64(__global const uint *a, __global const 
     uint n62 = n[62];
     uint n63 = n[63];
     uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47, r48, r49, r50, r51, r52, r53, r54, r55, r56, r57, r58, r59, r60, r61, r62, r63;
+
     uint br = 0u;
+
     const uint z = 0u, o = 1u;
+
     uint br_bit = br_in ? o : z;
 
+
+
     __asm volatile(
+
         "v_cmp_eq_u32    vcc_lo, %[br_bit], %[o]\n\t"
         "v_sub_co_ci_u32 %[r0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
         "v_sub_co_ci_u32 %[r1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
@@ -270,15 +281,26 @@ static inline void asm_sub_fused_block64(__global const uint *a, __global const 
         "v_sub_co_ci_u32 %[r62], vcc_lo, %[a62], %[b62], vcc_lo\n\t"
         "v_sub_co_ci_u32 %[r63], vcc_lo, %[a63], %[b63], vcc_lo\n\t"
         "v_cndmask_b32   %[br], %[z], %[o], vcc_lo"
+
         : [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31), [r32] "=&v"(r32), [r33] "=&v"(r33), [r34] "=&v"(r34), [r35] "=&v"(r35), [r36] "=&v"(r36), [r37] "=&v"(r37), [r38] "=&v"(r38), [r39] "=&v"(r39), [r40] "=&v"(r40), [r41] "=&v"(r41), [r42] "=&v"(r42), [r43] "=&v"(r43), [r44] "=&v"(r44), [r45] "=&v"(r45), [r46] "=&v"(r46), [r47] "=&v"(r47), [r48] "=&v"(r48), [r49] "=&v"(r49), [r50] "=&v"(r50), [r51] "=&v"(r51), [r52] "=&v"(r52), [r53] "=&v"(r53), [r54] "=&v"(r54), [r55] "=&v"(r55), [r56] "=&v"(r56), [r57] "=&v"(r57), [r58] "=&v"(r58), [r59] "=&v"(r59), [r60] "=&v"(r60), [r61] "=&v"(r61), [r62] "=&v"(r62), [r63] "=&v"(r63),
+
           [br] "=&v"(br)
+
         : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31), [a32] "v"(a32), [b32] "v"(b32), [a33] "v"(a33), [b33] "v"(b33), [a34] "v"(a34), [b34] "v"(b34), [a35] "v"(a35), [b35] "v"(b35), [a36] "v"(a36), [b36] "v"(b36), [a37] "v"(a37), [b37] "v"(b37), [a38] "v"(a38), [b38] "v"(b38), [a39] "v"(a39), [b39] "v"(b39), [a40] "v"(a40), [b40] "v"(b40), [a41] "v"(a41), [b41] "v"(b41), [a42] "v"(a42), [b42] "v"(b42), [a43] "v"(a43), [b43] "v"(b43), [a44] "v"(a44), [b44] "v"(b44), [a45] "v"(a45), [b45] "v"(b45), [a46] "v"(a46), [b46] "v"(b46), [a47] "v"(a47), [b47] "v"(b47), [a48] "v"(a48), [b48] "v"(b48), [a49] "v"(a49), [b49] "v"(b49), [a50] "v"(a50), [b50] "v"(b50), [a51] "v"(a51), [b51] "v"(b51), [a52] "v"(a52), [b52] "v"(b52), [a53] "v"(a53), [b53] "v"(b53), [a54] "v"(a54), [b54] "v"(b54), [a55] "v"(a55), [b55] "v"(b55), [a56] "v"(a56), [b56] "v"(b56), [a57] "v"(a57), [b57] "v"(b57), [a58] "v"(a58), [b58] "v"(b58), [a59] "v"(a59), [b59] "v"(b59), [a60] "v"(a60), [b60] "v"(b60), [a61] "v"(a61), [b61] "v"(b61), [a62] "v"(a62), [b62] "v"(b62), [a63] "v"(a63), [b63] "v"(b63),
+
           [br_bit] "v"(br_bit), [z] "v"(z), [o] "v"(o)
+
         : "vcc_lo");
 
+
+
     if (br != 0u) {
+
         c_fix_add_n64(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, &r32, &r33, &r34, &r35, &r36, &r37, &r38, &r39, &r40, &r41, &r42, &r43, &r44, &r45, &r46, &r47, &r48, &r49, &r50, &r51, &r52, &r53, &r54, &r55, &r56, &r57, &r58, &r59, &r60, &r61, &r62, &r63, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47, n48, n49, n50, n51, n52, n53, n54, n55, n56, n57, n58, n59, n60, n61, n62, n63);
+
     }
+
+
 
     r[0] = r0;
     r[1] = r1;
@@ -345,5 +367,7 @@ static inline void asm_sub_fused_block64(__global const uint *a, __global const 
     r[62] = r62;
     r[63] = r63;
     *br_out = br;
+
 }
+
 #endif

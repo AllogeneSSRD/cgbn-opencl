@@ -566,10 +566,10 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
         opencl_ecm_addsub_path_needs_asm_b32(sub_path);
     if (needs_asm_b32) {
         std::string asm_src = cgbn::opencl::load_kernel_file(
-            "cgbn/backends/opencl/kernels/mp_addsub_asm_block32_stage1_generated.cl");
+            "cgbn/backends/opencl/kernels/mp_addsub/stage1/asm_block32_stage1.cl");
         if (asm_src.empty()) {
             ecm_ts_fprintf(stderr,
-                           "OpenCL: failed to load mp_addsub_asm_block32_stage1_generated.cl "
+                           "OpenCL: failed to load mp_addsub/stage1/asm_block32_stage1.cl "
                            "(run tools/gen_mp_addsub_asm_block32_stage1.py)\n");
             return -1;
         }

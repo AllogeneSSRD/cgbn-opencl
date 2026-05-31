@@ -78,6 +78,7 @@ target_link_libraries(main
 
 add_executable(opencl_ecm_addsub
     src/opencl_ecm_addsub_bench.cpp
+    src/opencl_ecm_addsub_manifest.cpp
 )
 
 target_include_directories(opencl_ecm_addsub PRIVATE
@@ -146,6 +147,7 @@ target_link_libraries(opencl_mont_isa_export
 add_executable(opencl_addsub_isa_export
     src/cl_probe.cpp
     src/opencl_addsub_isa_export.cpp
+    src/opencl_ecm_addsub_manifest.cpp
 )
 
 target_include_directories(opencl_addsub_isa_export PRIVATE

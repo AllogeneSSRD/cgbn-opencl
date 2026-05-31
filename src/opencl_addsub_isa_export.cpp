@@ -1,5 +1,6 @@
 #include "cl_probe.h"
 #include "cgbn_opencl.h"
+#include "opencl_ecm_addsub_manifest.h"
 
 #include <CL/cl.h>
 
@@ -76,23 +77,22 @@ int main(int argc, char **argv) {
         cgbn::opencl::destroy_context(ctx);
         return 1;
     }
-    if (limbs == 128u || limbs == 8u) {
-        const std::string unroll_src =
-            cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mp_addmod_unroll_generated.cl");
-        const std::string asm_base =
-            cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mp_addmod_asm_fused.cl");
-        const std::string asm_gen =
-            cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mp_addmod_asm_fused_generated.cl");
-        if (!unroll_src.empty()) bench_src += "\n" + unroll_src;
-        if (!asm_base.empty() && !asm_gen.empty()) {
-            bench_src += "\n" + asm_base + "\n" + asm_gen;
+    const bool asm_enabled = (limbs == 128u || limbs == 8u || limbs == 16u);
+    const bool asm_b64 = (limbs == 128u);
+    const EcmAddSubBuildManifest manifest =
+        opencl_ecm_addsub_build_manifest((uint32_t)limbs, asm_enabled, asm_b64);
+    for (const std::string &rel : manifest.source_paths) {
+        if (rel == "cgbn/backends/opencl/kernels/ecm_addsub_bench.cl") {
+            continue;
+        }
+        const std::string extra = cgbn::opencl::load_text_file(rel.c_str());
+        if (!extra.empty()) {
+            bench_src += "\n" + extra;
         }
     }
 
     char build_opts[96];
-    if (limbs == 128u) {
-        snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DMP_ADDMOD_ASM_ENABLE=1", limbs);
-    } else if (limbs == 8u) {
+    if (limbs == 128u || limbs == 16u || limbs == 8u) {
         snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DMP_ADDMOD_ASM_ENABLE=1", limbs);
     } else {
         snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u", limbs);

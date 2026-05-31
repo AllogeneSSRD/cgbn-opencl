@@ -6,7 +6,7 @@ from pathlib import Path
 from mp_asm_block_gen import emit_add_block, emit_sub_block
 
 ROOT = Path(__file__).resolve().parents[1]
-OUT = ROOT / "cgbn/backends/opencl/kernels/mp_addsub_asm_block32_stage1_generated.cl"
+OUT = ROOT / "cgbn/backends/opencl/kernels/mp_addsub/stage1/asm_block32_stage1.cl"
 
 
 def main() -> None:

@@ -740,7 +740,83 @@ static bool append_opencl_save_lines(const std::string &savefilename, const mpz_
     return true;
 }
 
+static void print_ecm_usage(const char *prog) {
+    const char *name = prog;
+    if (name != nullptr) {
+        const char *slash = std::strrchr(name, '\\');
+        const char *slash2 = std::strrchr(name, '/');
+        if (slash2 != nullptr && (slash == nullptr || slash2 > slash)) {
+            slash = slash2;
+        }
+        if (slash != nullptr && slash[1] != '\0') {
+            name = slash + 1;
+        }
+    } else {
+        name = "ecm";
+    }
+
+    std::cout << "OpenCL ECM stage-1 driver\n\n"
+              << "Usage:\n"
+              << "  echo '<N>' | " << name << " [options] B1 [B2]\n\n"
+              << "Input:\n"
+              << "  N is read from stdin as a decimal integer or expression\n"
+              << "  (e.g. '(2^991-1)', '0xdeadbeef'). Whitespace is ignored.\n\n"
+              << "Positional:\n"
+              << "  B1              Stage-1 bound (required for meaningful runs)\n"
+              << "  B2              Stage-2 bound (optional; 0 disables stage 2)\n\n"
+              << "Options:\n"
+              << "  -gpu                 Enable GPU stage-1 (requires -gpucurves)\n"
+              << "  -gpucurves <n>       Number of ECM curves per GPU launch\n"
+              << "  -gpuckpt <sec>       GPU checkpoint interval in seconds (default: 600)\n"
+              << "  -d <index>           OpenCL device index (default: 0)\n"
+              << "  -sigma <value>       Fixed curve sigma (1..2^32-1; optional param:3: prefix)\n"
+              << "  -v                   Verbose output\n"
+              << "  -save <file>         Append factorization lines to file\n"
+              << "  -savea <file>        Same as -save (append mode)\n"
+              << "  --go                 Print group order diagnostics\n"
+              << "  --mul <path>         Montgomery mul kernel path (4096-bit)\n"
+              << "  --sqr <path>         Montgomery sqr kernel path\n"
+              << "  --add <path>         Modular add kernel path\n"
+              << "  --sub <path>         Modular sub kernel path\n"
+              << "  --showkernel         List available OpenCL kernel paths and exit\n"
+              << "  -h, --help           Show this help and exit\n\n"
+              << "Examples:\n"
+              << "  echo '(2^991-1)' | " << name << " -v --go -gpu -gpucurves 384 1e6 0\n"
+              << "  echo '(2^421-1)' | " << name << " -gpu -gpucurves 256 -d 1 1e5 0\n"
+              << "  echo '(2^4003-1)' | " << name << " -gpu -gpucurves 384 --add asm_b32 1e6 0\n"
+              << "  " << name << " --showkernel\n\n"
+              << "Add/sub path names (for --add / --sub): default, fused, fused_unroll,\n"
+              << "  fused_unroll_auto, fused_unroll_b16, fused_unroll_b32, asm_b32.\n"
+              << "Run with --showkernel for full Montgomery and add/sub path lists.\n";
+}
+
+static bool stdin_is_tty() {
+#ifdef _WIN32
+    return _isatty(_fileno(stdin)) != 0;
+#else
+    return isatty(fileno(stdin)) != 0;
+#endif
+}
+
+static bool ecm_wants_usage(int argc, char **argv) {
+    if (argc <= 1) {
+        return true;
+    }
+    for (int i = 1; i < argc; ++i) {
+        const std::string a = argv[i];
+        if (a == "-h" || a == "--help" || a == "/?") {
+            return true;
+        }
+    }
+    return false;
+}
+
 int main(int argc, char **argv){
+    if (ecm_wants_usage(argc, argv)) {
+        print_ecm_usage(argv[0]);
+        return 0;
+    }
+
     ecm_install_timestamped_iostreams();
     bool verbose = false;
     bool use_gpu = false;
@@ -830,12 +906,24 @@ int main(int argc, char **argv){
             show_kernels = true;
             continue;
         }
+        if(a == "-h" || a == "--help" || a == "/?") {
+            continue;
+        }
         pos.push_back(a);
     }
 
     if (show_kernels) {
         opencl_ecm_print_available_kernels(stdout);
         return 0;
+    }
+
+    if (pos.empty()) {
+        if (stdin_is_tty()) {
+            print_ecm_usage(argv[0]);
+        } else {
+            std::cerr << "Missing B1 (stage-1 bound). Run with -h for usage." << std::endl;
+        }
+        return 1;
     }
 
     unsigned long gpuckpt_ms = ECM_DEFAULT_GPU_CHECKPOINT_INTERVAL_MS;
@@ -880,14 +968,6 @@ int main(int argc, char **argv){
         }
         std::cout << std::endl;
     }
-
-#ifdef _WIN32
-    if(_isatty(_fileno(stdin))) {
-        std::cout << "This driver expects N on stdin. Example:" << std::endl;
-        std::cout << "  echo '(2^991-1)' | .\\build\\Debug\\ecm.exe -v --go -gpu -gpucurves 384 1e6 0" << std::endl;
-        return 1;
-    }
-#endif
 
     // read N from stdin
     std::string nline;
