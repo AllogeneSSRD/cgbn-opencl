@@ -107,7 +107,7 @@ static int resolve_addsub_paths(const char *gpu_add_path, const char *gpu_sub_pa
     if (add_path == -2) {
         ecm_ts_fprintf(stderr,
                        "OpenCL: unknown --add path '%s' (fused, fused_unroll, fused_unroll_b16, "
-                       "fused_unroll_b32, asm_b32, default)\n",
+                       "fused_unroll_b32, asm_b16, asm_b32, default)\n",
                        gpu_add_path ? gpu_add_path : "");
         return -1;
     }
@@ -121,6 +121,10 @@ static int resolve_addsub_paths(const char *gpu_add_path, const char *gpu_sub_pa
     }
     if (add_path == ECM_ADDSUB_PATH_ASM_B32 && limbs != 128u) {
         ecm_ts_fprintf(stderr, "OpenCL: asm_b32 addmod requires 4096-bit (128 limbs)\n");
+        return -1;
+    }
+    if (add_path == ECM_ADDSUB_PATH_ASM_B16 && limbs != 16u) {
+        ecm_ts_fprintf(stderr, "OpenCL: asm_b16 addmod requires 512-bit (16 limbs)\n");
         return -1;
     }
     if (sub_path == ECM_ADDSUB_PATH_ASM_B32 && limbs != 128u) {
@@ -564,6 +568,7 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
     const bool needs_asm_b32 =
         opencl_ecm_addsub_path_needs_asm_b32(add_path) ||
         opencl_ecm_addsub_path_needs_asm_b32(sub_path);
+    const bool needs_asm_b16 = opencl_ecm_addsub_path_needs_asm_b16(add_path);
     if (needs_asm_b32) {
         std::string asm_src = cgbn::opencl::load_kernel_file(
             "cgbn/backends/opencl/kernels/mp_addsub/stage1/asm_block32_stage1.cl");
@@ -571,6 +576,17 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
             ecm_ts_fprintf(stderr,
                            "OpenCL: failed to load mp_addsub/stage1/asm_block32_stage1.cl "
                            "(run tools/gen_mp_addsub_asm_block32_stage1.py)\n");
+            return -1;
+        }
+        src = asm_src + "\n" + src;
+    }
+    if (needs_asm_b16) {
+        std::string asm_src = cgbn::opencl::load_kernel_file(
+            "cgbn/backends/opencl/kernels/mp_addsub/stage1/asm_block16_stage1.cl");
+        if (asm_src.empty()) {
+            ecm_ts_fprintf(stderr,
+                           "OpenCL: failed to load mp_addsub/stage1/asm_block16_stage1.cl "
+                           "(run tools/gen_mp_addsub_asm_block16_stage1.py)\n");
             return -1;
         }
         src = asm_src + "\n" + src;
@@ -589,9 +605,11 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
              "-DMAX_LIMBS=%u -DTPI=%u -DECM_STAGE1_FORCE_NORMALIZE=%d -DMP_ADD_MOD_FUSED_UNROLL=%d "
              "-DECM_STAGE1_MUL_PATH=%d -DECM_STAGE1_SQR_PATH=%d -DECM_STAGE1_COOP_WG=%d "
              "-DECM_STAGE1_COOP_SCRATCH_U32=%d -DECM_STAGE1_HAS_FIPS4096=%d "
-             "-DECM_STAGE1_ADDMOD_PATH=%d -DECM_STAGE1_SUBMOD_PATH=%d -DECM_STAGE1_ASM_B32=%d",
+             "-DECM_STAGE1_ADDMOD_PATH=%d -DECM_STAGE1_SUBMOD_PATH=%d -DECM_STAGE1_ASM_B32=%d "
+             "-DECM_STAGE1_ASM_B16=%d",
              limbs, tpi, stage1_force_normalize, add_mod_fused_unroll, mul_path, sqr_path, coop_wg,
-             coop_scratch, has_fips4096, add_path, sub_path, needs_asm_b32 ? 1 : 0);
+             coop_scratch, has_fips4096, add_path, sub_path, needs_asm_b32 ? 1 : 0,
+             needs_asm_b16 ? 1 : 0);
 
     cl_int buildErr = CL_SUCCESS;
     g_ecm_program = cgbn::opencl::build_program_from_source(g_ctx, src.c_str(), opts, buildErr);
@@ -629,10 +647,10 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
     opencl_ecm_mont4096_path_labels(mul_path, sqr_path, &mul_name, &sqr_name);
     ocl_log_verbose(verbose,
                     "OpenCL: built kernel MAX_LIMBS=%u TPI=%u ADDMOD_UNROLL=%d NORM=%d "
-                    "mul4096=%s sqr4096=%s addmod=%s submod=%s asm_b32=%d coop_wg=%d (%.0fms)\n",
+                    "mul4096=%s sqr4096=%s addmod=%s submod=%s asm_b32=%d asm_b16=%d coop_wg=%d (%.0fms)\n",
                     limbs, tpi, add_mod_fused_unroll, stage1_force_normalize, mul_name, sqr_name,
                     opencl_ecm_addsub_path_name(add_path), opencl_ecm_addsub_path_name(sub_path),
-                    needs_asm_b32 ? 1 : 0, use_coop_wg ? coop_wg : 1, init_ms);
+                    needs_asm_b32 ? 1 : 0, needs_asm_b16 ? 1 : 0, use_coop_wg ? coop_wg : 1, init_ms);
     return 0;
 }
 

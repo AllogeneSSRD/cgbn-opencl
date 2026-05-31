@@ -409,12 +409,16 @@ static inline uint mp_add_n(uint *r, const uint *a, const uint *b, uint limbs) {
 #ifndef ECM_STAGE1_ASM_B32
 #define ECM_STAGE1_ASM_B32 0
 #endif
+#ifndef ECM_STAGE1_ASM_B16
+#define ECM_STAGE1_ASM_B16 0
+#endif
 
 #define ECM_ADDSUB_PATH_FUSED 0
 #define ECM_ADDSUB_PATH_FUSED_UNROLL 1
 #define ECM_ADDSUB_PATH_FUSED_UNROLL_B32 2
 #define ECM_ADDSUB_PATH_ASM_B32 3
 #define ECM_ADDSUB_PATH_FUSED_UNROLL_B16 4
+#define ECM_ADDSUB_PATH_ASM_B16 5
 
 // Hint for compile-time limb unroll (MAX_LIMBS is fixed per kernel build).
 #if MAX_LIMBS <= 16
@@ -585,6 +589,13 @@ static inline int mp_sub_mod_asm_b32_4096(uint *r, const uint *a, const uint *b,
 }
 #endif
 
+#if ECM_STAGE1_ASM_B16 && defined(__AMDGCN__)
+static inline void mp_add_mod_asm_b16_512(uint *r, const uint *a, const uint *b, const uint *N) {
+    uint ca = 0u, cs = 1u;
+    asm_fused_block16_priv(a, b, N, r, ca, cs, &ca, &cs);
+}
+#endif
+
 static inline void mp_add_mod(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
     if (limbs == 128u) {
 #if ECM_STAGE1_ADDMOD_PATH == ECM_ADDSUB_PATH_ASM_B32
@@ -600,7 +611,19 @@ static inline void mp_add_mod(uint *r, const uint *a, const uint *b, const uint 
         return;
 #endif
     }
-#if ECM_STAGE1_ADDMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL_B16
+#if ECM_STAGE1_ADDMOD_PATH == ECM_ADDSUB_PATH_ASM_B16
+#if ECM_STAGE1_ASM_B16 && defined(__AMDGCN__)
+    if (limbs == 16u) {
+        mp_add_mod_asm_b16_512(r, a, b, N);
+        return;
+    }
+#else
+    if (limbs == 16u) {
+        mp_add_mod_fused_unroll_b16_512(r, a, b, N);
+        return;
+    }
+#endif
+#elif ECM_STAGE1_ADDMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL_B16
     if (limbs == 16u) {
         mp_add_mod_fused_unroll_b16_512(r, a, b, N);
         return;
@@ -874,7 +897,21 @@ static inline void mp_add_mod_local(__local uint *r, __local const uint *a, __lo
         return;
 #endif
     }
-#if ECM_STAGE1_ADDMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL_B16
+#if ECM_STAGE1_ADDMOD_PATH == ECM_ADDSUB_PATH_ASM_B16
+#if ECM_STAGE1_ASM_B16 && defined(__AMDGCN__)
+    if (limbs == 16u) {
+        mp_add_mod_asm_b16_512(r, a, b, N);
+        (void)limbs;
+        return;
+    }
+#else
+    if (limbs == 16u) {
+        mp_add_mod_fused_unroll_b16_512(r, a, b, N);
+        (void)limbs;
+        return;
+    }
+#endif
+#elif ECM_STAGE1_ADDMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL_B16
     if (limbs == 16u) {
         mp_add_mod_fused_unroll_b16_512(r, a, b, N);
         (void)limbs;

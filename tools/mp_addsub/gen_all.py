@@ -21,6 +21,7 @@ SCRIPTS = [
     "gen_mp_addmod_asm_fused.py",
     "gen_mp_submod_asm_fused.py",
     "gen_mp_addsub_asm_block32_stage1.py",
+    "gen_mp_addsub_asm_block16_stage1.py",
 ]
 
 
