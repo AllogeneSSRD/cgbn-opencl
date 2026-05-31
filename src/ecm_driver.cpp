@@ -10,6 +10,7 @@
 #include <ctime>
 #include <fstream>
 #include <cstdio>
+#include <cstring>
 #include <sys/stat.h>
 
 #ifdef _WIN32
@@ -751,6 +752,8 @@ int main(int argc, char **argv){
     bool print_group_order = false;
     std::string savefilename;
     bool saveappend = false;
+    std::string gpu_mul_path;
+    std::string gpu_sqr_path;
     // parse args simple
     std::vector<std::string> pos;
     for(int i=1;i<argc;i++){
@@ -803,6 +806,14 @@ int main(int argc, char **argv){
             print_group_order = true;
             continue;
         }
+        if(a == "--mul" && i+1<argc) {
+            gpu_mul_path = argv[++i];
+            continue;
+        }
+        if(a == "--sqr" && i+1<argc) {
+            gpu_sqr_path = argv[++i];
+            continue;
+        }
         pos.push_back(a);
     }
 
@@ -827,7 +838,14 @@ int main(int argc, char **argv){
               << ", gpucurves=" << gpucurves
               << ", gpuckpt=" << (gpuckpt_ms == 0 ? 0.0 : gpuckpt_ms / 1000.0) << "s"
               << ", device=" << gpu_device_index
-              << ", group_order=" << (print_group_order ? "on" : "off") << std::endl;
+              << ", group_order=" << (print_group_order ? "on" : "off");
+    if (!gpu_mul_path.empty()) {
+        std::cout << ", mul=" << gpu_mul_path;
+    }
+    if (!gpu_sqr_path.empty()) {
+        std::cout << ", sqr=" << gpu_sqr_path;
+    }
+    std::cout << std::endl;
     if(!pos.empty()){
         std::cout << "  B1=" << pos[0];
         if(pos.size() >= 2){
@@ -890,6 +908,14 @@ int main(int argc, char **argv){
     params->gpu = use_gpu ? 1 : 0;
     params->gpu_number_of_curves = gpucurves;
     params->gpu_checkpoint_interval_ms = gpuckpt_ms;
+    if (!gpu_mul_path.empty()) {
+        strncpy(params->gpu_mul_path, gpu_mul_path.c_str(), sizeof(params->gpu_mul_path) - 1u);
+        params->gpu_mul_path[sizeof(params->gpu_mul_path) - 1u] = '\0';
+    }
+    if (!gpu_sqr_path.empty()) {
+        strncpy(params->gpu_sqr_path, gpu_sqr_path.c_str(), sizeof(params->gpu_sqr_path) - 1u);
+        params->gpu_sqr_path[sizeof(params->gpu_sqr_path) - 1u] = '\0';
+    }
     params->verbose = verbose ? 1 : 0;
     params->param = ECM_PARAM_BATCH_32BITS_D; // GPU expects batch 32bits d
 
@@ -917,7 +943,9 @@ int main(int argc, char **argv){
             ecm_clear(params);
             return 1;
         }
-        int prep = gpu_prepare_opencl((size_t)mpz_sizeinbase(N, 2), params->verbose);
+        int prep = gpu_prepare_opencl((size_t)mpz_sizeinbase(N, 2), params->verbose,
+                                      params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
+                                      params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr);
         if (prep != 0) {
             std::cerr << "GPU: OpenCL prepare failed" << std::endl;
             mpz_clear(N);
@@ -973,7 +1001,9 @@ int main(int argc, char **argv){
     float gputime = 0.0f;
 
     int ret = opencl_ecm_stage1(factors, array_found, N, params->batch_s, curves, &firstsigma,
-                                params->gpu_checkpoint_interval_ms, &gputime, params->verbose);
+                                params->gpu_checkpoint_interval_ms, &gputime, params->verbose,
+                                params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
+                                params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr);
 
     std::cout << "opencl_ecm_stage1 returned: "<< ret <<" gputime="<< gputime <<" ms\n";
     for(uint32_t i=0;i<curves;i++){

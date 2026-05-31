@@ -33,7 +33,8 @@ int cgbn_ecm_stage1(mpz_t *factors, int *array_found,
              const mpz_t N, const mpz_t s,
              uint32_t curves, uint32_t *sigma,
              unsigned long checkpoint_interval_ms,
-             float *gputime, int verbose);
+             float *gputime, int verbose,
+             const char *gpu_mul_path, const char *gpu_sqr_path);
 
 /* Pick a random starting sigma for ECM_PARAM_BATCH_32BITS_D (uint32 range). */
 uint32_t gpu_pick_random_sigma(uint32_t curves);
@@ -42,7 +43,8 @@ uint32_t gpu_pick_random_sigma(uint32_t curves);
 void gpu_compute_batch_d(mpz_t d_out, uint32_t sigma, const mpz_t N);
 
 /* Create OpenCL context, compile kernel for N, print GPU device info (once). */
-int gpu_prepare_opencl(size_t n_log2, int verbose);
+int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mul_path,
+                       const char *gpu_sqr_path);
 
 #ifdef __cplusplus
 }

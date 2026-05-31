@@ -47,6 +47,8 @@ extern "C" void ecm_init(ecm_params q)
     q->gpu_device_init = 0;
     q->gpu_number_of_curves = 0;
     q->gpu_checkpoint_interval_ms = ECM_DEFAULT_GPU_CHECKPOINT_INTERVAL_MS;
+    q->gpu_mul_path[0] = '\0';
+    q->gpu_sqr_path[0] = '\0';
     q->gw_k = 0.0;
     q->gw_b = 0;
     q->gw_n = 0;

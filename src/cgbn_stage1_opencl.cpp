@@ -7,6 +7,7 @@
 #include "opencl_ecm_debug_utils.h"
 #include "opencl_ecm_log.h"
 #include "opencl_ecm_mont.h"
+#include "opencl_ecm_mont_path.h"
 #include "opencl_ecm_selftest.h"
 
 #include <CL/cl.h>
@@ -40,6 +41,10 @@ static cl_program g_ecm_program = nullptr;
 static cl_kernel g_ecm_kernel = nullptr;
 static uint32_t g_kernel_limbs = 0;
 static uint32_t g_kernel_tpi = 0;
+static int g_kernel_mul_path = 0;
+static int g_kernel_sqr_path = 0;
+static int g_kernel_coop_wg = 1;
+static bool g_kernel_use_coop_wg = false;
 static bool g_device_info_printed = false;
 
 static int selected_device_index_from_env() {
@@ -442,7 +447,18 @@ static uint32_t select_bits(size_t n_log2) {
     return 0;
 }
 
-static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *device_init_ms) {
+static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr_path, int verbose,
+                             double *device_init_ms) {
+    const int coop_wg =
+        (limbs == 128u)
+            ? std::max(opencl_ecm_mont4096_coop_wg_size(mul_path),
+                       opencl_ecm_mont4096_coop_wg_size(sqr_path))
+            : 1;
+    const bool use_coop_wg = (limbs == 128u) && (coop_wg > 1);
+    const int coop_scratch =
+        (limbs == 128u) ? opencl_ecm_mont4096_coop_scratch_u32(mul_path, sqr_path) : 0;
+    const int has_fips4096 =
+        (limbs == 128u) ? (opencl_ecm_mont4096_needs_fips4096(mul_path, sqr_path) ? 1 : 0) : 0;
     if (!g_ctx_ready) {
         cl_int err = cgbn::opencl::create_context(g_ctx);
         if (err != CL_SUCCESS) {
@@ -451,7 +467,8 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
         }
         g_ctx_ready = true;
     }
-    if (g_ecm_kernel && g_kernel_limbs == limbs && g_kernel_tpi == tpi) {
+    if (g_ecm_kernel && g_kernel_limbs == limbs && g_kernel_tpi == tpi &&
+        g_kernel_mul_path == mul_path && g_kernel_sqr_path == sqr_path) {
         if (device_init_ms) {
             *device_init_ms = 0.0;
         }
@@ -476,7 +493,18 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
                        "OpenCL: failed to load ecm_stage1.cl (set CGBN_KERNEL_ROOT or run from project root)\n");
         return -1;
     }
-    std::string src = ecm_src;
+    std::string src;
+    if (has_fips4096) {
+        std::string fips_src = cgbn::opencl::load_kernel_file(
+            "cgbn/backends/opencl/kernels/ecm_stage1_mont4096_paths.cl");
+        if (fips_src.empty()) {
+            ecm_ts_fprintf(stderr, "OpenCL: failed to load ecm_stage1_mont4096_paths.cl\n");
+            return -1;
+        }
+        src = fips_src + "\n" + ecm_src;
+    } else {
+        src = ecm_src;
+    }
     int stage1_force_normalize = 1;
     int add_mod_fused_unroll = 2;
     if (const char *v = std::getenv("ECM_STAGE1_FORCE_NORMALIZE")) stage1_force_normalize = std::atoi(v);
@@ -486,10 +514,13 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
             add_mod_fused_unroll = 2;
         }
     }
-    char opts[256];
+    char opts[512];
     snprintf(opts, sizeof(opts),
-             "-DMAX_LIMBS=%u -DTPI=%u -DECM_STAGE1_FORCE_NORMALIZE=%d -DMP_ADD_MOD_FUSED_UNROLL=%d",
-             limbs, tpi, stage1_force_normalize, add_mod_fused_unroll);
+             "-DMAX_LIMBS=%u -DTPI=%u -DECM_STAGE1_FORCE_NORMALIZE=%d -DMP_ADD_MOD_FUSED_UNROLL=%d "
+             "-DECM_STAGE1_MUL_PATH=%d -DECM_STAGE1_SQR_PATH=%d -DECM_STAGE1_COOP_WG=%d "
+             "-DECM_STAGE1_COOP_SCRATCH_U32=%d -DECM_STAGE1_HAS_FIPS4096=%d",
+             limbs, tpi, stage1_force_normalize, add_mod_fused_unroll, mul_path, sqr_path, coop_wg,
+             coop_scratch, has_fips4096);
 
     cl_int buildErr = CL_SUCCESS;
     g_ecm_program = cgbn::opencl::build_program_from_source(g_ctx, src.c_str(), opts, buildErr);
@@ -506,6 +537,10 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
     }
     g_kernel_limbs = limbs;
     g_kernel_tpi = tpi;
+    g_kernel_mul_path = mul_path;
+    g_kernel_sqr_path = sqr_path;
+    g_kernel_coop_wg = coop_wg;
+    g_kernel_use_coop_wg = use_coop_wg;
     auto t_init1 = std::chrono::high_resolution_clock::now();
     double init_ms =
         std::chrono::duration<double, std::milli>(t_init1 - t_init0).count();
@@ -516,29 +551,70 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int verbose, double *
         print_opencl_device_info(selected_device_index_from_env(), init_ms);
         g_device_info_printed = true;
     }
+    const char *mul_name = nullptr;
+    const char *sqr_name = nullptr;
+    opencl_ecm_mont4096_path_labels(mul_path, sqr_path, &mul_name, &sqr_name);
     ocl_log_verbose(verbose,
-                    "OpenCL: built kernel MAX_LIMBS=%u TPI=%u ADDMOD_UNROLL=%d NORM=%d (%.0fms)\n",
-                    limbs, tpi, add_mod_fused_unroll, stage1_force_normalize, init_ms);
+                    "OpenCL: built kernel MAX_LIMBS=%u TPI=%u ADDMOD_UNROLL=%d NORM=%d "
+                    "mul4096=%s sqr4096=%s coop_wg=%d (%.0fms)\n",
+                    limbs, tpi, add_mod_fused_unroll, stage1_force_normalize, mul_name, sqr_name,
+                    use_coop_wg ? coop_wg : 1, init_ms);
     return 0;
 }
 
-extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose) {
+static int resolve_mont4096_paths(const char *gpu_mul_path, const char *gpu_sqr_path,
+                                  int *mul_path_out, int *sqr_path_out) {
+    int mul_path = opencl_ecm_parse_mont4096_path(gpu_mul_path);
+    if (mul_path < 0) {
+        ecm_ts_fprintf(stderr,
+                       "OpenCL: unknown --mul path '%s' (4096-bit: unroll64_4096, "
+                       "unroll64_4096_mt2, fips4096, fips4096_mt8, fips4096_mt16)\n",
+                       gpu_mul_path ? gpu_mul_path : "");
+        return -1;
+    }
+    int sqr_path = opencl_ecm_parse_mont4096_path(gpu_sqr_path);
+    if (sqr_path < 0) {
+        ecm_ts_fprintf(stderr,
+                       "OpenCL: unknown --sqr path '%s' (4096-bit: unroll64_4096, "
+                       "unroll64_4096_mt2, fips4096, fips4096_mt8, fips4096_mt16)\n",
+                       gpu_sqr_path ? gpu_sqr_path : "");
+        return -1;
+    }
+    *mul_path_out = mul_path;
+    *sqr_path_out = sqr_path;
+    return 0;
+}
+
+extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mul_path,
+                                  const char *gpu_sqr_path) {
     uint32_t BITS = select_bits(n_log2);
     if (BITS == 0) {
+        return ECM_ERROR;
+    }
+    int mul_path = 0;
+    int sqr_path = 0;
+    if (resolve_mont4096_paths(gpu_mul_path, gpu_sqr_path, &mul_path, &sqr_path) != 0) {
         return ECM_ERROR;
     }
     double init_ms = 0.0;
     const uint32_t limbs = BITS / 32;
     const uint32_t tpi = choose_effective_tpi(limbs);
-    return ensure_ecm_kernel(limbs, tpi, verbose, &init_ms);
+    return ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, verbose, &init_ms);
 }
 
 extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, const mpz_t s,
                     uint32_t curves, uint32_t *sigma_ptr,
-                    unsigned long checkpoint_interval_ms, float *gputime, int verbose) {
+                    unsigned long checkpoint_interval_ms, float *gputime, int verbose,
+                    const char *gpu_mul_path, const char *gpu_sqr_path) {
     uint32_t sigma = *sigma_ptr;
     if (sigma == 0 || (uint64_t)sigma + curves > 0xFFFFFFFFull) {
         ecm_ts_fprintf(stderr, "Invalid sigma/curves range\n");
+        return ECM_ERROR;
+    }
+
+    int mul_path = 0;
+    int sqr_path = 0;
+    if (resolve_mont4096_paths(gpu_mul_path, gpu_sqr_path, &mul_path, &sqr_path) != 0) {
         return ECM_ERROR;
     }
 
@@ -593,8 +669,16 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     const uint32_t tpi =
         ckpt_loaded ? ckpt_header.TPI : choose_effective_tpi(limbs);
 
+    if (limbs != 128u && (mul_path != 0 || sqr_path != 0)) {
+        ecm_ts_fprintf(stderr,
+                       "Warning: --mul/--sqr 4096 paths ignored (need 4096-bit kernel, got %u-bit)\n",
+                       BITS);
+        mul_path = 0;
+        sqr_path = 0;
+    }
+
     double device_init_ms = 0.0;
-    if (ensure_ecm_kernel(limbs, tpi, verbose, &device_init_ms) != 0) {
+    if (ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, verbose, &device_init_ms) != 0) {
         free(s_bits);
         if (ckpt_data) {
             free(ckpt_data);
@@ -644,10 +728,10 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             BITS, tpi, n_log2, curves, sigma, sigma + curves - 1,
             (unsigned long long)s_num_bits, np0);
     const char *mont_mul_op = (limbs == 16u) ? "mont_mul_priv_unroll_only_512"
-                             : (limbs == 128u) ? "mont_mul_priv_unroll64_4096"
+                             : (limbs == 128u) ? opencl_ecm_mont4096_path_name(mul_path)
                                                : "mont_mul_priv_unroll32";
     const char *mont_sqr_op = (limbs == 16u) ? "mont_sqr_priv_unroll_only_512"
-                             : (limbs == 128u) ? "mont_sqr_priv_unroll64_4096"
+                             : (limbs == 128u) ? opencl_ecm_mont4096_path_name(sqr_path)
                                                : "mont_sqr_priv_unroll32";
     const char *addmod_op = (limbs == 128u) ? "mp_add_mod_fused_unroll_asm_b32(path)"
                                             : "mp_add_mod_fused_unroll(default)";
@@ -725,10 +809,13 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             break;
         }
 
-        size_t global = (size_t)curves;
+        size_t global =
+            g_kernel_use_coop_wg ? (size_t)curves * (size_t)g_kernel_coop_wg : (size_t)curves;
+        size_t local_wg = (size_t)g_kernel_coop_wg;
+        const size_t *local_ptr = g_kernel_use_coop_wg ? &local_wg : nullptr;
         auto t0 = std::chrono::high_resolution_clock::now();
-        err = clEnqueueNDRangeKernel(g_ctx.queue, active_kernel, 1, nullptr, &global,
-                                     nullptr, 0, nullptr, nullptr);
+        err = clEnqueueNDRangeKernel(g_ctx.queue, active_kernel, 1, nullptr, &global, local_ptr, 0,
+                                     nullptr, nullptr);
         if (err != CL_SUCCESS) {
             ecm_ts_fprintf(stderr, "kernel enqueue failed (%d)\n", err);
             break;

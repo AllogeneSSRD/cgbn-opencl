@@ -8,7 +8,9 @@ int opencl_ecm_stage1(mpz_t *factors,
                       uint32_t *sigma,
                       unsigned long checkpoint_interval_ms,
                       float *gputime,
-                      int verbose)
+                      int verbose,
+                      const char *gpu_mul_path,
+                      const char *gpu_sqr_path)
 {
     if (factors == nullptr || array_found == nullptr || sigma == nullptr || gputime == nullptr) {
         return -1;
@@ -26,5 +28,7 @@ int opencl_ecm_stage1(mpz_t *factors,
                            sigma,
                            checkpoint_interval_ms,
                            gputime,
-                           verbose);
+                           verbose,
+                           gpu_mul_path,
+                           gpu_sqr_path);
 }

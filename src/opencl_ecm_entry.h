@@ -23,7 +23,9 @@ int opencl_ecm_stage1(mpz_t *factors,
                       uint32_t *sigma,
                       unsigned long checkpoint_interval_ms,
                       float *gputime,
-                      int verbose);
+                      int verbose,
+                      const char *gpu_mul_path,
+                      const char *gpu_sqr_path);
 
 #ifdef __cplusplus
 }
