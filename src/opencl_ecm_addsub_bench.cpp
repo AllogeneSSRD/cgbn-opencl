@@ -220,6 +220,14 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 std::cerr << "Warning: mp_submod_unroll_generated.cl missing; run "
                              "tools/gen_mp_sub_mod_unroll.py (submod unroll skipped)\n";
             }
+            std::string stage1_unroll_src = cgbn::opencl::load_text_file(
+                "cgbn/backends/opencl/kernels/ecm_addsub_stage1_unroll.cl");
+            if (!stage1_unroll_src.empty()) {
+                src += "\n" + stage1_unroll_src;
+            } else {
+                std::cerr << "Warning: ecm_addsub_stage1_unroll.cl missing (stage1 unroll bench "
+                             "skipped)\n";
+            }
         }
         if (WORDS == 8u || WORDS == 16u || WORDS == 128u) {
             const char *asm_disable = std::getenv("ECM_ADDSUB_ASM_DISABLE");
@@ -692,6 +700,8 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
 
         bool ok_unroll = true;
         bool have_unroll = false;
+        bool have_unroll_stage1 = false;
+        bool have_unroll_b16 = false;
         {
             cl_int kerr = CL_SUCCESS;
             cl_kernel ku = clCreateKernel(program, "ecm_mp_add_mod_fused_unroll", &kerr);
@@ -708,12 +718,45 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 clReleaseKernel(ku);
                 if (err2 != CL_SUCCESS) return false;
             }
+            cl_kernel ks = clCreateKernel(program, "ecm_mp_add_mod_fused_unroll_stage1", &kerr);
+            if (kerr == CL_SUCCESS) {
+                have_unroll_stage1 = true;
+                clSetKernelArg(ks, 0, sizeof(cl_mem), &bufA);
+                clSetKernelArg(ks, 1, sizeof(cl_mem), &bufB);
+                clSetKernelArg(ks, 2, sizeof(cl_mem), &bufN);
+                clSetKernelArg(ks, 3, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(ks, 4, sizeof(cl_uint), &limbs);
+                size_t g = 1u;
+                err2 = clEnqueueNDRangeKernel(ctx.queue, ks, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(ks);
+                if (err2 != CL_SUCCESS) return false;
+            }
+            if (WORDS == 16u) {
+                cl_kernel kb = clCreateKernel(program, "ecm_mp_add_mod_fused_unroll_b16", &kerr);
+                if (kerr == CL_SUCCESS) {
+                    have_unroll_b16 = true;
+                    clSetKernelArg(kb, 0, sizeof(cl_mem), &bufA);
+                    clSetKernelArg(kb, 1, sizeof(cl_mem), &bufB);
+                    clSetKernelArg(kb, 2, sizeof(cl_mem), &bufN);
+                    clSetKernelArg(kb, 3, sizeof(cl_mem), &bufOut);
+                    clSetKernelArg(kb, 4, sizeof(cl_uint), &limbs);
+                    size_t g = 1u;
+                    err2 = clEnqueueNDRangeKernel(ctx.queue, kb, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+                    clFinish(ctx.queue);
+                    clReleaseKernel(kb);
+                    if (err2 != CL_SUCCESS) return false;
+                }
+            }
         }
         mpz_t expect, got_fused, got_unroll;
+        mpz_t got_unroll_stage1, got_unroll_b16;
         mpz_t got_legacy, got_mask;
         mpz_init(expect);
         mpz_init(got_fused);
         mpz_init(got_unroll);
+        mpz_init(got_unroll_stage1);
+        mpz_init(got_unroll_b16);
         if (!bench_unroll_only) {
             mpz_init(got_legacy);
             mpz_init(got_mask);
@@ -812,6 +855,8 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             ok_legacy = (mpz_cmp(expect, got_legacy) == 0);
             ok_mask = (mpz_cmp(expect, got_mask) == 0);
         }
+        bool ok_unroll_stage1 = true;
+        bool ok_unroll_b16 = true;
         if (have_unroll) {
             if (!run_once("ecm_mp_add_mod_fused_unroll")) return false;
             std::vector<uint32_t> out_unroll(WORDS);
@@ -821,10 +866,28 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             fill_to_gmp(out_unroll.data(), WORDS, got_unroll);
             ok_unroll = (mpz_cmp(expect, got_unroll) == 0);
         }
+        if (have_unroll_stage1) {
+            if (!run_once("ecm_mp_add_mod_fused_unroll_stage1")) return false;
+            std::vector<uint32_t> out_s(WORDS);
+            err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                       out_s.data(), 0, nullptr, nullptr);
+            if (err2 != CL_SUCCESS) return false;
+            fill_to_gmp(out_s.data(), WORDS, got_unroll_stage1);
+            ok_unroll_stage1 = (mpz_cmp(expect, got_unroll_stage1) == 0);
+        }
+        if (have_unroll_b16) {
+            if (!run_once("ecm_mp_add_mod_fused_unroll_b16")) return false;
+            std::vector<uint32_t> out_b(WORDS);
+            err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                       out_b.data(), 0, nullptr, nullptr);
+            if (err2 != CL_SUCCESS) return false;
+            fill_to_gmp(out_b.data(), WORDS, got_unroll_b16);
+            ok_unroll_b16 = (mpz_cmp(expect, got_unroll_b16) == 0);
+        }
 
         bool ok_fused = (mpz_cmp(expect, got_fused) == 0);
-        if ((!bench_unroll_only && (!ok_legacy || !ok_mask)) || !ok_fused || !ok_unroll || !ok_lpt_all ||
-            !ok_asm) {
+        if ((!bench_unroll_only && (!ok_legacy || !ok_mask)) || !ok_fused || !ok_unroll ||
+            !ok_unroll_stage1 || !ok_unroll_b16 || !ok_lpt_all || !ok_asm) {
             std::cerr << "add_mod verify:";
             if (!bench_unroll_only) {
                 std::cerr << " legacy=" << (ok_legacy ? "PASS" : "FAIL")
@@ -832,12 +895,15 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             }
             std::cerr << " fused=" << (ok_fused ? "PASS" : "FAIL")
                       << " unroll=" << (ok_unroll ? "PASS" : "FAIL")
+                      << " unroll_stage1=" << (ok_unroll_stage1 ? "PASS" : "FAIL")
+                      << " unroll_b16=" << (ok_unroll_b16 ? "PASS" : "FAIL")
                       << " lpt=" << (ok_lpt_all ? "PASS" : "FAIL")
                       << " asm=" << (ok_asm ? "PASS" : "FAIL") << std::endl;
+            mpz_clears(expect, got_unroll_stage1, got_unroll_b16, nullptr);
             if (!bench_unroll_only) {
-                mpz_clears(expect, got_legacy, got_mask, got_fused, got_unroll, nullptr);
+                mpz_clears(got_legacy, got_mask, got_fused, got_unroll, nullptr);
             } else {
-                mpz_clears(expect, got_fused, got_unroll, nullptr);
+                mpz_clears(got_fused, got_unroll, nullptr);
             }
             return false;
         }
@@ -847,7 +913,16 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         }
         std::cout << "fused";
         if (have_unroll) {
-            std::cout << ", fused_unroll, lpt{16,32,48,64}";
+            std::cout << ", fused_unroll";
+        }
+        if (have_unroll_stage1) {
+            std::cout << ", fused_unroll_stage1";
+        }
+        if (have_unroll_b16) {
+            std::cout << ", fused_unroll_b16";
+        }
+        if (have_unroll) {
+            std::cout << ", lpt{16,32,48,64}";
         }
         if (asm_enabled) {
             std::cout << ", unroll_asm";
@@ -859,10 +934,11 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             }
         }
         std::cout << ")" << std::endl;
+        mpz_clears(expect, got_unroll_stage1, got_unroll_b16, nullptr);
         if (!bench_unroll_only) {
-            mpz_clears(expect, got_legacy, got_mask, got_fused, got_unroll, nullptr);
+            mpz_clears(got_legacy, got_mask, got_fused, got_unroll, nullptr);
         } else {
-            mpz_clears(expect, got_fused, got_unroll, nullptr);
+            mpz_clears(got_fused, got_unroll, nullptr);
         }
         return true;
     };
@@ -896,6 +972,8 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
 
         bool ok_unroll = true;
         bool have_unroll = false;
+        bool have_unroll_stage1 = false;
+        bool have_unroll_b16 = false;
         {
             cl_int kerr = CL_SUCCESS;
             cl_kernel ku = clCreateKernel(program, "ecm_mp_sub_mod_fused_unroll", &kerr);
@@ -913,24 +991,80 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 clReleaseKernel(ku);
                 if (err2 != CL_SUCCESS) return false;
             }
+            cl_kernel ks = clCreateKernel(program, "ecm_mp_sub_mod_fused_unroll_stage1", &kerr);
+            if (kerr == CL_SUCCESS) {
+                have_unroll_stage1 = true;
+                clSetKernelArg(ks, 0, sizeof(cl_mem), &bufA);
+                clSetKernelArg(ks, 1, sizeof(cl_mem), &bufB);
+                clSetKernelArg(ks, 2, sizeof(cl_mem), &bufN);
+                clSetKernelArg(ks, 3, sizeof(cl_mem), &bufOut);
+                clSetKernelArg(ks, 4, sizeof(cl_uint), &limbs);
+                size_t g = 1u;
+                err2 = clEnqueueNDRangeKernel(ctx.queue, ks, 1, nullptr, &g, nullptr, 0, nullptr,
+                                              nullptr);
+                clFinish(ctx.queue);
+                clReleaseKernel(ks);
+                if (err2 != CL_SUCCESS) return false;
+            }
+            if (WORDS == 16u) {
+                cl_kernel kb = clCreateKernel(program, "ecm_mp_sub_mod_fused_unroll_b16", &kerr);
+                if (kerr == CL_SUCCESS) {
+                    have_unroll_b16 = true;
+                    clSetKernelArg(kb, 0, sizeof(cl_mem), &bufA);
+                    clSetKernelArg(kb, 1, sizeof(cl_mem), &bufB);
+                    clSetKernelArg(kb, 2, sizeof(cl_mem), &bufN);
+                    clSetKernelArg(kb, 3, sizeof(cl_mem), &bufOut);
+                    clSetKernelArg(kb, 4, sizeof(cl_uint), &limbs);
+                    size_t g = 1u;
+                    err2 = clEnqueueNDRangeKernel(ctx.queue, kb, 1, nullptr, &g, nullptr, 0, nullptr,
+                                                  nullptr);
+                    clFinish(ctx.queue);
+                    clReleaseKernel(kb);
+                    if (err2 != CL_SUCCESS) return false;
+                }
+            }
         }
 
         mpz_t expect, got_base, got_unroll;
+        mpz_t got_unroll_stage1, got_unroll_b16;
         mpz_init(expect);
         mpz_init(got_base);
         mpz_init(got_unroll);
+        mpz_init(got_unroll_stage1);
+        mpz_init(got_unroll_b16);
         mpz_sub(expect, a_gmp, b_gmp);
         mpz_mod(expect, expect, n_gmp);
 
         fill_to_gmp(out_base.data(), WORDS, got_base);
         bool ok_base = (mpz_cmp(expect, got_base) == 0);
+        bool ok_unroll_stage1 = true;
+        bool ok_unroll_b16 = true;
         if (have_unroll) {
+            if (!run_once("ecm_mp_sub_mod_fused_unroll")) return false;
             std::vector<uint32_t> out_unroll(WORDS);
             err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
                                        out_unroll.data(), 0, nullptr, nullptr);
             if (err2 != CL_SUCCESS) return false;
             fill_to_gmp(out_unroll.data(), WORDS, got_unroll);
             ok_unroll = (mpz_cmp(expect, got_unroll) == 0);
+        }
+        if (have_unroll_stage1) {
+            if (!run_once("ecm_mp_sub_mod_fused_unroll_stage1")) return false;
+            std::vector<uint32_t> out_s(WORDS);
+            err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                       out_s.data(), 0, nullptr, nullptr);
+            if (err2 != CL_SUCCESS) return false;
+            fill_to_gmp(out_s.data(), WORDS, got_unroll_stage1);
+            ok_unroll_stage1 = (mpz_cmp(expect, got_unroll_stage1) == 0);
+        }
+        if (have_unroll_b16) {
+            if (!run_once("ecm_mp_sub_mod_fused_unroll_b16")) return false;
+            std::vector<uint32_t> out_b(WORDS);
+            err2 = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, sizeof(uint32_t) * WORDS,
+                                       out_b.data(), 0, nullptr, nullptr);
+            if (err2 != CL_SUCCESS) return false;
+            fill_to_gmp(out_b.data(), WORDS, got_unroll_b16);
+            ok_unroll_b16 = (mpz_cmp(expect, got_unroll_b16) == 0);
         }
 
         bool ok_asm = true;
@@ -965,16 +1099,24 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             }
         }
 
-        if (!ok_base || !ok_unroll || !ok_asm) {
+        if (!ok_base || !ok_unroll || !ok_unroll_stage1 || !ok_unroll_b16 || !ok_asm) {
             std::cerr << "sub_mod verify: base=" << (ok_base ? "PASS" : "FAIL")
                       << " unroll=" << (ok_unroll ? "PASS" : "FAIL")
+                      << " unroll_stage1=" << (ok_unroll_stage1 ? "PASS" : "FAIL")
+                      << " unroll_b16=" << (ok_unroll_b16 ? "PASS" : "FAIL")
                       << " asm=" << (ok_asm ? "PASS" : "FAIL") << std::endl;
-            mpz_clears(expect, got_base, got_unroll, nullptr);
+            mpz_clears(expect, got_base, got_unroll, got_unroll_stage1, got_unroll_b16, nullptr);
             return false;
         }
         std::cout << "  [ecm_mp_sub_mod] GMP verify: PASS (base";
         if (have_unroll) {
             std::cout << ", fused_unroll";
+        }
+        if (have_unroll_stage1) {
+            std::cout << ", fused_unroll_stage1";
+        }
+        if (have_unroll_b16) {
+            std::cout << ", fused_unroll_b16";
         }
         if (asm_enabled && WORDS == 128u) {
             std::cout << ", unroll_asm_b32";
@@ -983,18 +1125,20 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             }
         }
         std::cout << ")" << std::endl;
-        mpz_clears(expect, got_base, got_unroll, nullptr);
+        mpz_clears(expect, got_base, got_unroll, got_unroll_stage1, got_unroll_b16, nullptr);
         return true;
     };
 
     double t_add_n = 0.0, t_sub_n = 0.0, t_add_mod = 0.0, t_add_mod_legacy = 0.0, t_add_mod_mask = 0.0,
-           t_add_mod_unroll = 0.0, t_add_mod_unroll_priv = 0.0, t_add_mod_unroll_asm = 0.0,
+           t_add_mod_unroll = 0.0, t_add_mod_unroll_priv = 0.0, t_add_mod_unroll_stage1 = 0.0,
+           t_add_mod_unroll_b16 = 0.0, t_add_mod_unroll_asm = 0.0,
            t_add_mod_unroll_asm_b16 = 0.0, t_add_mod_unroll_asm_asmfix = 0.0,
            t_add_mod_unroll_asm_soft = 0.0, t_add_mod_unroll_asm_soft_b16 = 0.0,
            t_add_mod_unroll_asm_b32 = 0.0, t_add_mod_unroll_asm_b64 = 0.0,
            t_add_mod_asm_b16 = 0.0, t_add_mod_asm_b16_vccsoft = 0.0, t_add_mod_asm8 = 0.0,
            t_add_mod_asm8_asmfix = 0.0, t_add_mod_asm8_vccsoft = 0.0,
            t_sub_mod = 0.0, t_sub_mod_unroll = 0.0, t_sub_mod_unroll_priv = 0.0,
+           t_sub_mod_unroll_stage1 = 0.0, t_sub_mod_unroll_b16 = 0.0,
            t_sub_mod_unroll_asm_b32 = 0.0, t_sub_mod_unroll_asm_b64 = 0.0,
            t_mul_priv = 0.0, t_sqr_priv = 0.0, t_mul_priv_opt = 0.0,
            t_sqr_priv_opt = 0.0;
@@ -1023,6 +1167,19 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         if (kerr == CL_SUCCESS) {
             clReleaseKernel(kp);
             if (!run_pure("ecm_mp_add_mod_fused_unroll_priv", true, t_add_mod_unroll_priv)) return false;
+        }
+        {
+            auto try_bench_stage1 = [&](const char *kname, double &t_out) {
+                cl_int kerr2 = CL_SUCCESS;
+                cl_kernel ka = clCreateKernel(program, kname, &kerr2);
+                if (kerr2 != CL_SUCCESS) return;
+                clReleaseKernel(ka);
+                (void)run_pure(kname, true, t_out);
+            };
+            try_bench_stage1("ecm_mp_add_mod_fused_unroll_stage1", t_add_mod_unroll_stage1);
+            if (WORDS == 16u) {
+                try_bench_stage1("ecm_mp_add_mod_fused_unroll_b16", t_add_mod_unroll_b16);
+            }
         }
         if (asm_enabled) {
             auto try_bench_asm = [&](const char *kname, double &t_out) {
@@ -1082,6 +1239,19 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             clReleaseKernel(kp);
             if (!run_pure("ecm_mp_sub_mod_fused_unroll_priv", true, t_sub_mod_unroll_priv))
                 return false;
+        }
+        {
+            auto try_bench_sub_stage1 = [&](const char *kname, double &t_out) {
+                cl_int kerr2 = CL_SUCCESS;
+                cl_kernel ka = clCreateKernel(program, kname, &kerr2);
+                if (kerr2 != CL_SUCCESS) return;
+                clReleaseKernel(ka);
+                (void)run_pure(kname, true, t_out);
+            };
+            try_bench_sub_stage1("ecm_mp_sub_mod_fused_unroll_stage1", t_sub_mod_unroll_stage1);
+            if (WORDS == 16u) {
+                try_bench_sub_stage1("ecm_mp_sub_mod_fused_unroll_b16", t_sub_mod_unroll_b16);
+            }
         }
         if (asm_enabled && WORDS == 128u) {
             auto try_bench_sub_asm = [&](const char *kname, double &t_out) {
@@ -1176,6 +1346,27 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                   << (op_count / (t_add_mod_unroll_priv / 1000.0)) << " ops/s (vs fused: "
                   << (t_add_mod / t_add_mod_unroll_priv) << "x, vs unroll: "
                   << (t_add_mod_unroll / t_add_mod_unroll_priv) << "x)" << std::endl;
+    }
+    if (t_add_mod_unroll_stage1 > 0.0) {
+        std::cout << "mp_add_mod_fused_unroll_stage1:        " << t_add_mod_unroll_stage1 << " ms, "
+                  << (op_count / (t_add_mod_unroll_stage1 / 1000.0)) << " ops/s (ECM fused_unroll, "
+                  << "vs fused: " << (t_add_mod / t_add_mod_unroll_stage1) << "x";
+        if (t_add_mod_unroll > 0.0) {
+            std::cout << ", vs scalar unroll: " << (t_add_mod_unroll / t_add_mod_unroll_stage1) << "x";
+        }
+        std::cout << ")" << std::endl;
+    }
+    if (t_add_mod_unroll_b16 > 0.0) {
+        std::cout << "mp_add_mod_fused_unroll_b16:           " << t_add_mod_unroll_b16 << " ms, "
+                  << (op_count / (t_add_mod_unroll_b16 / 1000.0)) << " ops/s (ECM 512 default, "
+                  << "vs fused: " << (t_add_mod / t_add_mod_unroll_b16) << "x";
+        if (t_add_mod_unroll_stage1 > 0.0) {
+            std::cout << ", vs stage1: " << (t_add_mod_unroll_stage1 / t_add_mod_unroll_b16) << "x";
+        }
+        if (t_add_mod_unroll > 0.0) {
+            std::cout << ", vs scalar unroll: " << (t_add_mod_unroll / t_add_mod_unroll_b16) << "x";
+        }
+        std::cout << ")" << std::endl;
     }
     if (t_add_mod_unroll_asm > 0.0) {
         std::cout << "mp_add_mod_fused_unroll_asm_b8:        " << t_add_mod_unroll_asm << " ms, "
@@ -1286,6 +1477,24 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                   << (op_count / (t_sub_mod_unroll_priv / 1000.0)) << " ops/s (vs base: "
                   << (t_sub_mod / t_sub_mod_unroll_priv) << "x, vs unroll: "
                   << (t_sub_mod_unroll / t_sub_mod_unroll_priv) << "x)" << std::endl;
+    }
+    if (t_sub_mod_unroll_stage1 > 0.0) {
+        std::cout << "mp_sub_mod_fused_unroll_stage1:        " << t_sub_mod_unroll_stage1 << " ms, "
+                  << (op_count / (t_sub_mod_unroll_stage1 / 1000.0)) << " ops/s (ECM fused_unroll, "
+                  << "vs base: " << (t_sub_mod / t_sub_mod_unroll_stage1) << "x";
+        if (t_sub_mod_unroll > 0.0) {
+            std::cout << ", vs scalar unroll: " << (t_sub_mod_unroll / t_sub_mod_unroll_stage1) << "x";
+        }
+        std::cout << ")" << std::endl;
+    }
+    if (t_sub_mod_unroll_b16 > 0.0) {
+        std::cout << "mp_sub_mod_fused_unroll_b16:           " << t_sub_mod_unroll_b16 << " ms, "
+                  << (op_count / (t_sub_mod_unroll_b16 / 1000.0)) << " ops/s (ECM 512 default, "
+                  << "vs base: " << (t_sub_mod / t_sub_mod_unroll_b16) << "x";
+        if (t_sub_mod_unroll > 0.0) {
+            std::cout << ", vs scalar unroll: " << (t_sub_mod_unroll / t_sub_mod_unroll_b16) << "x";
+        }
+        std::cout << ")" << std::endl;
     }
     if (t_sub_mod_unroll_asm_b32 > 0.0) {
         std::cout << "mp_sub_mod_fused_unroll_asm_b32:       " << t_sub_mod_unroll_asm_b32 << " ms, "

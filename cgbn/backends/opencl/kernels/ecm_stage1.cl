@@ -400,7 +400,91 @@ static inline uint mp_add_n(uint *r, const uint *a, const uint *b, uint limbs) {
 #define MP_ADD_MOD_FUSED_UNROLL 2
 #endif
 
-// 4096-bit specialized fused add-mod path:
+#ifndef ECM_STAGE1_ADDMOD_PATH
+#define ECM_STAGE1_ADDMOD_PATH 2
+#endif
+#ifndef ECM_STAGE1_SUBMOD_PATH
+#define ECM_STAGE1_SUBMOD_PATH 1
+#endif
+#ifndef ECM_STAGE1_ASM_B32
+#define ECM_STAGE1_ASM_B32 0
+#endif
+
+#define ECM_ADDSUB_PATH_FUSED 0
+#define ECM_ADDSUB_PATH_FUSED_UNROLL 1
+#define ECM_ADDSUB_PATH_FUSED_UNROLL_B32 2
+#define ECM_ADDSUB_PATH_ASM_B32 3
+#define ECM_ADDSUB_PATH_FUSED_UNROLL_B16 4
+
+// Hint for compile-time limb unroll (MAX_LIMBS is fixed per kernel build).
+#if MAX_LIMBS <= 16
+#define ECM_ADDSUB_UNROLL_HINT 16
+#elif MAX_LIMBS <= 32
+#define ECM_ADDSUB_UNROLL_HINT 32
+#elif MAX_LIMBS <= 64
+#define ECM_ADDSUB_UNROLL_HINT 64
+#else
+#define ECM_ADDSUB_UNROLL_HINT 32
+#endif
+
+// Generic fused add-mod: full compile-time unroll for MAX_LIMBS (421b, 512b, etc.).
+static inline void mp_add_mod_fused_unroll(uint *r, const uint *a, const uint *b, const uint *N) {
+    ulong carry_add = 0ul;
+    ulong carry_sub = 1ul;
+    #pragma unroll ECM_ADDSUB_UNROLL_HINT
+    for (uint i = 0u; i < MAX_LIMBS; ++i) {
+        ulong sum = (ulong)a[i] + (ulong)b[i] + carry_add;
+        carry_add = sum >> 32;
+        ulong temp = (ulong)(uint)sum + (ulong)(~N[i]) + carry_sub;
+        carry_sub = temp >> 32;
+        r[i] = (uint)temp;
+    }
+    if ((carry_add | carry_sub) != 0ul) {
+        return;
+    }
+    ulong c = 0ul;
+    #pragma unroll ECM_ADDSUB_UNROLL_HINT
+    for (uint i = 0u; i < MAX_LIMBS; ++i) {
+        ulong s = (ulong)r[i] + (ulong)N[i] + c;
+        r[i] = (uint)s;
+        c = s >> 32;
+    }
+}
+
+static inline int mp_sub_mod_fused_unroll(uint *r, const uint *a, const uint *b, const uint *N) {
+    ulong br = 0ul;
+    #pragma unroll ECM_ADDSUB_UNROLL_HINT
+    for (uint i = 0u; i < MAX_LIMBS; ++i) {
+        ulong av = (ulong)a[i];
+        ulong bv = (ulong)b[i];
+        ulong w = av - bv - br;
+        r[i] = (uint)w;
+        br = (av < bv + br) ? 1ul : 0ul;
+    }
+    if (br != 0ul) {
+        ulong c = 0ul;
+        #pragma unroll ECM_ADDSUB_UNROLL_HINT
+        for (uint i = 0u; i < MAX_LIMBS; ++i) {
+            ulong s = (ulong)r[i] + (ulong)N[i] + c;
+            r[i] = (uint)s;
+            c = s >> 32;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+// 512-bit alias (16 limbs): same as mp_add_mod_fused_unroll when MAX_LIMBS==16.
+static inline void mp_add_mod_fused_unroll_b16_512(uint *r, const uint *a, const uint *b,
+                                                     const uint *N) {
+    mp_add_mod_fused_unroll(r, a, b, N);
+}
+
+static inline int mp_sub_mod_fused_unroll_b16_512(uint *r, const uint *a, const uint *b,
+                                                  const uint *N) {
+    return mp_sub_mod_fused_unroll(r, a, b, N);
+}
+
 // 4 blocks x 32 limbs, matching the b32 unroll structure.
 static inline void mp_add_mod_fused_unroll_b32_4096(uint *r, const uint *a, const uint *b, const uint *N) {
     ulong carry_add = 0ul;
@@ -432,11 +516,102 @@ static inline void mp_add_mod_fused_unroll_b32_4096(uint *r, const uint *a, cons
     }
 }
 
+static inline int mp_sub_mod_fused_unroll_b32_4096(uint *r, const uint *a, const uint *b,
+                                                   const uint *N) {
+    ulong br = 0ul;
+    #pragma unroll
+    for (uint blk = 0u; blk < 4u; ++blk) {
+        uint off = blk * 32u;
+        #pragma unroll 32
+        for (uint j = 0u; j < 32u; ++j) {
+            uint i = off + j;
+            ulong av = (ulong)a[i];
+            ulong bv = (ulong)b[i];
+            ulong w = av - bv - br;
+            r[i] = (uint)w;
+            br = (av < bv + br) ? 1ul : 0ul;
+        }
+    }
+    if (br != 0ul) {
+        ulong c = 0ul;
+        #pragma unroll 32
+        for (uint i = 0u; i < 128u; ++i) {
+            ulong s = (ulong)r[i] + (ulong)N[i] + c;
+            r[i] = (uint)s;
+            c = s >> 32;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+#if ECM_STAGE1_ASM_B32 && defined(__AMDGCN__)
+static inline void mp_add_mod_asm_b32_4096(uint *r, const uint *a, const uint *b, const uint *N) {
+    uint ca = 0u, cs = 1u;
+    #pragma unroll
+    for (uint blk = 0u; blk < 4u; ++blk) {
+        uint off = blk * 32u;
+        asm_fused_block32_priv(a + off, b + off, N + off, r + off, ca, cs, &ca, &cs);
+    }
+    if ((ca | cs) == 0u) {
+        ulong c = 0ul;
+        #pragma unroll 32
+        for (uint i = 0u; i < 128u; ++i) {
+            ulong s = (ulong)r[i] + (ulong)N[i] + c;
+            r[i] = (uint)s;
+            c = s >> 32;
+        }
+    }
+}
+
+static inline int mp_sub_mod_asm_b32_4096(uint *r, const uint *a, const uint *b, const uint *N) {
+    uint br = 0u;
+    #pragma unroll
+    for (uint blk = 0u; blk < 4u; ++blk) {
+        uint off = blk * 32u;
+        asm_sub_fused_block32_priv(a + off, b + off, N + off, r + off, br, &br);
+    }
+    if (br != 0u) {
+        ulong c = 0ul;
+        #pragma unroll 32
+        for (uint i = 0u; i < 128u; ++i) {
+            ulong s = (ulong)r[i] + (ulong)N[i] + c;
+            r[i] = (uint)s;
+            c = s >> 32;
+        }
+        return 1;
+    }
+    return 0;
+}
+#endif
+
 static inline void mp_add_mod(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
     if (limbs == 128u) {
+#if ECM_STAGE1_ADDMOD_PATH == ECM_ADDSUB_PATH_ASM_B32
+#if ECM_STAGE1_ASM_B32 && defined(__AMDGCN__)
+        mp_add_mod_asm_b32_4096(r, a, b, N);
+        return;
+#else
         mp_add_mod_fused_unroll_b32_4096(r, a, b, N);
         return;
+#endif
+#elif ECM_STAGE1_ADDMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL
+        mp_add_mod_fused_unroll_b32_4096(r, a, b, N);
+        return;
+#endif
     }
+#if ECM_STAGE1_ADDMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL_B16
+    if (limbs == 16u) {
+        mp_add_mod_fused_unroll_b16_512(r, a, b, N);
+        return;
+    }
+#endif
+#if ECM_STAGE1_ADDMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL
+    if (limbs == MAX_LIMBS) {
+        mp_add_mod_fused_unroll(r, a, b, N);
+        return;
+    }
+#endif
     ulong carry_add = 0ul;
     ulong carry_sub = 1ul;
 #if MP_ADD_MOD_FUSED_UNROLL == 2
@@ -483,6 +658,27 @@ static inline void mp_add_mod(uint *r, const uint *a, const uint *b, const uint 
 
 // Returns 1 if borrow (a < b)
 static inline int mp_sub_mod(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
+    if (limbs == 128u) {
+#if ECM_STAGE1_SUBMOD_PATH == ECM_ADDSUB_PATH_ASM_B32
+#if ECM_STAGE1_ASM_B32 && defined(__AMDGCN__)
+        return mp_sub_mod_asm_b32_4096(r, a, b, N);
+#else
+        return mp_sub_mod_fused_unroll_b32_4096(r, a, b, N);
+#endif
+#elif ECM_STAGE1_SUBMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL
+        return mp_sub_mod_fused_unroll_b32_4096(r, a, b, N);
+#endif
+    }
+#if ECM_STAGE1_SUBMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL_B16
+    if (limbs == 16u) {
+        return mp_sub_mod_fused_unroll_b16_512(r, a, b, N);
+    }
+#endif
+#if ECM_STAGE1_SUBMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL
+    if (limbs == MAX_LIMBS) {
+        return mp_sub_mod_fused_unroll(r, a, b, N);
+    }
+#endif
     ulong borrow = 0ul;
     for (uint i = 0u; i < limbs; ++i) {
         ulong av = (ulong)a[i];
@@ -661,8 +857,38 @@ static inline void mp_add_mod_fused_unroll_b32_4096_local(__local uint *r, __loc
 
 static inline void mp_add_mod_local(__local uint *r, __local const uint *a, __local const uint *b,
                                     __local const uint *N, uint limbs) {
-    mp_add_mod_fused_unroll_b32_4096_local(r, a, b, N);
-    (void)limbs;
+    if (limbs == 128u) {
+#if ECM_STAGE1_ADDMOD_PATH == ECM_ADDSUB_PATH_ASM_B32
+#if ECM_STAGE1_ASM_B32 && defined(__AMDGCN__)
+        mp_add_mod_asm_b32_4096(r, a, b, N);
+        (void)limbs;
+        return;
+#else
+        mp_add_mod_fused_unroll_b32_4096_local(r, a, b, N);
+        (void)limbs;
+        return;
+#endif
+#elif ECM_STAGE1_ADDMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL
+        mp_add_mod_fused_unroll_b32_4096_local(r, a, b, N);
+        (void)limbs;
+        return;
+#endif
+    }
+#if ECM_STAGE1_ADDMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL_B16
+    if (limbs == 16u) {
+        mp_add_mod_fused_unroll_b16_512(r, a, b, N);
+        (void)limbs;
+        return;
+    }
+#endif
+#if ECM_STAGE1_ADDMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL
+    if (limbs == MAX_LIMBS) {
+        mp_add_mod_fused_unroll(r, a, b, N);
+        (void)limbs;
+        return;
+    }
+#endif
+    mp_add_mod(r, a, b, N, limbs);
 }
 
 static inline uint mp_add_n_local(__local uint *r, __local const uint *a, __local const uint *b,
@@ -690,6 +916,27 @@ static inline void mp_sub_n_local(__local uint *r, __local const uint *a, __loca
 
 static inline int mp_sub_mod_local(__local uint *r, __local const uint *a, __local const uint *b,
                                      __local const uint *N, uint limbs) {
+    if (limbs == 128u) {
+#if ECM_STAGE1_SUBMOD_PATH == ECM_ADDSUB_PATH_ASM_B32
+#if ECM_STAGE1_ASM_B32 && defined(__AMDGCN__)
+        return mp_sub_mod_asm_b32_4096(r, a, b, N);
+#else
+        return mp_sub_mod_fused_unroll_b32_4096(r, a, b, N);
+#endif
+#elif ECM_STAGE1_SUBMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL
+        return mp_sub_mod_fused_unroll_b32_4096(r, a, b, N);
+#endif
+    }
+#if ECM_STAGE1_SUBMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL_B16
+    if (limbs == 16u) {
+        return mp_sub_mod_fused_unroll_b16_512(r, a, b, N);
+    }
+#endif
+#if ECM_STAGE1_SUBMOD_PATH >= ECM_ADDSUB_PATH_FUSED_UNROLL
+    if (limbs == MAX_LIMBS) {
+        return mp_sub_mod_fused_unroll(r, a, b, N);
+    }
+#endif
     ulong borrow = 0ul;
     for (uint i = 0u; i < limbs; ++i) {
         ulong av = (ulong)a[i];

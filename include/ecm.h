@@ -122,6 +122,8 @@ typedef struct
   unsigned long gpu_checkpoint_interval_ms;
   char gpu_mul_path[48];
   char gpu_sqr_path[48];
+  char gpu_add_path[32];
+  char gpu_sub_path[32];
   double gw_k;         /* use for gwnum stage 1 if input has form k*b^n+c */
   unsigned long gw_b;  /* use for gwnum stage 1 if input has form k*b^n+c */
   unsigned long gw_n;  /* use for gwnum stage 1 if input has form k*b^n+c */

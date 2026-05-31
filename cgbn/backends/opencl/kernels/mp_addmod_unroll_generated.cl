@@ -5,6 +5,141 @@
 #ifndef MAX_LIMBS
 #define MAX_LIMBS 128
 #endif
+// --- 8 limbs (256 bit) ---
+inline void mp_add_mod_u8(uint *r, const uint *a, const uint *b, const uint *N) {
+    uint a0=a[0], b0=b[0], n0=N[0];
+    uint a1=a[1], b1=b[1], n1=N[1];
+    uint a2=a[2], b2=b[2], n2=N[2];
+    uint a3=a[3], b3=b[3], n3=N[3];
+    uint a4=a[4], b4=b[4], n4=N[4];
+    uint a5=a[5], b5=b[5], n5=N[5];
+    uint a6=a[6], b6=b[6], n6=N[6];
+    uint a7=a[7], b7=b[7], n7=N[7];
+    ulong ca = 0ul, cs = 1ul, s, t;
+    s = (ulong)a0 + (ulong)b0 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n0) + cs; cs = t >> 32; uint r0 = (uint)t;
+    s = (ulong)a1 + (ulong)b1 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n1) + cs; cs = t >> 32; uint r1 = (uint)t;
+    s = (ulong)a2 + (ulong)b2 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n2) + cs; cs = t >> 32; uint r2 = (uint)t;
+    s = (ulong)a3 + (ulong)b3 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n3) + cs; cs = t >> 32; uint r3 = (uint)t;
+    s = (ulong)a4 + (ulong)b4 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n4) + cs; cs = t >> 32; uint r4 = (uint)t;
+    s = (ulong)a5 + (ulong)b5 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n5) + cs; cs = t >> 32; uint r5 = (uint)t;
+    s = (ulong)a6 + (ulong)b6 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n6) + cs; cs = t >> 32; uint r6 = (uint)t;
+    s = (ulong)a7 + (ulong)b7 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n7) + cs; cs = t >> 32; uint r7 = (uint)t;
+    if (ca == 0ul && cs == 0ul) {
+        ulong c = 0ul;
+        s = (ulong)r0 + (ulong)n0 + c; c = s >> 32; r0 = (uint)s;
+        s = (ulong)r1 + (ulong)n1 + c; c = s >> 32; r1 = (uint)s;
+        s = (ulong)r2 + (ulong)n2 + c; c = s >> 32; r2 = (uint)s;
+        s = (ulong)r3 + (ulong)n3 + c; c = s >> 32; r3 = (uint)s;
+        s = (ulong)r4 + (ulong)n4 + c; c = s >> 32; r4 = (uint)s;
+        s = (ulong)r5 + (ulong)n5 + c; c = s >> 32; r5 = (uint)s;
+        s = (ulong)r6 + (ulong)n6 + c; c = s >> 32; r6 = (uint)s;
+        s = (ulong)r7 + (ulong)n7 + c; c = s >> 32; r7 = (uint)s;
+    }
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+}
+
+// --- 16 limbs (512 bit) ---
+inline void mp_add_mod_u16(uint *r, const uint *a, const uint *b, const uint *N) {
+    uint a0=a[0], b0=b[0], n0=N[0];
+    uint a1=a[1], b1=b[1], n1=N[1];
+    uint a2=a[2], b2=b[2], n2=N[2];
+    uint a3=a[3], b3=b[3], n3=N[3];
+    uint a4=a[4], b4=b[4], n4=N[4];
+    uint a5=a[5], b5=b[5], n5=N[5];
+    uint a6=a[6], b6=b[6], n6=N[6];
+    uint a7=a[7], b7=b[7], n7=N[7];
+    uint a8=a[8], b8=b[8], n8=N[8];
+    uint a9=a[9], b9=b[9], n9=N[9];
+    uint a10=a[10], b10=b[10], n10=N[10];
+    uint a11=a[11], b11=b[11], n11=N[11];
+    uint a12=a[12], b12=b[12], n12=N[12];
+    uint a13=a[13], b13=b[13], n13=N[13];
+    uint a14=a[14], b14=b[14], n14=N[14];
+    uint a15=a[15], b15=b[15], n15=N[15];
+    ulong ca = 0ul, cs = 1ul, s, t;
+    s = (ulong)a0 + (ulong)b0 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n0) + cs; cs = t >> 32; uint r0 = (uint)t;
+    s = (ulong)a1 + (ulong)b1 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n1) + cs; cs = t >> 32; uint r1 = (uint)t;
+    s = (ulong)a2 + (ulong)b2 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n2) + cs; cs = t >> 32; uint r2 = (uint)t;
+    s = (ulong)a3 + (ulong)b3 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n3) + cs; cs = t >> 32; uint r3 = (uint)t;
+    s = (ulong)a4 + (ulong)b4 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n4) + cs; cs = t >> 32; uint r4 = (uint)t;
+    s = (ulong)a5 + (ulong)b5 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n5) + cs; cs = t >> 32; uint r5 = (uint)t;
+    s = (ulong)a6 + (ulong)b6 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n6) + cs; cs = t >> 32; uint r6 = (uint)t;
+    s = (ulong)a7 + (ulong)b7 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n7) + cs; cs = t >> 32; uint r7 = (uint)t;
+    s = (ulong)a8 + (ulong)b8 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n8) + cs; cs = t >> 32; uint r8 = (uint)t;
+    s = (ulong)a9 + (ulong)b9 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n9) + cs; cs = t >> 32; uint r9 = (uint)t;
+    s = (ulong)a10 + (ulong)b10 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n10) + cs; cs = t >> 32; uint r10 = (uint)t;
+    s = (ulong)a11 + (ulong)b11 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n11) + cs; cs = t >> 32; uint r11 = (uint)t;
+    s = (ulong)a12 + (ulong)b12 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n12) + cs; cs = t >> 32; uint r12 = (uint)t;
+    s = (ulong)a13 + (ulong)b13 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n13) + cs; cs = t >> 32; uint r13 = (uint)t;
+    s = (ulong)a14 + (ulong)b14 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n14) + cs; cs = t >> 32; uint r14 = (uint)t;
+    s = (ulong)a15 + (ulong)b15 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n15) + cs; cs = t >> 32; uint r15 = (uint)t;
+    if (ca == 0ul && cs == 0ul) {
+        ulong c = 0ul;
+        s = (ulong)r0 + (ulong)n0 + c; c = s >> 32; r0 = (uint)s;
+        s = (ulong)r1 + (ulong)n1 + c; c = s >> 32; r1 = (uint)s;
+        s = (ulong)r2 + (ulong)n2 + c; c = s >> 32; r2 = (uint)s;
+        s = (ulong)r3 + (ulong)n3 + c; c = s >> 32; r3 = (uint)s;
+        s = (ulong)r4 + (ulong)n4 + c; c = s >> 32; r4 = (uint)s;
+        s = (ulong)r5 + (ulong)n5 + c; c = s >> 32; r5 = (uint)s;
+        s = (ulong)r6 + (ulong)n6 + c; c = s >> 32; r6 = (uint)s;
+        s = (ulong)r7 + (ulong)n7 + c; c = s >> 32; r7 = (uint)s;
+        s = (ulong)r8 + (ulong)n8 + c; c = s >> 32; r8 = (uint)s;
+        s = (ulong)r9 + (ulong)n9 + c; c = s >> 32; r9 = (uint)s;
+        s = (ulong)r10 + (ulong)n10 + c; c = s >> 32; r10 = (uint)s;
+        s = (ulong)r11 + (ulong)n11 + c; c = s >> 32; r11 = (uint)s;
+        s = (ulong)r12 + (ulong)n12 + c; c = s >> 32; r12 = (uint)s;
+        s = (ulong)r13 + (ulong)n13 + c; c = s >> 32; r13 = (uint)s;
+        s = (ulong)r14 + (ulong)n14 + c; c = s >> 32; r14 = (uint)s;
+        s = (ulong)r15 + (ulong)n15 + c; c = s >> 32; r15 = (uint)s;
+    }
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+}
 
 // --- 64 limbs (2048 bit) ---
 inline void mp_add_mod_u64(uint *r, const uint *a, const uint *b, const uint *N) {
@@ -2271,6 +2406,56 @@ inline void mp_add_mod_u256(uint *r, const uint *a, const uint *b, const uint *N
 }
 
 
+#if MAX_LIMBS == 8
+__kernel void ecm_mp_add_mod_fused_unroll_priv(
+    __global const uint *a,
+    __global const uint *b,
+    __global const uint *n,
+    __global uint *out,
+    uint limbs)
+{
+    if (limbs != 8u) return;
+    uint gid = get_global_id(0);
+    uint base = gid * 8u;
+    uint x[MAX_LIMBS], y[MAX_LIMBS], m[MAX_LIMBS], r[MAX_LIMBS];
+    for (uint i = 0u; i < 8u; ++i) {
+        x[i] = a[base + i];
+        y[i] = b[base + i];
+        m[i] = n[base + i];
+    }
+    mp_add_mod_u8(r, x, y, m);
+    for (uint i = 0u; i < 8u; ++i) {
+        out[base + i] = r[i];
+    }
+}
+#endif
+
+
+#if MAX_LIMBS == 16
+__kernel void ecm_mp_add_mod_fused_unroll_priv(
+    __global const uint *a,
+    __global const uint *b,
+    __global const uint *n,
+    __global uint *out,
+    uint limbs)
+{
+    if (limbs != 16u) return;
+    uint gid = get_global_id(0);
+    uint base = gid * 16u;
+    uint x[MAX_LIMBS], y[MAX_LIMBS], m[MAX_LIMBS], r[MAX_LIMBS];
+    for (uint i = 0u; i < 16u; ++i) {
+        x[i] = a[base + i];
+        y[i] = b[base + i];
+        m[i] = n[base + i];
+    }
+    mp_add_mod_u16(r, x, y, m);
+    for (uint i = 0u; i < 16u; ++i) {
+        out[base + i] = r[i];
+    }
+}
+#endif
+
+
 #if MAX_LIMBS == 64
 __kernel void ecm_mp_add_mod_fused_unroll_priv(
     __global const uint *a,
@@ -2342,6 +2527,214 @@ __kernel void ecm_mp_add_mod_fused_unroll_priv(
     for (uint i = 0u; i < 256u; ++i) {
         out[base + i] = r[i];
     }
+}
+#endif
+
+
+#if MAX_LIMBS == 8
+// Direct global load → scalars → store (no x/y/m/r[MAX_LIMBS] private arrays)
+__kernel void ecm_mp_add_mod_fused_unroll(
+    __global const uint *a,
+    __global const uint *b,
+    __global const uint *n,
+    __global uint *out,
+    uint limbs)
+{
+    if (limbs != 8u) return;
+    uint gid = get_global_id(0);
+    uint base = gid * 8u;
+    uint a0 = a[base + 0u];
+    uint a1 = a[base + 1u];
+    uint a2 = a[base + 2u];
+    uint a3 = a[base + 3u];
+    uint a4 = a[base + 4u];
+    uint a5 = a[base + 5u];
+    uint a6 = a[base + 6u];
+    uint a7 = a[base + 7u];
+    uint b0 = b[base + 0u];
+    uint b1 = b[base + 1u];
+    uint b2 = b[base + 2u];
+    uint b3 = b[base + 3u];
+    uint b4 = b[base + 4u];
+    uint b5 = b[base + 5u];
+    uint b6 = b[base + 6u];
+    uint b7 = b[base + 7u];
+    uint n0 = n[base + 0u];
+    uint n1 = n[base + 1u];
+    uint n2 = n[base + 2u];
+    uint n3 = n[base + 3u];
+    uint n4 = n[base + 4u];
+    uint n5 = n[base + 5u];
+    uint n6 = n[base + 6u];
+    uint n7 = n[base + 7u];
+    ulong ca = 0ul, cs = 1ul, s, t;
+    s = (ulong)a0 + (ulong)b0 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n0) + cs; cs = t >> 32; uint r0 = (uint)t;
+    s = (ulong)a1 + (ulong)b1 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n1) + cs; cs = t >> 32; uint r1 = (uint)t;
+    s = (ulong)a2 + (ulong)b2 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n2) + cs; cs = t >> 32; uint r2 = (uint)t;
+    s = (ulong)a3 + (ulong)b3 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n3) + cs; cs = t >> 32; uint r3 = (uint)t;
+    s = (ulong)a4 + (ulong)b4 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n4) + cs; cs = t >> 32; uint r4 = (uint)t;
+    s = (ulong)a5 + (ulong)b5 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n5) + cs; cs = t >> 32; uint r5 = (uint)t;
+    s = (ulong)a6 + (ulong)b6 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n6) + cs; cs = t >> 32; uint r6 = (uint)t;
+    s = (ulong)a7 + (ulong)b7 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n7) + cs; cs = t >> 32; uint r7 = (uint)t;
+    if (ca == 0ul && cs == 0ul) {
+        ulong c = 0ul;
+        s = (ulong)r0 + (ulong)n0 + c; c = s >> 32; r0 = (uint)s;
+        s = (ulong)r1 + (ulong)n1 + c; c = s >> 32; r1 = (uint)s;
+        s = (ulong)r2 + (ulong)n2 + c; c = s >> 32; r2 = (uint)s;
+        s = (ulong)r3 + (ulong)n3 + c; c = s >> 32; r3 = (uint)s;
+        s = (ulong)r4 + (ulong)n4 + c; c = s >> 32; r4 = (uint)s;
+        s = (ulong)r5 + (ulong)n5 + c; c = s >> 32; r5 = (uint)s;
+        s = (ulong)r6 + (ulong)n6 + c; c = s >> 32; r6 = (uint)s;
+        s = (ulong)r7 + (ulong)n7 + c; c = s >> 32; r7 = (uint)s;
+    }
+    out[base + 0u] = r0;
+    out[base + 1u] = r1;
+    out[base + 2u] = r2;
+    out[base + 3u] = r3;
+    out[base + 4u] = r4;
+    out[base + 5u] = r5;
+    out[base + 6u] = r6;
+    out[base + 7u] = r7;
+}
+#endif
+
+
+#if MAX_LIMBS == 16
+// Direct global load → scalars → store (no x/y/m/r[MAX_LIMBS] private arrays)
+__kernel void ecm_mp_add_mod_fused_unroll(
+    __global const uint *a,
+    __global const uint *b,
+    __global const uint *n,
+    __global uint *out,
+    uint limbs)
+{
+    if (limbs != 16u) return;
+    uint gid = get_global_id(0);
+    uint base = gid * 16u;
+    uint a0 = a[base + 0u];
+    uint a1 = a[base + 1u];
+    uint a2 = a[base + 2u];
+    uint a3 = a[base + 3u];
+    uint a4 = a[base + 4u];
+    uint a5 = a[base + 5u];
+    uint a6 = a[base + 6u];
+    uint a7 = a[base + 7u];
+    uint a8 = a[base + 8u];
+    uint a9 = a[base + 9u];
+    uint a10 = a[base + 10u];
+    uint a11 = a[base + 11u];
+    uint a12 = a[base + 12u];
+    uint a13 = a[base + 13u];
+    uint a14 = a[base + 14u];
+    uint a15 = a[base + 15u];
+    uint b0 = b[base + 0u];
+    uint b1 = b[base + 1u];
+    uint b2 = b[base + 2u];
+    uint b3 = b[base + 3u];
+    uint b4 = b[base + 4u];
+    uint b5 = b[base + 5u];
+    uint b6 = b[base + 6u];
+    uint b7 = b[base + 7u];
+    uint b8 = b[base + 8u];
+    uint b9 = b[base + 9u];
+    uint b10 = b[base + 10u];
+    uint b11 = b[base + 11u];
+    uint b12 = b[base + 12u];
+    uint b13 = b[base + 13u];
+    uint b14 = b[base + 14u];
+    uint b15 = b[base + 15u];
+    uint n0 = n[base + 0u];
+    uint n1 = n[base + 1u];
+    uint n2 = n[base + 2u];
+    uint n3 = n[base + 3u];
+    uint n4 = n[base + 4u];
+    uint n5 = n[base + 5u];
+    uint n6 = n[base + 6u];
+    uint n7 = n[base + 7u];
+    uint n8 = n[base + 8u];
+    uint n9 = n[base + 9u];
+    uint n10 = n[base + 10u];
+    uint n11 = n[base + 11u];
+    uint n12 = n[base + 12u];
+    uint n13 = n[base + 13u];
+    uint n14 = n[base + 14u];
+    uint n15 = n[base + 15u];
+    ulong ca = 0ul, cs = 1ul, s, t;
+    s = (ulong)a0 + (ulong)b0 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n0) + cs; cs = t >> 32; uint r0 = (uint)t;
+    s = (ulong)a1 + (ulong)b1 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n1) + cs; cs = t >> 32; uint r1 = (uint)t;
+    s = (ulong)a2 + (ulong)b2 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n2) + cs; cs = t >> 32; uint r2 = (uint)t;
+    s = (ulong)a3 + (ulong)b3 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n3) + cs; cs = t >> 32; uint r3 = (uint)t;
+    s = (ulong)a4 + (ulong)b4 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n4) + cs; cs = t >> 32; uint r4 = (uint)t;
+    s = (ulong)a5 + (ulong)b5 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n5) + cs; cs = t >> 32; uint r5 = (uint)t;
+    s = (ulong)a6 + (ulong)b6 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n6) + cs; cs = t >> 32; uint r6 = (uint)t;
+    s = (ulong)a7 + (ulong)b7 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n7) + cs; cs = t >> 32; uint r7 = (uint)t;
+    s = (ulong)a8 + (ulong)b8 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n8) + cs; cs = t >> 32; uint r8 = (uint)t;
+    s = (ulong)a9 + (ulong)b9 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n9) + cs; cs = t >> 32; uint r9 = (uint)t;
+    s = (ulong)a10 + (ulong)b10 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n10) + cs; cs = t >> 32; uint r10 = (uint)t;
+    s = (ulong)a11 + (ulong)b11 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n11) + cs; cs = t >> 32; uint r11 = (uint)t;
+    s = (ulong)a12 + (ulong)b12 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n12) + cs; cs = t >> 32; uint r12 = (uint)t;
+    s = (ulong)a13 + (ulong)b13 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n13) + cs; cs = t >> 32; uint r13 = (uint)t;
+    s = (ulong)a14 + (ulong)b14 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n14) + cs; cs = t >> 32; uint r14 = (uint)t;
+    s = (ulong)a15 + (ulong)b15 + ca; ca = s >> 32;
+    t = (ulong)(uint)s + (ulong)(~n15) + cs; cs = t >> 32; uint r15 = (uint)t;
+    if (ca == 0ul && cs == 0ul) {
+        ulong c = 0ul;
+        s = (ulong)r0 + (ulong)n0 + c; c = s >> 32; r0 = (uint)s;
+        s = (ulong)r1 + (ulong)n1 + c; c = s >> 32; r1 = (uint)s;
+        s = (ulong)r2 + (ulong)n2 + c; c = s >> 32; r2 = (uint)s;
+        s = (ulong)r3 + (ulong)n3 + c; c = s >> 32; r3 = (uint)s;
+        s = (ulong)r4 + (ulong)n4 + c; c = s >> 32; r4 = (uint)s;
+        s = (ulong)r5 + (ulong)n5 + c; c = s >> 32; r5 = (uint)s;
+        s = (ulong)r6 + (ulong)n6 + c; c = s >> 32; r6 = (uint)s;
+        s = (ulong)r7 + (ulong)n7 + c; c = s >> 32; r7 = (uint)s;
+        s = (ulong)r8 + (ulong)n8 + c; c = s >> 32; r8 = (uint)s;
+        s = (ulong)r9 + (ulong)n9 + c; c = s >> 32; r9 = (uint)s;
+        s = (ulong)r10 + (ulong)n10 + c; c = s >> 32; r10 = (uint)s;
+        s = (ulong)r11 + (ulong)n11 + c; c = s >> 32; r11 = (uint)s;
+        s = (ulong)r12 + (ulong)n12 + c; c = s >> 32; r12 = (uint)s;
+        s = (ulong)r13 + (ulong)n13 + c; c = s >> 32; r13 = (uint)s;
+        s = (ulong)r14 + (ulong)n14 + c; c = s >> 32; r14 = (uint)s;
+        s = (ulong)r15 + (ulong)n15 + c; c = s >> 32; r15 = (uint)s;
+    }
+    out[base + 0u] = r0;
+    out[base + 1u] = r1;
+    out[base + 2u] = r2;
+    out[base + 3u] = r3;
+    out[base + 4u] = r4;
+    out[base + 5u] = r5;
+    out[base + 6u] = r6;
+    out[base + 7u] = r7;
+    out[base + 8u] = r8;
+    out[base + 9u] = r9;
+    out[base + 10u] = r10;
+    out[base + 11u] = r11;
+    out[base + 12u] = r12;
+    out[base + 13u] = r13;
+    out[base + 14u] = r14;
+    out[base + 15u] = r15;
 }
 #endif
 
@@ -5541,6 +5934,8 @@ __kernel void ecm_mp_add_mod_fused_unroll(
 }
 #endif
 
+// --- limb-split (lpt) kernels for 8 limbs ---
+// --- limb-split (lpt) kernels for 16 limbs ---
 // --- limb-split (lpt) kernels for 64 limbs ---
 
 #if MAX_LIMBS == 64

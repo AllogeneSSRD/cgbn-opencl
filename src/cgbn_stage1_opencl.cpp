@@ -7,6 +7,7 @@
 #include "opencl_ecm_debug_utils.h"
 #include "opencl_ecm_log.h"
 #include "opencl_ecm_mont.h"
+#include "opencl_ecm_addsub_path.h"
 #include "opencl_ecm_mont_path.h"
 #include "opencl_ecm_selftest.h"
 
@@ -43,6 +44,8 @@ static uint32_t g_kernel_limbs = 0;
 static uint32_t g_kernel_tpi = 0;
 static int g_kernel_mul_path = 0;
 static int g_kernel_sqr_path = 0;
+static int g_kernel_add_path = ECM_ADDSUB_PATH_FUSED_UNROLL_B32;
+static int g_kernel_sub_path = ECM_ADDSUB_PATH_FUSED_UNROLL;
 static int g_kernel_coop_wg = 1;
 static bool g_kernel_use_coop_wg = false;
 static bool g_device_info_printed = false;
@@ -75,6 +78,58 @@ static uint32_t requested_tpi_from_env() {
 
 static bool is_power_of_two_u32(uint32_t x) {
     return x != 0u && (x & (x - 1u)) == 0u;
+}
+
+static bool device_is_amd(cl_device_id dev) {
+    if (dev == nullptr) {
+        return false;
+    }
+    char vendor[256] = {};
+    clGetDeviceInfo(dev, CL_DEVICE_VENDOR, sizeof(vendor), vendor, nullptr);
+    for (char *p = vendor; *p; ++p) {
+        *p = (char)std::tolower((unsigned char)*p);
+    }
+    return std::strstr(vendor, "advanced micro devices") != nullptr || std::strstr(vendor, "amd") != nullptr;
+}
+
+static int resolve_addsub_paths(const char *gpu_add_path, const char *gpu_sub_path, uint32_t limbs,
+                                int *add_path_out, int *sub_path_out) {
+    if (!g_ctx_ready) {
+        cl_int err = cgbn::opencl::create_context(g_ctx);
+        if (err != CL_SUCCESS) {
+            ecm_ts_fprintf(stderr, "OpenCL: failed to create context (%d)\n", err);
+            return -1;
+        }
+        g_ctx_ready = true;
+    }
+    const bool is_amd = device_is_amd(g_ctx.device);
+    int add_path = opencl_ecm_resolve_addsub_path(gpu_add_path, limbs, is_amd, true);
+    if (add_path == -2) {
+        ecm_ts_fprintf(stderr,
+                       "OpenCL: unknown --add path '%s' (fused, fused_unroll, fused_unroll_b16, "
+                       "fused_unroll_b32, asm_b32, default)\n",
+                       gpu_add_path ? gpu_add_path : "");
+        return -1;
+    }
+    int sub_path = opencl_ecm_resolve_addsub_path(gpu_sub_path, limbs, is_amd, false);
+    if (sub_path == -2) {
+        ecm_ts_fprintf(stderr,
+                       "OpenCL: unknown --sub path '%s' (fused, fused_unroll, fused_unroll_b16, "
+                       "fused_unroll_b32, asm_b32, default)\n",
+                       gpu_sub_path ? gpu_sub_path : "");
+        return -1;
+    }
+    if (add_path == ECM_ADDSUB_PATH_ASM_B32 && limbs != 128u) {
+        ecm_ts_fprintf(stderr, "OpenCL: asm_b32 addmod requires 4096-bit (128 limbs)\n");
+        return -1;
+    }
+    if (sub_path == ECM_ADDSUB_PATH_ASM_B32 && limbs != 128u) {
+        ecm_ts_fprintf(stderr, "OpenCL: asm_b32 submod requires 4096-bit (128 limbs)\n");
+        return -1;
+    }
+    *add_path_out = add_path;
+    *sub_path_out = sub_path;
+    return 0;
 }
 
 static uint32_t choose_effective_tpi(uint32_t limbs) {
@@ -447,8 +502,8 @@ static uint32_t select_bits(size_t n_log2) {
     return 0;
 }
 
-static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr_path, int verbose,
-                             double *device_init_ms) {
+static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr_path, int add_path,
+                             int sub_path, int verbose, double *device_init_ms) {
     const int coop_wg =
         (limbs == 128u)
             ? std::max(opencl_ecm_mont4096_coop_wg_size(mul_path),
@@ -468,7 +523,8 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
         g_ctx_ready = true;
     }
     if (g_ecm_kernel && g_kernel_limbs == limbs && g_kernel_tpi == tpi &&
-        g_kernel_mul_path == mul_path && g_kernel_sqr_path == sqr_path) {
+        g_kernel_mul_path == mul_path && g_kernel_sqr_path == sqr_path &&
+        g_kernel_add_path == add_path && g_kernel_sub_path == sub_path) {
         if (device_init_ms) {
             *device_init_ms = 0.0;
         }
@@ -505,6 +561,20 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
     } else {
         src = ecm_src;
     }
+    const bool needs_asm_b32 =
+        opencl_ecm_addsub_path_needs_asm_b32(add_path) ||
+        opencl_ecm_addsub_path_needs_asm_b32(sub_path);
+    if (needs_asm_b32) {
+        std::string asm_src = cgbn::opencl::load_kernel_file(
+            "cgbn/backends/opencl/kernels/mp_addsub_asm_block32_stage1_generated.cl");
+        if (asm_src.empty()) {
+            ecm_ts_fprintf(stderr,
+                           "OpenCL: failed to load mp_addsub_asm_block32_stage1_generated.cl "
+                           "(run tools/gen_mp_addsub_asm_block32_stage1.py)\n");
+            return -1;
+        }
+        src = asm_src + "\n" + src;
+    }
     int stage1_force_normalize = 1;
     int add_mod_fused_unroll = 2;
     if (const char *v = std::getenv("ECM_STAGE1_FORCE_NORMALIZE")) stage1_force_normalize = std::atoi(v);
@@ -514,13 +584,14 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
             add_mod_fused_unroll = 2;
         }
     }
-    char opts[512];
+    char opts[640];
     snprintf(opts, sizeof(opts),
              "-DMAX_LIMBS=%u -DTPI=%u -DECM_STAGE1_FORCE_NORMALIZE=%d -DMP_ADD_MOD_FUSED_UNROLL=%d "
              "-DECM_STAGE1_MUL_PATH=%d -DECM_STAGE1_SQR_PATH=%d -DECM_STAGE1_COOP_WG=%d "
-             "-DECM_STAGE1_COOP_SCRATCH_U32=%d -DECM_STAGE1_HAS_FIPS4096=%d",
+             "-DECM_STAGE1_COOP_SCRATCH_U32=%d -DECM_STAGE1_HAS_FIPS4096=%d "
+             "-DECM_STAGE1_ADDMOD_PATH=%d -DECM_STAGE1_SUBMOD_PATH=%d -DECM_STAGE1_ASM_B32=%d",
              limbs, tpi, stage1_force_normalize, add_mod_fused_unroll, mul_path, sqr_path, coop_wg,
-             coop_scratch, has_fips4096);
+             coop_scratch, has_fips4096, add_path, sub_path, needs_asm_b32 ? 1 : 0);
 
     cl_int buildErr = CL_SUCCESS;
     g_ecm_program = cgbn::opencl::build_program_from_source(g_ctx, src.c_str(), opts, buildErr);
@@ -539,6 +610,8 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
     g_kernel_tpi = tpi;
     g_kernel_mul_path = mul_path;
     g_kernel_sqr_path = sqr_path;
+    g_kernel_add_path = add_path;
+    g_kernel_sub_path = sub_path;
     g_kernel_coop_wg = coop_wg;
     g_kernel_use_coop_wg = use_coop_wg;
     auto t_init1 = std::chrono::high_resolution_clock::now();
@@ -556,9 +629,10 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
     opencl_ecm_mont4096_path_labels(mul_path, sqr_path, &mul_name, &sqr_name);
     ocl_log_verbose(verbose,
                     "OpenCL: built kernel MAX_LIMBS=%u TPI=%u ADDMOD_UNROLL=%d NORM=%d "
-                    "mul4096=%s sqr4096=%s coop_wg=%d (%.0fms)\n",
+                    "mul4096=%s sqr4096=%s addmod=%s submod=%s asm_b32=%d coop_wg=%d (%.0fms)\n",
                     limbs, tpi, add_mod_fused_unroll, stage1_force_normalize, mul_name, sqr_name,
-                    use_coop_wg ? coop_wg : 1, init_ms);
+                    opencl_ecm_addsub_path_name(add_path), opencl_ecm_addsub_path_name(sub_path),
+                    needs_asm_b32 ? 1 : 0, use_coop_wg ? coop_wg : 1, init_ms);
     return 0;
 }
 
@@ -586,7 +660,8 @@ static int resolve_mont4096_paths(const char *gpu_mul_path, const char *gpu_sqr_
 }
 
 extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mul_path,
-                                  const char *gpu_sqr_path) {
+                                  const char *gpu_sqr_path, const char *gpu_add_path,
+                                  const char *gpu_sub_path) {
     uint32_t BITS = select_bits(n_log2);
     if (BITS == 0) {
         return ECM_ERROR;
@@ -596,16 +671,22 @@ extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mu
     if (resolve_mont4096_paths(gpu_mul_path, gpu_sqr_path, &mul_path, &sqr_path) != 0) {
         return ECM_ERROR;
     }
-    double init_ms = 0.0;
     const uint32_t limbs = BITS / 32;
+    int add_path = 0;
+    int sub_path = 0;
+    if (resolve_addsub_paths(gpu_add_path, gpu_sub_path, limbs, &add_path, &sub_path) != 0) {
+        return ECM_ERROR;
+    }
+    double init_ms = 0.0;
     const uint32_t tpi = choose_effective_tpi(limbs);
-    return ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, verbose, &init_ms);
+    return ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, add_path, sub_path, verbose, &init_ms);
 }
 
 extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, const mpz_t s,
                     uint32_t curves, uint32_t *sigma_ptr,
                     unsigned long checkpoint_interval_ms, float *gputime, int verbose,
-                    const char *gpu_mul_path, const char *gpu_sqr_path) {
+                    const char *gpu_mul_path, const char *gpu_sqr_path, const char *gpu_add_path,
+                    const char *gpu_sub_path) {
     uint32_t sigma = *sigma_ptr;
     if (sigma == 0 || (uint64_t)sigma + curves > 0xFFFFFFFFull) {
         ecm_ts_fprintf(stderr, "Invalid sigma/curves range\n");
@@ -618,13 +699,14 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         return ECM_ERROR;
     }
 
+    const size_t n_log2 = mpz_sizeinbase(N, 2);
+
     uint64_t s_num_bits;
     uint32_t *s_bits = allocate_and_set_s_bits(s, &s_num_bits);
     if (!s_bits) {
         return ECM_ERROR;
     }
 
-    const size_t n_log2 = mpz_sizeinbase(N, 2);
     const char *ckpt_filename = opencl_ecm_checkpoint_filename(N);
     opencl_ecm_checkpoint_header_t ckpt_header{};
     uint32_t *ckpt_data = nullptr;
@@ -669,6 +751,16 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     const uint32_t tpi =
         ckpt_loaded ? ckpt_header.TPI : choose_effective_tpi(limbs);
 
+    int add_path = 0;
+    int sub_path = 0;
+    if (resolve_addsub_paths(gpu_add_path, gpu_sub_path, limbs, &add_path, &sub_path) != 0) {
+        free(s_bits);
+        if (ckpt_data) {
+            free(ckpt_data);
+        }
+        return ECM_ERROR;
+    }
+
     if (limbs != 128u && (mul_path != 0 || sqr_path != 0)) {
         ecm_ts_fprintf(stderr,
                        "Warning: --mul/--sqr 4096 paths ignored (need 4096-bit kernel, got %u-bit)\n",
@@ -676,9 +768,19 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         mul_path = 0;
         sqr_path = 0;
     }
+    if (limbs != 128u &&
+        (opencl_ecm_addsub_path_needs_asm_b32(add_path) ||
+         opencl_ecm_addsub_path_needs_asm_b32(sub_path))) {
+        ecm_ts_fprintf(stderr,
+                       "Warning: --add/--sub asm_b32 ignored (need 4096-bit kernel, got %u-bit)\n",
+                       BITS);
+        add_path = ECM_ADDSUB_PATH_FUSED_UNROLL_B32;
+        sub_path = ECM_ADDSUB_PATH_FUSED_UNROLL_B32;
+    }
 
     double device_init_ms = 0.0;
-    if (ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, verbose, &device_init_ms) != 0) {
+    if (ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, add_path, sub_path, verbose,
+                          &device_init_ms) != 0) {
         free(s_bits);
         if (ckpt_data) {
             free(ckpt_data);
@@ -733,11 +835,11 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     const char *mont_sqr_op = (limbs == 16u) ? "mont_sqr_priv_unroll_only_512"
                              : (limbs == 128u) ? opencl_ecm_mont4096_path_name(sqr_path)
                                                : "mont_sqr_priv_unroll32";
-    const char *addmod_op = (limbs == 128u) ? "mp_add_mod_fused_unroll_b32_4096"
-                                            : "mp_add_mod_fused_unroll(default)";
+    const char *addmod_op = opencl_ecm_addsub_path_name(add_path);
+    const char *submod_op = opencl_ecm_addsub_path_name(sub_path);
     ecm_ts_fprintf(stdout,
-            "GPU: stage1 operators: mul=%s, sqr=%s, addmod=%s\n",
-            mont_mul_op, mont_sqr_op, addmod_op);
+            "GPU: stage1 operators: mul=%s, sqr=%s, addmod=%s, submod=%s\n",
+            mont_mul_op, mont_sqr_op, addmod_op, submod_op);
     if (device_init_ms > 0.0) {
         ecm_ts_fprintf(stdout, "GPU: kernel compile/build for this limb size took %.0fms\n",
                 device_init_ms);

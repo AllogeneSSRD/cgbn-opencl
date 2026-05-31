@@ -213,7 +213,7 @@ CHUNK_SIZES = [16, 32, 48, 64]
 
 
 def main() -> None:
-    limb_counts = [64, 128, 256]  # 2048 / 4096 / 8192 bit
+    limb_counts = [8, 16, 64, 128, 256]  # 256 / 512 / 2048 / 4096 / 8192 bit
     parts = [HEADER]
     for n in limb_counts:
         parts.append(f"// --- {n} limbs ({n * 32} bit) ---\n")

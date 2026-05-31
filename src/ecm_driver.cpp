@@ -26,6 +26,7 @@
 #include <gmp.h>
 
 #include "opencl_ecm_entry.h"
+#include "opencl_ecm_addsub_path.h"
 #include "ecm.h"
 #include "cgbn_stage1.h"
 #include "opencl_ecm_log.h"
@@ -754,6 +755,9 @@ int main(int argc, char **argv){
     bool saveappend = false;
     std::string gpu_mul_path;
     std::string gpu_sqr_path;
+    std::string gpu_add_path;
+    std::string gpu_sub_path;
+    bool show_kernels = false;
     // parse args simple
     std::vector<std::string> pos;
     for(int i=1;i<argc;i++){
@@ -814,7 +818,24 @@ int main(int argc, char **argv){
             gpu_sqr_path = argv[++i];
             continue;
         }
+        if(a == "--add" && i+1<argc) {
+            gpu_add_path = argv[++i];
+            continue;
+        }
+        if(a == "--sub" && i+1<argc) {
+            gpu_sub_path = argv[++i];
+            continue;
+        }
+        if(a == "--showkernel") {
+            show_kernels = true;
+            continue;
+        }
         pos.push_back(a);
+    }
+
+    if (show_kernels) {
+        opencl_ecm_print_available_kernels(stdout);
+        return 0;
     }
 
     unsigned long gpuckpt_ms = ECM_DEFAULT_GPU_CHECKPOINT_INTERVAL_MS;
@@ -844,6 +865,12 @@ int main(int argc, char **argv){
     }
     if (!gpu_sqr_path.empty()) {
         std::cout << ", sqr=" << gpu_sqr_path;
+    }
+    if (!gpu_add_path.empty()) {
+        std::cout << ", add=" << gpu_add_path;
+    }
+    if (!gpu_sub_path.empty()) {
+        std::cout << ", sub=" << gpu_sub_path;
     }
     std::cout << std::endl;
     if(!pos.empty()){
@@ -916,6 +943,14 @@ int main(int argc, char **argv){
         strncpy(params->gpu_sqr_path, gpu_sqr_path.c_str(), sizeof(params->gpu_sqr_path) - 1u);
         params->gpu_sqr_path[sizeof(params->gpu_sqr_path) - 1u] = '\0';
     }
+    if (!gpu_add_path.empty()) {
+        strncpy(params->gpu_add_path, gpu_add_path.c_str(), sizeof(params->gpu_add_path) - 1u);
+        params->gpu_add_path[sizeof(params->gpu_add_path) - 1u] = '\0';
+    }
+    if (!gpu_sub_path.empty()) {
+        strncpy(params->gpu_sub_path, gpu_sub_path.c_str(), sizeof(params->gpu_sub_path) - 1u);
+        params->gpu_sub_path[sizeof(params->gpu_sub_path) - 1u] = '\0';
+    }
     params->verbose = verbose ? 1 : 0;
     params->param = ECM_PARAM_BATCH_32BITS_D; // GPU expects batch 32bits d
 
@@ -945,7 +980,9 @@ int main(int argc, char **argv){
         }
         int prep = gpu_prepare_opencl((size_t)mpz_sizeinbase(N, 2), params->verbose,
                                       params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
-                                      params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr);
+                                      params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr,
+                                      params->gpu_add_path[0] ? params->gpu_add_path : nullptr,
+                                      params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr);
         if (prep != 0) {
             std::cerr << "GPU: OpenCL prepare failed" << std::endl;
             mpz_clear(N);
@@ -1003,7 +1040,9 @@ int main(int argc, char **argv){
     int ret = opencl_ecm_stage1(factors, array_found, N, params->batch_s, curves, &firstsigma,
                                 params->gpu_checkpoint_interval_ms, &gputime, params->verbose,
                                 params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
-                                params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr);
+                                params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr,
+                                params->gpu_add_path[0] ? params->gpu_add_path : nullptr,
+                                params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr);
 
     std::cout << "opencl_ecm_stage1 returned: "<< ret <<" gputime="<< gputime <<" ms\n";
     for(uint32_t i=0;i<curves;i++){

@@ -110,7 +110,7 @@ __kernel void ecm_mp_sub_mod_fused_unroll(
 
 
 def main() -> None:
-    limb_counts = [64, 128, 256]
+    limb_counts = [8, 16, 64, 128, 256]
     parts = [HEADER]
     for n in limb_counts:
         parts.append(f"// --- {n} limbs ({n * 32} bit) ---\n")

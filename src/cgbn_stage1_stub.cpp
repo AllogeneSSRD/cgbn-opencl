@@ -8,10 +8,13 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found,
                                uint32_t curves, uint32_t *sigma,
                                unsigned long checkpoint_interval_ms,
                                float *gputime, int verbose,
-                               const char *gpu_mul_path, const char *gpu_sqr_path)
+                               const char *gpu_mul_path, const char *gpu_sqr_path,
+                               const char *gpu_add_path, const char *gpu_sub_path)
 {
     (void)gpu_mul_path;
     (void)gpu_sqr_path;
+    (void)gpu_add_path;
+    (void)gpu_sub_path;
     // Minimal stub: mark no factors found, set gputime to 0
     std::cout << "Warning: cgbn_ecm_stage1 is a stub that does not perform any computation.\n";
     if(gputime) *gputime = 0.0f;
