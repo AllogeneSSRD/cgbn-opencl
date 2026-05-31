@@ -1,4 +1,8 @@
+# C/C++ 强制文本
+*.c text diff
+*.cpp text diff
+*.h text diff
+
+# 可选：统一换行（跨平台）
 # Auto detect text files and perform LF normalization
 * text=auto
-*.cpp text
-*.h text
