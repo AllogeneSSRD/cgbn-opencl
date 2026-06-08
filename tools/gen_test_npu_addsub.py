@@ -62,6 +62,25 @@ class TestNoNpuUint512Import(unittest.TestCase):
         self.assertNotIn("import npu_uint512", src)
 
 
+class TestKoggeStoneAdd(unittest.TestCase):
+    def test_kogge_matches_serial_all_limb_bits(self):
+        for lb in m.SUPPORTED_LIMB_BITS:
+            w = m.MpWidth(512, lb)
+            n_vec, a_vec, b_vec = m.opencl_test_vectors(w)
+            ok = m.verify_kogge_matches_serial(w, a_vec, b_vec, n_vec, instances=8)
+            self.assertTrue(ok, f"kogge vs serial failed lb={lb}")
+
+    def test_kogge_matches_ref_mp_add_n(self):
+        w = m.MpWidth(512)
+        n_vec, a_vec, b_vec = m.opencl_test_vectors(w)
+        a_batch, b_batch, _ = m.tile_vectors(a_vec, b_vec, n_vec, 4)
+        got = m.int_from_limbs(m.limbwise_add_kogge(w, a_batch, b_batch)[0], w)
+        a0 = m.int_from_limbs(a_vec, w)
+        b0 = m.int_from_limbs(b_vec, w)
+        expect = m.ref_mp_add_n(a0, b0, w.bits)
+        self.assertEqual(got & ((1 << w.bits) - 1), expect & ((1 << w.bits) - 1))
+
+
 class TestNumpyOps(unittest.TestCase):
     def test_all_widths_numpy_backend(self):
         for bits in m.SELF_TEST_WIDTHS:
@@ -86,7 +105,7 @@ class TestOnnxBackend(unittest.TestCase):
         n_vec, a_vec, b_vec = m.opencl_test_vectors(width)
         onnx_be = m.NPUAddSubBackend(width, preferred_eps=["CPUExecutionProvider"])
         if not onnx_be.active:
-            self.skipTest("CPU ONNX session unavailable")
+            self.skipTest("ONNX session unavailable")
         ok = m.verify_ops(
             width,
             a_vec,
@@ -99,12 +118,12 @@ class TestOnnxBackend(unittest.TestCase):
 
 class TestSelfTestRunner(unittest.TestCase):
     def test_run_self_test_numpy_only(self):
-        ok = m.run_self_test(include_onnx=False)
+        ok = m.run_self_test(widths=(512,), limb_bits_list=(32,), include_onnx=False)
         self.assertTrue(ok)
 
 
 def main() -> int:
-    suite = unittest.defaultTestLoader.loadTestsFromModule(sys.modules[__name__])
+    suite = unittest.TestLoader().loadTestsFromModule(sys.modules[__name__])
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     return 0 if result.wasSuccessful() else 1
 
@@ -113,5 +132,12 @@ if __name__ == "__main__":
     raise SystemExit(main())
 '''
 
-OUT.write_text(CONTENT, encoding="utf-8", newline="\n")
-print(f"Wrote {OUT}")
+
+def main() -> None:
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(CONTENT, encoding="utf-8", newline="\n")
+    print(f"Wrote {OUT} ({OUT.stat().st_size} bytes)")
+
+
+if __name__ == "__main__":
+    main()

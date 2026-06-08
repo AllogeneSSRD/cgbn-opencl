@@ -13,6 +13,15 @@ Operations (ecm_addsub_bench.cl):
   mp_sub_n    r = a - N
   mp_add_mod  r = (a + b) mod N   (fused speculative subtract)
   mp_sub_mod  r = (a - b) mod N
+
+Carry paths (benchmark path labels):
+  npu_*_serial  ONNX/NPU limb ops + host serial/fused mod reduce
+  npu_*_kogge   ONNX/NPU limb ops + host Kogge-Stone mod reduce
+  cpu_serial    NumPy serial ripple carry
+  cpu_kogge     NumPy Kogge-Stone parallel prefix (add/mod)
+  cpu_fused     NumPy fused speculative mod subtract (legacy)
+
+Edit this file directly (RyzenAI/npu_addsub.py); tools/gen_npu_addsub.py is legacy.
 """
 
 from __future__ import annotations
@@ -214,7 +223,7 @@ def tile_vectors(a: np.ndarray, b: np.ndarray, n: np.ndarray, instances: int):
 
 
 def limbwise_add(width: MpWidth, a: np.ndarray, b: np.ndarray) -> np.ndarray:
-    """Element-wise limb add with carry propagation."""
+    """Element-wise limb add with serial carry propagation (O(limbs) steps)."""
     lb = width.limb_bits
     mask = width.limb_mask
     a = np.asarray(a, dtype=np.uint64)
@@ -236,6 +245,147 @@ def limbwise_add(width: MpWidth, a: np.ndarray, b: np.ndarray) -> np.ndarray:
         result[:, j] = s & mask_np
         carry = s >> lb
     return result
+
+
+def kogge_stone_prefix(g: np.ndarray, p: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """Parallel prefix on (generate, propagate) pairs; O(log2(limbs)) rounds."""
+    limbs = g.shape[1]
+    shift = 1
+    while shift < limbs:
+        g_shifted = np.zeros_like(g)
+        p_shifted = np.zeros_like(p)
+        g_shifted[:, shift:] = g[:, :-shift]
+        p_shifted[:, shift:] = p[:, :-shift]
+        g = g | (p & g_shifted)
+        p = p & p_shifted
+        shift <<= 1
+    return g, p
+
+
+def kogge_stone_add_with_carry(
+    a_arr: np.ndarray, b_arr: np.ndarray, limb_bits: int
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Kogge-Stone parallel carry add over [batch, limbs].
+    Returns (result_limbs, carry_out) where carry_out is per-row MS carry.
+    """
+    if limb_bits == 64:
+        batch, limbs = a_arr.shape
+        out = np.zeros((batch, limbs), dtype=np.uint64)
+        carry_out = np.zeros(batch, dtype=np.uint64)
+        for i in range(batch):
+            row, c = kogge_stone_add_row(
+                np.asarray(a_arr[i], dtype=np.uint64),
+                np.asarray(b_arr[i], dtype=np.uint64),
+                limb_bits,
+            )
+            out[i] = row
+            carry_out[i] = c
+        return out, carry_out
+
+    mask = np.uint64((1 << limb_bits) - 1)
+    a_arr = np.asarray(a_arr, dtype=np.uint64)
+    b_arr = np.asarray(b_arr, dtype=np.uint64)
+    limbs = a_arr.shape[1]
+
+    raw_sum = a_arr.astype(np.int64) + b_arr.astype(np.int64)
+    g = (raw_sum >> limb_bits).astype(np.int64)
+    p = ((raw_sum & int(mask)) == int(mask)).astype(np.int64)
+    g, _p = kogge_stone_prefix(g, p)
+
+    carry_in = np.zeros_like(g)
+    carry_in[:, 1:] = g[:, :-1]
+    result = (raw_sum + carry_in) & int(mask)
+    carry_out = ((raw_sum[:, -1] + carry_in[:, -1]) >> limb_bits).astype(np.uint64)
+    return result.astype(np.uint64), carry_out
+
+
+def kogge_stone_add(a_arr: np.ndarray, b_arr: np.ndarray, limb_bits: int) -> np.ndarray:
+    """Kogge-Stone add; carry depth O(log2(limbs)) instead of O(limbs) serial ripple."""
+    result, _carry = kogge_stone_add_with_carry(a_arr, b_arr, limb_bits)
+    return result
+
+
+def kogge_stone_sub_borrow(
+    a_arr: np.ndarray, b_arr: np.ndarray, limb_bits: int
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Parallel-prefix subtract a - b over limbs (OpenCL sub_wg borrow propagation).
+    Returns (result_limbs, borrow_out) where borrow_out=1 iff a < b.
+    """
+    if limb_bits == 64:
+        batch, limbs = a_arr.shape
+        out = np.zeros((batch, limbs), dtype=np.uint64)
+        borrow_out = np.zeros(batch, dtype=np.uint64)
+        mask = (1 << limb_bits) - 1
+        for i in range(batch):
+            ai = np.asarray(a_arr[i], dtype=np.uint64)
+            bi = np.asarray(b_arr[i], dtype=np.uint64)
+            d = [(int(ai[j]) - int(bi[j])) & mask for j in range(limbs)]
+            g = [1 if int(ai[j]) < int(bi[j]) else 0 for j in range(limbs)]
+            p = [1 if d[j] == 0 else 0 for j in range(limbs)]
+            shift = 1
+            while shift < limbs:
+                new_g = list(g)
+                new_p = list(p)
+                for j in range(shift, limbs):
+                    new_g[j] = g[j] | (p[j] & g[j - shift])
+                    new_p[j] = p[j] & p[j - shift]
+                g = new_g
+                p = new_p
+                shift <<= 1
+            borrow_in = [0] * limbs
+            for j in range(1, limbs):
+                borrow_in[j] = g[j - 1]
+            out[i] = np.array([(d[j] - borrow_in[j]) & mask for j in range(limbs)], dtype=np.uint64)
+            borrow_out[i] = g[limbs - 1]
+        return out, borrow_out
+
+    mask = np.uint64((1 << limb_bits) - 1)
+    a_arr = np.asarray(a_arr, dtype=np.uint64)
+    b_arr = np.asarray(b_arr, dtype=np.uint64)
+    d = (a_arr - b_arr) & mask
+    g = (a_arr < b_arr).astype(np.int64)
+    p = (d == 0).astype(np.int64)
+    g, _p = kogge_stone_prefix(g, p)
+
+    borrow_in = np.zeros_like(g)
+    borrow_in[:, 1:] = g[:, :-1]
+    result = (d.astype(np.int64) - borrow_in) & int(mask)
+    borrow_out = g[:, -1].astype(np.uint64)
+    return result.astype(np.uint64), borrow_out
+
+
+def kogge_stone_add_row(a_row: np.ndarray, b_row: np.ndarray, limb_bits: int) -> Tuple[np.ndarray, int]:
+    """Single-row Kogge-Stone add (64b/limb wide arithmetic)."""
+    mask = (1 << limb_bits) - 1
+    limbs = a_row.shape[0]
+    raw_sum = [int(a_row[j]) + int(b_row[j]) for j in range(limbs)]
+    g = [(s >> limb_bits) for s in raw_sum]
+    p = [1 if (s & mask) == mask else 0 for s in raw_sum]
+
+    shift = 1
+    while shift < limbs:
+        new_g = list(g)
+        new_p = list(p)
+        for j in range(shift, limbs):
+            new_g[j] = g[j] | (p[j] & g[j - shift])
+            new_p[j] = p[j] & p[j - shift]
+        g = new_g
+        p = new_p
+        shift <<= 1
+
+    carry_in = [0] * limbs
+    for j in range(1, limbs):
+        carry_in[j] = g[j - 1]
+
+    result = np.array([(raw_sum[j] + carry_in[j]) & mask for j in range(limbs)], dtype=np.uint64)
+    carry_out = (raw_sum[-1] + carry_in[-1]) >> limb_bits
+    return result, carry_out
+
+
+def limbwise_add_kogge(width: MpWidth, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return kogge_stone_add(np.asarray(a, dtype=np.uint64), np.asarray(b, dtype=np.uint64), width.limb_bits)
 
 
 def propagate_borrow_sub(width: MpWidth, a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -272,6 +422,10 @@ def ref_mp_sub_mod(a: int, b: int, n: int) -> int:
 
 def numpy_mp_add_n(width: MpWidth, a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return limbwise_add(width, a, b)
+
+
+def numpy_mp_add_n_kogge(width: MpWidth, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+    return limbwise_add_kogge(width, a, b)
 
 
 def numpy_mp_sub_n(width: MpWidth, a: np.ndarray, n: np.ndarray) -> np.ndarray:
@@ -392,6 +546,133 @@ def numpy_mp_sub_mod_vec(width: MpWidth, a: np.ndarray, b: np.ndarray, n: np.nda
     return r
 
 
+def numpy_mp_add_mod_kogge(width: MpWidth, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
+    """
+    (a + b) mod N via Kogge-Stone carry/borrow (OpenCL mp_add_mod_mask structure).
+
+    S = a + b; D = S - N; pick D when S >= N (carry or non-borrowing subtract).
+    """
+    a = np.asarray(a, dtype=np.uint64)
+    b = np.asarray(b, dtype=np.uint64)
+    n = np.asarray(n, dtype=np.uint64)
+    lb = width.limb_bits
+    s, carry_add = kogge_stone_add_with_carry(a, b, lb)
+    d, borrow = kogge_stone_sub_borrow(s, n, lb)
+    need_sub = (carry_add != 0) | (borrow == 0)
+    return np.where(need_sub[:, None], d, s)
+
+
+def numpy_mp_sub_mod_kogge(width: MpWidth, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
+    """(a - b) mod N: Kogge subtract, then Kogge add N when underflow."""
+    a = np.asarray(a, dtype=np.uint64)
+    b = np.asarray(b, dtype=np.uint64)
+    n = np.asarray(n, dtype=np.uint64)
+    lb = width.limb_bits
+    r, borrow = kogge_stone_sub_borrow(a, b, lb)
+    need_fix = borrow.astype(bool)
+    if not np.any(need_fix):
+        return r
+    fixed = kogge_stone_add(r, n, lb)
+    return np.where(need_fix[:, None], fixed, r)
+
+
+def npu_mp_add_mod_serial(
+    width: MpWidth,
+    a: np.ndarray,
+    b: np.ndarray,
+    n: np.ndarray,
+    *,
+    add_session=None,
+) -> np.ndarray:
+    """NPU mod add: ONNX/NPU limb add + host serial/fused mod reduce."""
+    a = np.asarray(a, dtype=np.uint64)
+    b = np.asarray(b, dtype=np.uint64)
+    n = np.asarray(n, dtype=np.uint64)
+    if add_session is not None:
+        add_session.run(None, {"X": a.astype(np.int64), "Y": b.astype(np.int64)})
+    return numpy_mp_add_mod_vec(width, a, b, n)
+
+
+def npu_mp_sub_mod_serial(
+    width: MpWidth,
+    a: np.ndarray,
+    b: np.ndarray,
+    n: np.ndarray,
+    *,
+    sub_session=None,
+    add_session=None,
+) -> np.ndarray:
+    """NPU mod sub: ONNX/NPU limb sub + host serial/fused mod reduce."""
+    del add_session  # host serial path fixes underflow without a second NPU add
+    a = np.asarray(a, dtype=np.uint64)
+    b = np.asarray(b, dtype=np.uint64)
+    n = np.asarray(n, dtype=np.uint64)
+    if sub_session is not None:
+        sub_session.run(None, {"X": a.astype(np.int64), "Y": b.astype(np.int64)})
+    return numpy_mp_sub_mod_vec(width, a, b, n)
+
+
+def npu_mp_add_mod_kogge(
+    width: MpWidth,
+    a: np.ndarray,
+    b: np.ndarray,
+    n: np.ndarray,
+    *,
+    add_session=None,
+) -> np.ndarray:
+    """
+    NPU mod add: ONNX/NPU limb add + host Kogge-Stone mod reduce (mp_add_mod_mask).
+
+    The ORT add session is invoked when present; carry/mod reduction uses Kogge on CPU.
+    """
+    a = np.asarray(a, dtype=np.uint64)
+    b = np.asarray(b, dtype=np.uint64)
+    n = np.asarray(n, dtype=np.uint64)
+    if add_session is not None:
+        add_session.run(None, {"X": a.astype(np.int64), "Y": b.astype(np.int64)})
+    lb = width.limb_bits
+    s, carry_add = kogge_stone_add_with_carry(a, b, lb)
+    d, borrow = kogge_stone_sub_borrow(s, n, lb)
+    need_sub = (carry_add != 0) | (borrow == 0)
+    return np.where(need_sub[:, None], d, s)
+
+
+def npu_mp_sub_mod_kogge(
+    width: MpWidth,
+    a: np.ndarray,
+    b: np.ndarray,
+    n: np.ndarray,
+    *,
+    sub_session=None,
+    add_session=None,
+) -> np.ndarray:
+    """
+    NPU mod sub: ONNX/NPU limb sub + host Kogge-Stone mod reduce.
+
+    Underflow fix uses NPU add session (when present) plus Kogge carry for r + N.
+    """
+    a = np.asarray(a, dtype=np.uint64)
+    b = np.asarray(b, dtype=np.uint64)
+    n = np.asarray(n, dtype=np.uint64)
+    if sub_session is not None:
+        sub_session.run(None, {"X": a.astype(np.int64), "Y": b.astype(np.int64)})
+    lb = width.limb_bits
+    r, borrow = kogge_stone_sub_borrow(a, b, lb)
+    need_fix = borrow.astype(bool)
+    if not np.any(need_fix):
+        return r
+    if add_session is not None:
+        add_session.run(
+            None,
+            {
+                "X": r.astype(np.int64),
+                "Y": n.astype(np.int64),
+            },
+        )
+    fixed = kogge_stone_add(r, n, lb)
+    return np.where(need_fix[:, None], fixed, r)
+
+
 class NPUAddSubBackend:
     def __init__(self, width: MpWidth, preferred_eps: Optional[List[str]] = None):
         self.width = width
@@ -439,30 +720,57 @@ class NPUAddSubBackend:
         return self._onnx_sub(a, n)
 
     def mp_add_mod(self, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
-        return numpy_mp_add_mod_vec(self.width, a, b, n)
+        return npu_mp_add_mod_kogge(self.width, a, b, n, add_session=self.add_session)
+
+    def mp_add_mod_serial(self, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
+        return npu_mp_add_mod_serial(self.width, a, b, n, add_session=self.add_session)
 
     def mp_sub_mod(self, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
-        return numpy_mp_sub_mod_vec(self.width, a, b, n)
+        return npu_mp_sub_mod_kogge(
+            self.width, a, b, n, sub_session=self.sub_session, add_session=self.add_session
+        )
+
+    def mp_sub_mod_serial(self, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
+        return npu_mp_sub_mod_serial(
+            self.width, a, b, n, sub_session=self.sub_session, add_session=self.add_session
+        )
 
 
 class NumpyBackend:
-    def __init__(self, width: MpWidth):
+    """NumPy limb backend; optional Kogge-Stone paths for add/mod carry chains."""
+
+    def __init__(self, width: MpWidth, *, use_kogge: bool = False):
         self.width = width
+        self.use_kogge = use_kogge
 
     def mp_add_n(self, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+        if self.use_kogge:
+            return numpy_mp_add_n_kogge(self.width, a, b)
         return numpy_mp_add_n(self.width, a, b)
 
     def mp_sub_n(self, a: np.ndarray, n: np.ndarray) -> np.ndarray:
         return numpy_mp_sub_n(self.width, a, n)
 
     def mp_add_mod(self, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
+        if self.use_kogge:
+            return numpy_mp_add_mod_kogge(self.width, a, b, n)
         return numpy_mp_add_mod_vec(self.width, a, b, n)
 
     def mp_sub_mod(self, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
+        if self.use_kogge:
+            return numpy_mp_sub_mod_kogge(self.width, a, b, n)
         return numpy_mp_sub_mod_vec(self.width, a, b, n)
 
 
-def verify_ops(width: MpWidth, a_vec, b_vec, n_vec, backends) -> bool:
+def verify_ops(
+    width: MpWidth,
+    a_vec,
+    b_vec,
+    n_vec,
+    backends,
+    *,
+    verbose: bool = False,
+) -> bool:
     bits = width.bits
     limbs = width.limbs
     mask = (1 << bits) - 1
@@ -494,14 +802,17 @@ def verify_ops(width: MpWidth, a_vec, b_vec, n_vec, backends) -> bool:
             else:
                 ok = (got & mask) == (expected & mask)
             if ok:
-                print(f"  [{be_name}:{op_name}] Python verify: PASS")
+                if verbose:
+                    print(f"  [{be_name}:{op_name}] Python verify: PASS")
             else:
                 print(f"  [{be_name}:{op_name}] verify: FAIL (got={got}, expect={expected})")
                 all_ok = False
     return all_ok
 
 
-def verify_fused_vec_matches_legacy(width: MpWidth, a_vec, b_vec, n_vec) -> bool:
+def verify_fused_vec_matches_legacy(
+    width: MpWidth, a_vec, b_vec, n_vec, *, verbose: bool = False
+) -> bool:
     limbs = width.limbs
     a_batch = a_vec.reshape(1, limbs).astype(np.int64)
     b_batch = b_vec.reshape(1, limbs).astype(np.int64)
@@ -515,11 +826,129 @@ def verify_fused_vec_matches_legacy(width: MpWidth, a_vec, b_vec, n_vec) -> bool
         got = fast(width, a_batch, b_batch, n_batch)
         ref = slow(width, a_batch, b_batch, n_batch)
         if np.array_equal(got, ref):
-            print(f"  [fused_vec:{name}] matches legacy: PASS")
+            if verbose:
+                print(f"  [cpu_fused:{name}] matches legacy: PASS")
         else:
-            print(f"  [fused_vec:{name}] matches legacy: FAIL")
+            print(f"  [cpu_fused:{name}] matches legacy: FAIL")
             all_ok = False
     return all_ok
+
+
+def verify_kogge_paths(
+    width: MpWidth, a_vec, b_vec, n_vec, instances: int = 4, *, verbose: bool = False
+) -> bool:
+    """Kogge-Stone add/mod paths must match serial fused baselines."""
+    limbs = width.limbs
+    a_batch, b_batch, n_batch = tile_vectors(a_vec, b_vec, n_vec, instances)
+    all_ok = True
+
+    serial_add = limbwise_add(width, a_batch, b_batch)
+    kogge_add = limbwise_add_kogge(width, a_batch, b_batch)
+    if np.array_equal(serial_add, kogge_add):
+        if verbose:
+            print(f"  [cpu_kogge:mp_add_n] matches cpu_serial: PASS ({instances} instances)")
+    else:
+        print("  [cpu_kogge:mp_add_n] matches cpu_serial: FAIL")
+        all_ok = False
+
+    fused_add_mod = numpy_mp_add_mod_vec(width, a_batch, b_batch, n_batch)
+    kogge_add_mod = numpy_mp_add_mod_kogge(width, a_batch, b_batch, n_batch)
+    if np.array_equal(fused_add_mod, kogge_add_mod):
+        if verbose:
+            print(f"  [cpu_kogge:mp_add_mod] matches cpu_fused: PASS ({instances} instances)")
+    else:
+        print("  [cpu_kogge:mp_add_mod] matches cpu_fused: FAIL")
+        all_ok = False
+
+    fused_sub_mod = numpy_mp_sub_mod_vec(width, a_batch, b_batch, n_batch)
+    kogge_sub_mod = numpy_mp_sub_mod_kogge(width, a_batch, b_batch, n_batch)
+    if np.array_equal(fused_sub_mod, kogge_sub_mod):
+        if verbose:
+            print(f"  [cpu_kogge:mp_sub_mod] matches cpu_fused: PASS ({instances} instances)")
+    else:
+        print("  [cpu_kogge:mp_sub_mod] matches cpu_fused: FAIL")
+        all_ok = False
+
+    return all_ok
+
+
+def verify_npu_mod_paths(
+    width: MpWidth,
+    a_vec,
+    b_vec,
+    n_vec,
+    npu_be: NPUAddSubBackend,
+    instances: int = 4,
+    *,
+    verbose: bool = False,
+) -> bool:
+    """Compare NPU serial vs fused, NPU Kogge vs cpu_kogge, and NPU serial vs Kogge."""
+    a_batch, b_batch, n_batch = tile_vectors(a_vec, b_vec, n_vec, instances)
+    ref_fused_add = numpy_mp_add_mod_vec(width, a_batch, b_batch, n_batch)
+    ref_fused_sub = numpy_mp_sub_mod_vec(width, a_batch, b_batch, n_batch)
+    ref_kogge_add = numpy_mp_add_mod_kogge(width, a_batch, b_batch, n_batch)
+    ref_kogge_sub = numpy_mp_sub_mod_kogge(width, a_batch, b_batch, n_batch)
+    npu_serial_add = npu_mp_add_mod_serial(
+        width, a_batch, b_batch, n_batch, add_session=npu_be.add_session
+    )
+    npu_serial_sub = npu_mp_sub_mod_serial(
+        width,
+        a_batch,
+        b_batch,
+        n_batch,
+        sub_session=npu_be.sub_session,
+        add_session=npu_be.add_session,
+    )
+    npu_kogge_add = npu_mp_add_mod_kogge(
+        width, a_batch, b_batch, n_batch, add_session=npu_be.add_session
+    )
+    npu_kogge_sub = npu_mp_sub_mod_kogge(
+        width,
+        a_batch,
+        b_batch,
+        n_batch,
+        sub_session=npu_be.sub_session,
+        add_session=npu_be.add_session,
+    )
+    checks = (
+        ("npu_add_mod_serial", "cpu_fused", npu_serial_add, ref_fused_add),
+        ("npu_sub_mod_serial", "cpu_fused", npu_serial_sub, ref_fused_sub),
+        ("npu_add_mod_kogge", "cpu_kogge", npu_kogge_add, ref_kogge_add),
+        ("npu_sub_mod_kogge", "cpu_kogge", npu_kogge_sub, ref_kogge_sub),
+        ("npu_add_mod_serial", "npu_add_mod_kogge", npu_serial_add, npu_kogge_add),
+        ("npu_sub_mod_serial", "npu_sub_mod_kogge", npu_serial_sub, npu_kogge_sub),
+    )
+    all_ok = True
+    for left, right, got, ref in checks:
+        if np.array_equal(got, ref):
+            if verbose:
+                print(f"  [{left}] matches {right}: PASS ({instances} instances)")
+        else:
+            print(f"  [{left}] matches {right}: FAIL")
+            all_ok = False
+    return all_ok
+
+
+def verify_npu_mod_kogge(
+    width: MpWidth,
+    a_vec,
+    b_vec,
+    n_vec,
+    npu_be: NPUAddSubBackend,
+    instances: int = 4,
+    *,
+    verbose: bool = False,
+) -> bool:
+    """Backward-compatible alias: full NPU mod path comparison."""
+    return verify_npu_mod_paths(
+        width, a_vec, b_vec, n_vec, npu_be, instances=instances, verbose=verbose
+    )
+
+
+def verify_kogge_matches_serial(
+    width: MpWidth, a_vec, b_vec, n_vec, instances: int = 4, *, verbose: bool = False
+) -> bool:
+    return verify_kogge_paths(width, a_vec, b_vec, n_vec, instances=instances, verbose=verbose)
 
 
 def run_self_test(
@@ -527,6 +956,8 @@ def run_self_test(
     limb_bits_list: Tuple[int, ...] = SUPPORTED_LIMB_BITS,
     preferred_eps: Optional[List[str]] = None,
     include_onnx: bool = True,
+    *,
+    verbose: bool = False,
 ) -> bool:
     print("npu_addsub self-test")
     all_ok = True
@@ -539,16 +970,27 @@ def run_self_test(
                 continue
             width = MpWidth(bits, lb)
             n_vec, a_vec, b_vec = opencl_test_vectors(width)
-            backends: List[Tuple[str, object]] = [("numpy", NumpyBackend(width))]
+            backends: List[Tuple[str, object]] = [
+                ("cpu", NumpyBackend(width)),
+                ("cpu_kogge", NumpyBackend(width, use_kogge=True)),
+            ]
+            npu_be: Optional[NPUAddSubBackend] = None
             if include_onnx and HAS_ORT:
-                onnx_be = NPUAddSubBackend(width, preferred_eps=preferred_eps)
-                if onnx_be.active:
-                    backends.insert(0, ("onnx", onnx_be))
+                npu_be = NPUAddSubBackend(width, preferred_eps=preferred_eps)
+                if npu_be.active:
+                    backends.insert(0, ("npu", npu_be))
+            else:
+                npu_be = NPUAddSubBackend(width)
             print(f"\n--- {bits}-bit, {lb}b/limb (limbs={width.limbs}) ---")
-            if not verify_ops(width, a_vec, b_vec, n_vec, backends):
+            if not verify_ops(width, a_vec, b_vec, n_vec, backends, verbose=verbose):
                 all_ok = False
-            if not verify_fused_vec_matches_legacy(width, a_vec, b_vec, n_vec):
+            if not verify_fused_vec_matches_legacy(width, a_vec, b_vec, n_vec, verbose=verbose):
                 all_ok = False
+            if not verify_kogge_paths(width, a_vec, b_vec, n_vec, verbose=verbose):
+                all_ok = False
+            if npu_be is not None:
+                if not verify_npu_mod_paths(width, a_vec, b_vec, n_vec, npu_be, verbose=verbose):
+                    all_ok = False
     print()
     if all_ok:
         print("self-test: ALL PASS")
@@ -589,6 +1031,7 @@ def collect_timings(
     npu_backend: NPUAddSubBackend,
     *,
     include_legacy: bool = False,
+    include_kogge: bool = True,
 ) -> Tuple[float, List[Tuple[str, str, float]]]:
     n_vec, a_vec, b_vec = opencl_test_vectors(width)
     a_batch, b_batch, n_batch = tile_vectors(a_vec, b_vec, n_vec, instances)
@@ -614,7 +1057,21 @@ def collect_timings(
         timings.append(
             (
                 "mp_add_mod",
-                "npu_fused",
+                "npu_add_mod_serial",
+                bench_op(
+                    lambda: npu_mp_add_mod_serial(
+                        width, a_batch, b_batch, n_batch, add_session=npu_backend.add_session
+                    ),
+                    warmup,
+                    kernel_iterations,
+                    launch_repeats,
+                ),
+            )
+        )
+        timings.append(
+            (
+                "mp_add_mod",
+                "npu_add_mod_kogge",
                 bench_op(
                     lambda: npu_backend.mp_add_mod(a_batch, b_batch, n_batch),
                     warmup,
@@ -626,7 +1083,26 @@ def collect_timings(
         timings.append(
             (
                 "mp_sub_mod",
-                "npu_fused",
+                "npu_sub_mod_serial",
+                bench_op(
+                    lambda: npu_mp_sub_mod_serial(
+                        width,
+                        a_batch,
+                        b_batch,
+                        n_batch,
+                        sub_session=npu_backend.sub_session,
+                        add_session=npu_backend.add_session,
+                    ),
+                    warmup,
+                    kernel_iterations,
+                    launch_repeats,
+                ),
+            )
+        )
+        timings.append(
+            (
+                "mp_sub_mod",
+                "npu_sub_mod_kogge",
                 bench_op(
                     lambda: npu_backend.mp_sub_mod(a_batch, b_batch, n_batch),
                     warmup,
@@ -637,15 +1113,52 @@ def collect_timings(
         )
 
     timings.append(
-        ("mp_add_n", "numpy", bench_op(lambda: numpy_be.mp_add_n(a_batch, b_batch), warmup, kernel_iterations, launch_repeats))
+        ("mp_add_n", "cpu_serial", bench_op(lambda: numpy_be.mp_add_n(a_batch, b_batch), warmup, kernel_iterations, launch_repeats))
     )
+    if include_kogge:
+        timings.append(
+            (
+                "mp_add_n",
+                "cpu_kogge",
+                bench_op(
+                    lambda: numpy_mp_add_n_kogge(width, a_batch, b_batch),
+                    warmup,
+                    kernel_iterations,
+                    launch_repeats,
+                ),
+            )
+        )
+        timings.append(
+            (
+                "mp_add_mod",
+                "cpu_kogge",
+                bench_op(
+                    lambda: numpy_mp_add_mod_kogge(width, a_batch, b_batch, n_batch),
+                    warmup,
+                    kernel_iterations,
+                    launch_repeats,
+                ),
+            )
+        )
+        timings.append(
+            (
+                "mp_sub_mod",
+                "cpu_kogge",
+                bench_op(
+                    lambda: numpy_mp_sub_mod_kogge(width, a_batch, b_batch, n_batch),
+                    warmup,
+                    kernel_iterations,
+                    launch_repeats,
+                ),
+            )
+        )
     timings.append(
-        ("mp_sub_n", "numpy", bench_op(lambda: numpy_be.mp_sub_n(a_batch, n_batch), warmup, kernel_iterations, launch_repeats))
+        ("mp_sub_n", "cpu_serial", bench_op(lambda: numpy_be.mp_sub_n(a_batch, n_batch), warmup, kernel_iterations, launch_repeats))
     )
     timings.append(
         (
             "mp_add_mod",
-            "numpy_fused",
+            "cpu_fused",
             bench_op(
                 lambda: numpy_be.mp_add_mod(a_batch, b_batch, n_batch),
                 warmup,
@@ -657,7 +1170,7 @@ def collect_timings(
     timings.append(
         (
             "mp_sub_mod",
-            "numpy_fused",
+            "cpu_fused",
             bench_op(
                 lambda: numpy_be.mp_sub_mod(a_batch, b_batch, n_batch),
                 warmup,
@@ -670,7 +1183,7 @@ def collect_timings(
         timings.append(
             (
                 "mp_add_mod",
-                "fused_legacy",
+                "cpu_fused_legacy",
                 bench_op(
                     lambda: numpy_mp_add_mod_legacy(width, a_batch, b_batch, n_batch),
                     warmup,
@@ -682,7 +1195,7 @@ def collect_timings(
         timings.append(
             (
                 "mp_sub_mod",
-                "fused_legacy",
+                "cpu_fused_legacy",
                 bench_op(
                     lambda: numpy_mp_sub_mod_legacy(width, a_batch, b_batch, n_batch),
                     warmup,
@@ -737,15 +1250,18 @@ def print_timings(timings: List[Tuple[str, str, float]], op_count: float) -> Non
         print(line)
 
     print()
+    print("--- summary (fastest per op) ---")
     for op in ("mp_add_n", "mp_sub_n", "mp_add_mod", "mp_sub_mod"):
         rows = by_op.get(op, [])
         if not rows:
             continue
-        path, ms = rows[0]
+        sorted_rows = sorted(rows, key=lambda item: item[1])
+        path, ms = sorted_rows[0]
         ops_s = op_count / (ms / 1000.0)
         suffix = ""
-        if len(rows) > 1:
-            suffix = f" (vs {rows[1][0]}: {rows[1][1] / ms:.6g}x)"
+        if len(sorted_rows) > 1:
+            _second_path, second_ms = sorted_rows[1]
+            suffix = f" (next: {_second_path} {second_ms / ms:.6g}x slower)"
         print(f"{op}: {ms:.4f} ms, {ops_s:.6g} ops/s [{path}]{suffix}")
 
 
@@ -758,6 +1274,7 @@ def run_benchmark(
     npu_backend,
     *,
     include_legacy: bool = False,
+    include_kogge: bool = True,
 ):
     op_count, timings = collect_timings(
         width,
@@ -767,6 +1284,7 @@ def run_benchmark(
         warmup,
         npu_backend,
         include_legacy=include_legacy,
+        include_kogge=include_kogge,
     )
     print_timings(timings, op_count)
 
@@ -781,6 +1299,8 @@ def run_limb_sweep(
     numpy_only: bool = False,
     *,
     include_legacy: bool = False,
+    include_kogge: bool = True,
+    verbose: bool = False,
 ) -> bool:
     print(
         f"Limb sweep: counts={limb_counts} (32-bit limbs), "
@@ -803,12 +1323,19 @@ def run_limb_sweep(
         if numpy_only:
             npu.add_session = None
             npu.sub_session = None
-        backends: List[Tuple[str, object]] = [("numpy", NumpyBackend(width))]
+        backends: List[Tuple[str, object]] = [("cpu", NumpyBackend(width))]
         if npu.active and not numpy_only:
-            backends.insert(0, ("onnx", npu))
-        if not verify_ops(width, a_vec, b_vec, n_vec, backends):
+            backends.insert(0, ("npu", npu))
+        if not verify_ops(width, a_vec, b_vec, n_vec, backends, verbose=verbose):
             all_ok = False
             continue
+        if not verify_kogge_paths(width, a_vec, b_vec, n_vec, verbose=verbose):
+            all_ok = False
+            continue
+        if npu.active and not numpy_only:
+            if not verify_npu_mod_paths(width, a_vec, b_vec, n_vec, npu, verbose=verbose):
+                all_ok = False
+                continue
         op_count, timings = collect_timings(
             width,
             instances,
@@ -817,17 +1344,25 @@ def run_limb_sweep(
             warmup,
             npu,
             include_legacy=include_legacy,
+            include_kogge=include_kogge,
         )
         row = {
             "limbs": limbs,
             "limb_bits": width.limb_bits,
             "bits": width.bits,
             "npu_add_n": timing_lookup(timings, "mp_add_n", "npu_add_n"),
-            "numpy_add_n": timing_lookup(timings, "mp_add_n", "numpy"),
+            "cpu_add_n": timing_lookup(timings, "mp_add_n", "cpu_serial"),
+            "cpu_kogge_add_n": timing_lookup(timings, "mp_add_n", "cpu_kogge"),
+            "cpu_kogge_add_mod": timing_lookup(timings, "mp_add_mod", "cpu_kogge"),
+            "cpu_kogge_sub_mod": timing_lookup(timings, "mp_sub_mod", "cpu_kogge"),
             "npu_sub_n": timing_lookup(timings, "mp_sub_n", "npu_sub_n"),
-            "numpy_sub_n": timing_lookup(timings, "mp_sub_n", "numpy"),
-            "npu_add_mod": timing_lookup(timings, "mp_add_mod", "npu_fused"),
-            "npu_sub_mod": timing_lookup(timings, "mp_sub_mod", "npu_fused"),
+            "cpu_sub_n": timing_lookup(timings, "mp_sub_n", "cpu_serial"),
+            "npu_add_mod_serial": timing_lookup(timings, "mp_add_mod", "npu_add_mod_serial"),
+            "npu_add_mod_kogge": timing_lookup(timings, "mp_add_mod", "npu_add_mod_kogge"),
+            "npu_sub_mod_serial": timing_lookup(timings, "mp_sub_mod", "npu_sub_mod_serial"),
+            "npu_sub_mod_kogge": timing_lookup(timings, "mp_sub_mod", "npu_sub_mod_kogge"),
+            "cpu_add_mod": timing_lookup(timings, "mp_add_mod", "cpu_fused"),
+            "cpu_sub_mod": timing_lookup(timings, "mp_sub_mod", "cpu_fused"),
             "op_count": op_count,
         }
         rows.append(row)
@@ -838,9 +1373,9 @@ def run_limb_sweep(
 
     hdr = (
         f"{'limbs':>5} {'bits':>5} | "
-        f"{'add_n NPU':>10} {'add_n np':>10} | "
-        f"{'sub_n NPU':>10} {'sub_n np':>10} | "
-        f"{'add_mod':>10} {'sub_mod':>10} | "
+        f"{'add_n NPU':>10} {'serial':>10} {'kogge':>10} | "
+        f"{'sub_n NPU':>10} {'sub_n cpu':>10} | "
+        f"{'add ser':>10} {'add kog':>10} {'sub ser':>10} {'sub kog':>10} | "
         f"{'us/limb add':>11}"
     )
     print()
@@ -852,21 +1387,25 @@ def run_limb_sweep(
 
     base_row = next((r for r in rows if r["limbs"] == DEFAULT_LIMB_SWEEP[0]), rows[0])
     base_limbs = base_row["limbs"]
-    base_add = base_row.get("npu_add_n") or base_row.get("numpy_add_n")
+    base_add = base_row.get("npu_add_n") or base_row.get("cpu_add_n")
     for row in rows:
         add_npu = row.get("npu_add_n")
-        add_np = row.get("numpy_add_n")
+        add_cpu = row.get("cpu_add_n")
+        kogge = row.get("cpu_kogge_add_n")
         sub_npu = row.get("npu_sub_n")
-        sub_np = row.get("numpy_sub_n")
-        add_mod = row.get("npu_add_mod")
-        sub_mod = row.get("npu_sub_mod")
-        add_ref = add_npu if add_npu is not None else add_np
+        sub_cpu = row.get("cpu_sub_n")
+        add_mod_serial = row.get("npu_add_mod_serial")
+        add_mod_kogge = row.get("npu_add_mod_kogge")
+        sub_mod_serial = row.get("npu_sub_mod_serial")
+        sub_mod_kogge = row.get("npu_sub_mod_kogge")
+        add_ref = add_npu if add_npu is not None else (kogge if kogge is not None else add_cpu)
         us_per_limb = (add_ref / row["limbs"] * 1000.0) if add_ref is not None else None
         print(
             f"{row['limbs']:5d} {row['bits']:5d} | "
-            f"{_fmt_ms(add_npu)} {_fmt_ms(add_np)} | "
-            f"{_fmt_ms(sub_npu)} {_fmt_ms(sub_np)} | "
-            f"{_fmt_ms(add_mod)} {_fmt_ms(sub_mod)} | "
+            f"{_fmt_ms(add_npu)} {_fmt_ms(add_cpu)} {_fmt_ms(kogge)} | "
+            f"{_fmt_ms(sub_npu)} {_fmt_ms(sub_cpu)} | "
+            f"{_fmt_ms(add_mod_serial)} {_fmt_ms(add_mod_kogge)} "
+            f"{_fmt_ms(sub_mod_serial)} {_fmt_ms(sub_mod_kogge)} | "
             f"{us_per_limb if us_per_limb is not None else float('nan'):11.2f}"
         )
 
@@ -875,14 +1414,14 @@ def run_limb_sweep(
     if base_add is not None and base_limbs > 0:
         for row in rows:
             add_npu = row.get("npu_add_n")
-            add_np = row.get("numpy_add_n")
-            ref = add_npu if add_npu is not None else add_np
+            add_cpu = row.get("cpu_add_n")
+            ref = add_npu if add_npu is not None else add_cpu
             if ref is None:
                 continue
             limb_ratio = row["limbs"] / base_limbs
             time_ratio = ref / base_add
             linear_ratio = time_ratio / limb_ratio if limb_ratio > 0 else float("nan")
-            backend = "NPU" if add_npu is not None else "numpy"
+            backend = "npu" if add_npu is not None else "cpu"
             print(
                 f"  limbs={row['limbs']:3d} ({row['bits']:4d}b) {backend}: "
                 f"{time_ratio:.3f}x wall time vs {base_limbs} limbs, "
@@ -923,6 +1462,8 @@ def run_limb_bits_sweep(
     numpy_only: bool = False,
     *,
     include_legacy: bool = False,
+    include_kogge: bool = True,
+    verbose: bool = False,
 ) -> bool:
     print(
         f"Limb-bits sweep: {bits}-bit fixed, limb_bits={limb_bits_list}, "
@@ -945,12 +1486,19 @@ def run_limb_bits_sweep(
         if numpy_only:
             npu.add_session = None
             npu.sub_session = None
-        backends: List[Tuple[str, object]] = [("numpy", NumpyBackend(width))]
+        backends: List[Tuple[str, object]] = [("cpu", NumpyBackend(width))]
         if npu.active and not numpy_only:
-            backends.insert(0, ("onnx", npu))
-        if not verify_ops(width, a_vec, b_vec, n_vec, backends):
+            backends.insert(0, ("npu", npu))
+        if not verify_ops(width, a_vec, b_vec, n_vec, backends, verbose=verbose):
             all_ok = False
             continue
+        if not verify_kogge_paths(width, a_vec, b_vec, n_vec, verbose=verbose):
+            all_ok = False
+            continue
+        if npu.active and not numpy_only:
+            if not verify_npu_mod_paths(width, a_vec, b_vec, n_vec, npu, verbose=verbose):
+                all_ok = False
+                continue
         op_count, timings = collect_timings(
             width,
             instances,
@@ -959,6 +1507,7 @@ def run_limb_bits_sweep(
             warmup,
             npu,
             include_legacy=include_legacy,
+            include_kogge=include_kogge,
         )
         rows.append(
             {
@@ -966,11 +1515,16 @@ def run_limb_bits_sweep(
                 "limbs": width.limbs,
                 "bits": bits,
                 "npu_add_n": timing_lookup(timings, "mp_add_n", "npu_add_n"),
-                "numpy_add_n": timing_lookup(timings, "mp_add_n", "numpy"),
+                "cpu_add_n": timing_lookup(timings, "mp_add_n", "cpu_serial"),
+                "cpu_kogge_add_n": timing_lookup(timings, "mp_add_n", "cpu_kogge"),
+                "cpu_kogge_add_mod": timing_lookup(timings, "mp_add_mod", "cpu_kogge"),
+                "cpu_kogge_sub_mod": timing_lookup(timings, "mp_sub_mod", "cpu_kogge"),
                 "npu_sub_n": timing_lookup(timings, "mp_sub_n", "npu_sub_n"),
-                "numpy_sub_n": timing_lookup(timings, "mp_sub_n", "numpy"),
-                "npu_add_mod": timing_lookup(timings, "mp_add_mod", "npu_fused"),
-                "npu_sub_mod": timing_lookup(timings, "mp_sub_mod", "npu_fused"),
+                "cpu_sub_n": timing_lookup(timings, "mp_sub_n", "cpu_serial"),
+                "npu_add_mod_serial": timing_lookup(timings, "mp_add_mod", "npu_add_mod_serial"),
+                "npu_add_mod_kogge": timing_lookup(timings, "mp_add_mod", "npu_add_mod_kogge"),
+                "npu_sub_mod_serial": timing_lookup(timings, "mp_sub_mod", "npu_sub_mod_serial"),
+                "npu_sub_mod_kogge": timing_lookup(timings, "mp_sub_mod", "npu_sub_mod_kogge"),
                 "op_count": op_count,
             }
         )
@@ -984,9 +1538,9 @@ def run_limb_bits_sweep(
 
     hdr = (
         f"{'lb':>3} {'limbs':>5} {'bits':>5} | "
-        f"{'add_n NPU':>10} {'add_n np':>10} | "
-        f"{'sub_n NPU':>10} {'sub_n np':>10} | "
-        f"{'add_mod':>10} {'sub_mod':>10} | "
+        f"{'add_n NPU':>10} {'serial':>10} {'kogge':>10} | "
+        f"{'sub_n NPU':>10} {'sub_n cpu':>10} | "
+        f"{'add ser':>10} {'add kog':>10} {'sub ser':>10} {'sub kog':>10} | "
         f"{'us/limb':>9}"
     )
     print()
@@ -995,21 +1549,25 @@ def run_limb_bits_sweep(
     print("-" * len(hdr))
 
     base_row = next((r for r in rows if r["limb_bits"] == DEFAULT_LIMB_BITS_SWEEP[0]), rows[0])
-    base_add = base_row.get("npu_add_n") or base_row.get("numpy_add_n")
+    base_add = base_row.get("npu_add_n") or base_row.get("cpu_add_n")
     for row in rows:
         add_npu = row.get("npu_add_n")
-        add_np = row.get("numpy_add_n")
+        add_cpu = row.get("cpu_add_n")
+        kogge = row.get("cpu_kogge_add_n")
         sub_npu = row.get("npu_sub_n")
-        sub_np = row.get("numpy_sub_n")
-        add_mod = row.get("npu_add_mod")
-        sub_mod = row.get("npu_sub_mod")
-        add_ref = add_npu if add_npu is not None else add_np
+        sub_cpu = row.get("cpu_sub_n")
+        add_mod_serial = row.get("npu_add_mod_serial")
+        add_mod_kogge = row.get("npu_add_mod_kogge")
+        sub_mod_serial = row.get("npu_sub_mod_serial")
+        sub_mod_kogge = row.get("npu_sub_mod_kogge")
+        add_ref = add_npu if add_npu is not None else (kogge if kogge is not None else add_cpu)
         us_per_limb = (add_ref / row["limbs"] * 1000.0) if add_ref is not None else None
         print(
             f"{row['limb_bits']:3d} {row['limbs']:5d} {row['bits']:5d} | "
-            f"{_fmt_ms(add_npu)} {_fmt_ms(add_np)} | "
-            f"{_fmt_ms(sub_npu)} {_fmt_ms(sub_np)} | "
-            f"{_fmt_ms(add_mod)} {_fmt_ms(sub_mod)} | "
+            f"{_fmt_ms(add_npu)} {_fmt_ms(add_cpu)} {_fmt_ms(kogge)} | "
+            f"{_fmt_ms(sub_npu)} {_fmt_ms(sub_cpu)} | "
+            f"{_fmt_ms(add_mod_serial)} {_fmt_ms(add_mod_kogge)} "
+            f"{_fmt_ms(sub_mod_serial)} {_fmt_ms(sub_mod_kogge)} | "
             f"{us_per_limb if us_per_limb is not None else float('nan'):9.2f}"
         )
 
@@ -1018,13 +1576,13 @@ def run_limb_bits_sweep(
     if base_add is not None:
         for row in rows:
             add_npu = row.get("npu_add_n")
-            add_np = row.get("numpy_add_n")
-            ref = add_npu if add_npu is not None else add_np
+            add_cpu = row.get("cpu_add_n")
+            ref = add_npu if add_npu is not None else add_cpu
             if ref is None:
                 continue
             limb_ratio = row["limbs"] / base_row["limbs"]
             time_ratio = ref / base_add
-            backend = "NPU" if add_npu is not None else "numpy"
+            backend = "npu" if add_npu is not None else "cpu"
             print(
                 f"  {row['limb_bits']:2d}b/limb, {row['limbs']:3d} limbs: {backend} add_n "
                 f"{time_ratio:.3f}x vs {base_row['limb_bits']}b/limb "
@@ -1100,6 +1658,27 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Include fused_legacy mod tier in benchmark (slow per-row Python loops)",
     )
+    p.add_argument(
+        "--kogge",
+        action="store_true",
+        help="Use Kogge-Stone parallel carry for numpy mp_add_n / mp_add_mod / mp_sub_mod",
+    )
+    p.add_argument(
+        "--kogge-add",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    p.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Print per-backend verify PASS lines (default: failures only)",
+    )
+    p.add_argument(
+        "--no-kogge-bench",
+        action="store_true",
+        help="Skip cpu_kogge tiers in benchmark output",
+    )
     p.add_argument("positional", nargs="*", help="kernel_iterations [instances] [launch_repeats]")
     return p.parse_args(argv)
 
@@ -1111,7 +1690,15 @@ def main(argv: Optional[List[str]] = None) -> int:
         preferred_eps = [s.strip() for s in args.onnx_ep.split(",") if s.strip()]
 
     if args.self_test:
-        return 0 if run_self_test(preferred_eps=preferred_eps, include_onnx=not args.numpy_only) else 1
+        return (
+            0
+            if run_self_test(
+                preferred_eps=preferred_eps,
+                include_onnx=not args.numpy_only,
+                verbose=args.verbose,
+            )
+            else 1
+        )
 
     kernel_iterations = int(args.positional[0]) if len(args.positional) >= 1 else 10000
     instances = int(args.positional[1]) if len(args.positional) >= 2 else 128
@@ -1134,6 +1721,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             preferred_eps=preferred_eps,
             numpy_only=args.numpy_only,
             include_legacy=args.fused_legacy,
+            include_kogge=not args.no_kogge_bench,
+            verbose=args.verbose,
         )
         return 0 if ok else 1
 
@@ -1152,6 +1741,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             preferred_eps=preferred_eps,
             numpy_only=args.numpy_only,
             include_legacy=args.fused_legacy,
+            include_kogge=not args.no_kogge_bench,
+            verbose=args.verbose,
         )
         return 0 if ok else 1
 
@@ -1195,14 +1786,21 @@ def main(argv: Optional[List[str]] = None) -> int:
     else:
         print("  >>> ONNX sessions unavailable; NumPy baseline only")
 
+    use_kogge = args.kogge or args.kogge_add
     n_vec, a_vec, b_vec = opencl_test_vectors(width)
-    backends: List[Tuple[str, object]] = [("numpy", NumpyBackend(width))]
+    backends: List[Tuple[str, object]] = [
+        ("cpu", NumpyBackend(width, use_kogge=use_kogge)),
+        ("cpu_kogge", NumpyBackend(width, use_kogge=True)),
+    ]
     if npu.active and not args.numpy_only:
         backends.insert(0, ("npu", npu))
 
     print()
-    if not verify_ops(width, a_vec, b_vec, n_vec, backends):
+    if not verify_ops(width, a_vec, b_vec, n_vec, backends, verbose=args.verbose):
         print("\nVerify FAILED")
+        return 1
+    if not verify_kogge_paths(width, a_vec, b_vec, n_vec, verbose=args.verbose):
+        print("\nKogge-Stone verify FAILED")
         return 1
 
     run_benchmark(
@@ -1213,6 +1811,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         args.warmup,
         npu,
         include_legacy=args.fused_legacy,
+        include_kogge=not args.no_kogge_bench,
     )
     return 0
 
