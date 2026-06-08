@@ -8,3 +8,4 @@ test/bench
 build/
 ecm/
 *.save
+*-*signature.txt

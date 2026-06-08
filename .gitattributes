@@ -2,6 +2,8 @@
 *.c text diff
 *.cpp text diff
 *.h text diff
+*.py text diff
+*.md text diff
 
 # 可选：统一换行（跨平台）
 # Auto detect text files and perform LF normalization
