@@ -15,11 +15,13 @@ Operations (ecm_addsub_bench.cl):
   mp_sub_mod  r = (a - b) mod N
 
 Carry paths (benchmark path labels):
-  npu_*_serial  ONNX/NPU limb ops + host serial/fused mod reduce
-  npu_*_kogge   ONNX/NPU limb ops + host Kogge-Stone mod reduce
-  cpu_serial    NumPy serial ripple carry
-  cpu_kogge     NumPy Kogge-Stone parallel prefix (add/mod)
-  cpu_fused     NumPy fused speculative mod subtract (legacy)
+  npu_*_serial      ONNX/NPU limb ops + host serial/fused mod reduce
+  npu_*_kogge       ONNX/NPU limb ops + host Kogge-Stone mod reduce
+  npu_*_branchfree  ONNX/NPU limb ops + host branch-free mod reduce
+  cpu_serial        NumPy serial ripple carry
+  cpu_kogge         NumPy Kogge-Stone parallel prefix (add/mod)
+  cpu_fused         NumPy fused speculative mod subtract (legacy)
+  cpu_branchfree    NumPy branch-free vector mod add (SIMD-friendly)
 
 Edit this file directly (RyzenAI/npu_addsub.py); tools/gen_npu_addsub.py is legacy.
 """
@@ -576,6 +578,57 @@ def numpy_mp_sub_mod_kogge(width: MpWidth, a: np.ndarray, b: np.ndarray, n: np.n
     return np.where(need_fix[:, None], fixed, r)
 
 
+def _branchfree_blend(
+    need_sub: np.ndarray, s: np.ndarray, d: np.ndarray, limb_mask: int
+) -> np.ndarray:
+    """CMOV-style row select: pick full d limb-vector when need_sub else s."""
+    mask = np.uint64(limb_mask)
+    full_sel = np.where(need_sub[:, None], mask, np.uint64(0))
+    return (d & full_sel) | (s & (~full_sel & mask))
+
+
+def numpy_mp_add_mod_branchfree(
+    width: MpWidth, a: np.ndarray, b: np.ndarray, n: np.ndarray
+) -> np.ndarray:
+    """
+    Branch-free (a + b) mod N for SIMD-friendly host reduce.
+
+    Always computes s = a + b and d = s - N, then blends with a vector mask
+    (mp_add_mod_mask semantics: subtract when carry_out or no borrow on s - N).
+    """
+    a = np.asarray(a, dtype=np.uint64)
+    b = np.asarray(b, dtype=np.uint64)
+    n = np.asarray(n, dtype=np.uint64)
+    lb = width.limb_bits
+    mask = width.limb_mask
+    batch, limbs = a.shape
+
+    if lb == 64:
+        s, carry_add = kogge_stone_add_with_carry(a, b, lb)
+        d, borrow = kogge_stone_sub_borrow(s, n, lb)
+        need_sub = (carry_add != 0) | (borrow == 0)
+        return _branchfree_blend(need_sub, s, d, mask)
+
+    carry_add = np.zeros(batch, dtype=np.uint64)
+    s = np.zeros((batch, limbs), dtype=np.uint64)
+    for j in range(limbs):
+        t = a[:, j] + b[:, j] + carry_add
+        s[:, j] = t & mask
+        carry_add = t >> lb
+
+    borrow = np.zeros(batch, dtype=np.uint64)
+    d = np.zeros((batch, limbs), dtype=np.uint64)
+    for j in range(limbs):
+        av = s[:, j]
+        nv = n[:, j]
+        w = av - nv - borrow
+        d[:, j] = w & mask
+        borrow = (av < nv + borrow).astype(np.uint64)
+
+    need_sub = (carry_add != 0) | (borrow == 0)
+    return _branchfree_blend(need_sub, s, d, mask)
+
+
 def npu_mp_add_mod_serial(
     width: MpWidth,
     a: np.ndarray,
@@ -673,6 +726,23 @@ def npu_mp_sub_mod_kogge(
     return np.where(need_fix[:, None], fixed, r)
 
 
+def npu_mp_add_mod_branchfree(
+    width: MpWidth,
+    a: np.ndarray,
+    b: np.ndarray,
+    n: np.ndarray,
+    *,
+    add_session=None,
+) -> np.ndarray:
+    """NPU mod add: ONNX/NPU limb add + host branch-free mod reduce."""
+    a = np.asarray(a, dtype=np.uint64)
+    b = np.asarray(b, dtype=np.uint64)
+    n = np.asarray(n, dtype=np.uint64)
+    if add_session is not None:
+        add_session.run(None, {"X": a.astype(np.int64), "Y": b.astype(np.int64)})
+    return numpy_mp_add_mod_branchfree(width, a, b, n)
+
+
 class NPUAddSubBackend:
     def __init__(self, width: MpWidth, preferred_eps: Optional[List[str]] = None):
         self.width = width
@@ -724,6 +794,9 @@ class NPUAddSubBackend:
 
     def mp_add_mod_serial(self, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
         return npu_mp_add_mod_serial(self.width, a, b, n, add_session=self.add_session)
+
+    def mp_add_mod_branchfree(self, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
+        return npu_mp_add_mod_branchfree(self.width, a, b, n, add_session=self.add_session)
 
     def mp_sub_mod(self, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
         return npu_mp_sub_mod_kogge(
@@ -872,6 +945,25 @@ def verify_kogge_paths(
     return all_ok
 
 
+def verify_branchfree_paths(
+    width: MpWidth, a_vec, b_vec, n_vec, instances: int = 4, *, verbose: bool = False
+) -> bool:
+    """Branch-free mod add must match cpu_fused and cpu_kogge baselines."""
+    a_batch, b_batch, n_batch = tile_vectors(a_vec, b_vec, n_vec, instances)
+    ref_fused = numpy_mp_add_mod_vec(width, a_batch, b_batch, n_batch)
+    ref_kogge = numpy_mp_add_mod_kogge(width, a_batch, b_batch, n_batch)
+    got = numpy_mp_add_mod_branchfree(width, a_batch, b_batch, n_batch)
+    all_ok = True
+    for label, ref in (("cpu_fused", ref_fused), ("cpu_kogge", ref_kogge)):
+        if np.array_equal(got, ref):
+            if verbose:
+                print(f"  [cpu_branchfree:mp_add_mod] matches {label}: PASS ({instances} instances)")
+        else:
+            print(f"  [cpu_branchfree:mp_add_mod] matches {label}: FAIL")
+            all_ok = False
+    return all_ok
+
+
 def verify_npu_mod_paths(
     width: MpWidth,
     a_vec,
@@ -888,6 +980,7 @@ def verify_npu_mod_paths(
     ref_fused_sub = numpy_mp_sub_mod_vec(width, a_batch, b_batch, n_batch)
     ref_kogge_add = numpy_mp_add_mod_kogge(width, a_batch, b_batch, n_batch)
     ref_kogge_sub = numpy_mp_sub_mod_kogge(width, a_batch, b_batch, n_batch)
+    ref_branchfree_add = numpy_mp_add_mod_branchfree(width, a_batch, b_batch, n_batch)
     npu_serial_add = npu_mp_add_mod_serial(
         width, a_batch, b_batch, n_batch, add_session=npu_be.add_session
     )
@@ -910,13 +1003,19 @@ def verify_npu_mod_paths(
         sub_session=npu_be.sub_session,
         add_session=npu_be.add_session,
     )
+    npu_branchfree_add = npu_mp_add_mod_branchfree(
+        width, a_batch, b_batch, n_batch, add_session=npu_be.add_session
+    )
     checks = (
         ("npu_add_mod_serial", "cpu_fused", npu_serial_add, ref_fused_add),
         ("npu_sub_mod_serial", "cpu_fused", npu_serial_sub, ref_fused_sub),
         ("npu_add_mod_kogge", "cpu_kogge", npu_kogge_add, ref_kogge_add),
         ("npu_sub_mod_kogge", "cpu_kogge", npu_kogge_sub, ref_kogge_sub),
+        ("npu_add_mod_branchfree", "cpu_branchfree", npu_branchfree_add, ref_branchfree_add),
         ("npu_add_mod_serial", "npu_add_mod_kogge", npu_serial_add, npu_kogge_add),
         ("npu_sub_mod_serial", "npu_sub_mod_kogge", npu_serial_sub, npu_kogge_sub),
+        ("npu_add_mod_branchfree", "npu_add_mod_kogge", npu_branchfree_add, npu_kogge_add),
+        ("cpu_branchfree", "cpu_fused", ref_branchfree_add, ref_fused_add),
     )
     all_ok = True
     for left, right, got, ref in checks:
@@ -987,6 +1086,8 @@ def run_self_test(
             if not verify_fused_vec_matches_legacy(width, a_vec, b_vec, n_vec, verbose=verbose):
                 all_ok = False
             if not verify_kogge_paths(width, a_vec, b_vec, n_vec, verbose=verbose):
+                all_ok = False
+            if not verify_branchfree_paths(width, a_vec, b_vec, n_vec, verbose=verbose):
                 all_ok = False
             if npu_be is not None:
                 if not verify_npu_mod_paths(width, a_vec, b_vec, n_vec, npu_be, verbose=verbose):
@@ -1082,6 +1183,20 @@ def collect_timings(
         )
         timings.append(
             (
+                "mp_add_mod",
+                "npu_add_mod_branchfree",
+                bench_op(
+                    lambda: npu_mp_add_mod_branchfree(
+                        width, a_batch, b_batch, n_batch, add_session=npu_backend.add_session
+                    ),
+                    warmup,
+                    kernel_iterations,
+                    launch_repeats,
+                ),
+            )
+        )
+        timings.append(
+            (
                 "mp_sub_mod",
                 "npu_sub_mod_serial",
                 bench_op(
@@ -1154,6 +1269,18 @@ def collect_timings(
         )
     timings.append(
         ("mp_sub_n", "cpu_serial", bench_op(lambda: numpy_be.mp_sub_n(a_batch, n_batch), warmup, kernel_iterations, launch_repeats))
+    )
+    timings.append(
+        (
+            "mp_add_mod",
+            "cpu_branchfree",
+            bench_op(
+                lambda: numpy_mp_add_mod_branchfree(width, a_batch, b_batch, n_batch),
+                warmup,
+                kernel_iterations,
+                launch_repeats,
+            ),
+        )
     )
     timings.append(
         (
@@ -1332,6 +1459,9 @@ def run_limb_sweep(
         if not verify_kogge_paths(width, a_vec, b_vec, n_vec, verbose=verbose):
             all_ok = False
             continue
+        if not verify_branchfree_paths(width, a_vec, b_vec, n_vec, verbose=verbose):
+            all_ok = False
+            continue
         if npu.active and not numpy_only:
             if not verify_npu_mod_paths(width, a_vec, b_vec, n_vec, npu, verbose=verbose):
                 all_ok = False
@@ -1359,6 +1489,8 @@ def run_limb_sweep(
             "cpu_sub_n": timing_lookup(timings, "mp_sub_n", "cpu_serial"),
             "npu_add_mod_serial": timing_lookup(timings, "mp_add_mod", "npu_add_mod_serial"),
             "npu_add_mod_kogge": timing_lookup(timings, "mp_add_mod", "npu_add_mod_kogge"),
+            "npu_add_mod_branchfree": timing_lookup(timings, "mp_add_mod", "npu_add_mod_branchfree"),
+            "cpu_branchfree_add_mod": timing_lookup(timings, "mp_add_mod", "cpu_branchfree"),
             "npu_sub_mod_serial": timing_lookup(timings, "mp_sub_mod", "npu_sub_mod_serial"),
             "npu_sub_mod_kogge": timing_lookup(timings, "mp_sub_mod", "npu_sub_mod_kogge"),
             "cpu_add_mod": timing_lookup(timings, "mp_add_mod", "cpu_fused"),
@@ -1495,6 +1627,9 @@ def run_limb_bits_sweep(
         if not verify_kogge_paths(width, a_vec, b_vec, n_vec, verbose=verbose):
             all_ok = False
             continue
+        if not verify_branchfree_paths(width, a_vec, b_vec, n_vec, verbose=verbose):
+            all_ok = False
+            continue
         if npu.active and not numpy_only:
             if not verify_npu_mod_paths(width, a_vec, b_vec, n_vec, npu, verbose=verbose):
                 all_ok = False
@@ -1523,6 +1658,8 @@ def run_limb_bits_sweep(
                 "cpu_sub_n": timing_lookup(timings, "mp_sub_n", "cpu_serial"),
                 "npu_add_mod_serial": timing_lookup(timings, "mp_add_mod", "npu_add_mod_serial"),
                 "npu_add_mod_kogge": timing_lookup(timings, "mp_add_mod", "npu_add_mod_kogge"),
+                "npu_add_mod_branchfree": timing_lookup(timings, "mp_add_mod", "npu_add_mod_branchfree"),
+                "cpu_branchfree_add_mod": timing_lookup(timings, "mp_add_mod", "cpu_branchfree"),
                 "npu_sub_mod_serial": timing_lookup(timings, "mp_sub_mod", "npu_sub_mod_serial"),
                 "npu_sub_mod_kogge": timing_lookup(timings, "mp_sub_mod", "npu_sub_mod_kogge"),
                 "op_count": op_count,

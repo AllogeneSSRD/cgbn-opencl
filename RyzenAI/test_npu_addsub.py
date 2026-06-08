@@ -24,6 +24,15 @@ class TestKoggeStone(unittest.TestCase):
                 f"kogge paths failed lb={lb}",
             )
 
+    def test_branchfree_paths(self):
+        for lb in m.SUPPORTED_LIMB_BITS:
+            w = m.MpWidth(512, lb)
+            n_vec, a_vec, b_vec = m.opencl_test_vectors(w)
+            self.assertTrue(
+                m.verify_branchfree_paths(w, a_vec, b_vec, n_vec, instances=8, verbose=False),
+                f"branchfree paths failed lb={lb}",
+            )
+
     def test_npu_mod_serial_and_kogge(self):
         for lb in m.SUPPORTED_LIMB_BITS:
             w = m.MpWidth(512, lb)
