@@ -6,6 +6,7 @@ NPU add/sub/mod microbench - mirrors opencl_ecm_addsub core ops.
 Run environment:
   conda activate ryzen-ai-1.7.1
   python RyzenAI/npu_addsub.py --bits 512 10000 128 2
+  python RyzenAI/npu_addsub.py --bits 2048 500 32 1
 
 Operations (ecm_addsub_bench.cl):
   mp_add_n    r = a + b
@@ -39,19 +40,39 @@ except ImportError:
     HAS_ORT = False
 
 try:
-    from npu_uint512 import (
-        create_add_model,
-        create_session,
-        create_sub_model,
-        propagate_borrow,
-        propagate_carry,
-    )
+    from npu_uint512 import create_add_model, create_session, create_sub_model
 except ImportError:
-    propagate_carry = None
-    propagate_borrow = None
     create_add_model = None
     create_sub_model = None
     create_session = None
+
+
+class MpWidth:
+    """Multiprecision width: 512..4096 bits in 32-bit limbs (32/64-bit aligned widths)."""
+
+    MIN_BITS = 512
+    MAX_BITS = 4096
+    LIMB_BITS = 32
+
+    __slots__ = ("bits",)
+
+    def __init__(self, bits: int) -> None:
+        err = MpWidth.validate(bits)
+        if err:
+            raise ValueError(err)
+        self.bits = bits
+
+    @staticmethod
+    def validate(bits: int) -> Optional[str]:
+        if bits < MpWidth.MIN_BITS or bits > MpWidth.MAX_BITS:
+            return f"bits must be in [{MpWidth.MIN_BITS}, {MpWidth.MAX_BITS}]"
+        if bits % MpWidth.LIMB_BITS != 0:
+            return f"bits must be a multiple of {MpWidth.LIMB_BITS}"
+        return None
+
+    @property
+    def limbs(self) -> int:
+        return self.bits // MpWidth.LIMB_BITS
 
 
 def limbs_from_int(value: int, limbs: int) -> np.ndarray:
@@ -67,9 +88,10 @@ def int_from_limbs(arr: np.ndarray) -> int:
     return result
 
 
-def opencl_test_vectors(bits: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def opencl_test_vectors(width: MpWidth) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Same fixed values as opencl_ecm_addsub_bench.cpp."""
-    limbs = bits // 32
+    bits = width.bits
+    limbs = width.limbs
     mask = (1 << bits) - 1
     n_val = (1 << (bits - 1)) - 109
     a_val = ((1 << (bits - 1)) - 991) % n_val
@@ -110,10 +132,8 @@ def _propagate_borrow(diff_arr: np.ndarray) -> np.ndarray:
     return result & 0xFFFFFFFF
 
 
-if propagate_carry is None:
-    propagate_carry = _propagate_carry
-if propagate_borrow is None:
-    propagate_borrow = _propagate_borrow
+propagate_carry = _propagate_carry
+propagate_borrow = _propagate_borrow
 
 
 def ref_mp_add_n(a: int, b: int, bits: int) -> int:
@@ -140,7 +160,7 @@ def numpy_mp_sub_n(a: np.ndarray, n: np.ndarray) -> np.ndarray:
     return propagate_borrow(a.astype(np.int64) - n.astype(np.int64))
 
 
-def numpy_mp_add_mod(a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
+def numpy_mp_add_mod_legacy(a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
     batch, limbs = a.shape
     r = np.zeros((batch, limbs), dtype=np.uint32)
     for i in range(batch):
@@ -166,7 +186,7 @@ def numpy_mp_add_mod(a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
     return r
 
 
-def numpy_mp_sub_mod(a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
+def numpy_mp_sub_mod_legacy(a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
     batch, limbs = a.shape
     r = np.zeros((batch, limbs), dtype=np.uint32)
     for i in range(batch):
@@ -191,9 +211,67 @@ def numpy_mp_sub_mod(a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
     return r
 
 
+def numpy_mp_add_mod_vec(a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
+    a = np.asarray(a, dtype=np.uint64)
+    b = np.asarray(b, dtype=np.uint64)
+    n = np.asarray(n, dtype=np.uint64)
+    batch, limbs = a.shape
+    r = np.zeros((batch, limbs), dtype=np.uint64)
+    carry_add = np.zeros(batch, dtype=np.uint64)
+    carry_sub = np.ones(batch, dtype=np.uint64)
+    mask32 = np.uint64(0xFFFFFFFF)
+    for j in range(limbs):
+        s = a[:, j] + b[:, j] + carry_add
+        carry_add = s >> 32
+        t = (s & mask32) + ((~n[:, j]) & mask32) + carry_sub
+        carry_sub = t >> 32
+        r[:, j] = t & mask32
+    need_fix = (carry_add | carry_sub) == 0
+    if np.any(need_fix):
+        c = np.zeros(batch, dtype=np.uint64)
+        for j in range(limbs):
+            s = r[:, j] + n[:, j] + c
+            new_r = s & mask32
+            new_c = s >> 32
+            r[:, j] = np.where(need_fix, new_r, r[:, j])
+            c = np.where(need_fix, new_c, np.uint64(0))
+    return r.astype(np.uint32)
+
+
+def numpy_mp_sub_mod_vec(a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
+    a = np.asarray(a, dtype=np.uint64)
+    b = np.asarray(b, dtype=np.uint64)
+    n = np.asarray(n, dtype=np.uint64)
+    batch, limbs = a.shape
+    r = np.zeros((batch, limbs), dtype=np.uint64)
+    borrow = np.zeros(batch, dtype=np.uint64)
+    mask32 = np.uint64(0xFFFFFFFF)
+    for j in range(limbs):
+        av = a[:, j]
+        bv = b[:, j]
+        w = av - bv - borrow
+        r[:, j] = w & mask32
+        borrow = (av < bv + borrow).astype(np.uint64)
+    need_fix = borrow.astype(bool)
+    if np.any(need_fix):
+        c = np.zeros(batch, dtype=np.uint64)
+        for j in range(limbs):
+            s = r[:, j] + n[:, j] + c
+            new_r = s & mask32
+            new_c = s >> 32
+            r[:, j] = np.where(need_fix, new_r, r[:, j])
+            c = np.where(need_fix, new_c, np.uint64(0))
+    return r.astype(np.uint32)
+
+
+numpy_mp_add_mod = numpy_mp_add_mod_vec
+numpy_mp_sub_mod = numpy_mp_sub_mod_vec
+
+
 class NPUAddSubBackend:
-    def __init__(self, limbs: int):
-        self.limbs = limbs
+    def __init__(self, width: MpWidth):
+        self.width = width
+        self.limbs = width.limbs
         self.add_session = None
         self.sub_session = None
         self.add_ep: Optional[str] = None
@@ -265,21 +343,22 @@ class NPUAddSubBackend:
         return self._onnx_sub(a, n)
 
     def mp_add_mod(self, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
-        return numpy_mp_add_mod(a, b, n)
+        return numpy_mp_add_mod_vec(a, b, n)
 
     def mp_sub_mod(self, a: np.ndarray, b: np.ndarray, n: np.ndarray) -> np.ndarray:
-        return numpy_mp_sub_mod(a, b, n)
+        return numpy_mp_sub_mod_vec(a, b, n)
 
 
 class NumpyBackend:
     mp_add_n = staticmethod(numpy_mp_add_n)
     mp_sub_n = staticmethod(numpy_mp_sub_n)
-    mp_add_mod = staticmethod(numpy_mp_add_mod)
-    mp_sub_mod = staticmethod(numpy_mp_sub_mod)
+    mp_add_mod = staticmethod(numpy_mp_add_mod_vec)
+    mp_sub_mod = staticmethod(numpy_mp_sub_mod_vec)
 
 
-def verify_ops(bits: int, a_vec, b_vec, n_vec, backends) -> bool:
-    limbs = bits // 32
+def verify_ops(width: MpWidth, a_vec, b_vec, n_vec, backends) -> bool:
+    bits = width.bits
+    limbs = width.limbs
     mask = (1 << bits) - 1
     a0 = int_from_limbs(a_vec) & mask
     b0 = int_from_limbs(b_vec) & mask
@@ -327,8 +406,8 @@ def bench_op(fn: Callable[[], None], warmup: int, iters: int, repeats: int) -> f
     return (t1 - t0) * 1000.0
 
 
-def run_benchmark(bits, instances, kernel_iterations, launch_repeats, warmup, npu_backend):
-    n_vec, a_vec, b_vec = opencl_test_vectors(bits)
+def run_benchmark(width: MpWidth, instances, kernel_iterations, launch_repeats, warmup, npu_backend):
+    n_vec, a_vec, b_vec = opencl_test_vectors(width)
     a_batch, b_batch, n_batch = tile_vectors(a_vec, b_vec, n_vec, instances)
     numpy_be = NumpyBackend()
     op_count = float(instances * kernel_iterations * launch_repeats)
@@ -384,14 +463,48 @@ def run_benchmark(bits, instances, kernel_iterations, launch_repeats, warmup, np
         (
             "mp_add_mod",
             "numpy_fused",
-            bench_op(lambda: numpy_be.mp_add_mod(a_batch, b_batch, n_batch), warmup, kernel_iterations, launch_repeats),
+            bench_op(
+                lambda: numpy_be.mp_add_mod(a_batch, b_batch, n_batch),
+                warmup,
+                kernel_iterations,
+                launch_repeats,
+            ),
         )
     )
     timings.append(
         (
             "mp_sub_mod",
             "numpy_fused",
-            bench_op(lambda: numpy_be.mp_sub_mod(a_batch, b_batch, n_batch), warmup, kernel_iterations, launch_repeats),
+            bench_op(
+                lambda: numpy_be.mp_sub_mod(a_batch, b_batch, n_batch),
+                warmup,
+                kernel_iterations,
+                launch_repeats,
+            ),
+        )
+    )
+    timings.append(
+        (
+            "mp_add_mod",
+            "fused_legacy",
+            bench_op(
+                lambda: numpy_mp_add_mod_legacy(a_batch, b_batch, n_batch),
+                warmup,
+                kernel_iterations,
+                launch_repeats,
+            ),
+        )
+    )
+    timings.append(
+        (
+            "mp_sub_mod",
+            "fused_legacy",
+            bench_op(
+                lambda: numpy_mp_sub_mod_legacy(a_batch, b_batch, n_batch),
+                warmup,
+                kernel_iterations,
+                launch_repeats,
+            ),
         )
     )
 
@@ -450,7 +563,12 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--bits", type=int, default=512, help="Bit width (multiple of 32)")
+    p.add_argument(
+        "--bits",
+        type=int,
+        default=512,
+        help=f"Bit width, {MpWidth.MIN_BITS}..{MpWidth.MAX_BITS}, multiple of 32 (64 ok)",
+    )
     p.add_argument("--warmup", type=int, default=100, help="Warmup iterations")
     p.add_argument("--numpy-only", action="store_true", help="Skip ONNX/NPU backend")
     p.add_argument("positional", nargs="*", help="kernel_iterations [instances] [launch_repeats]")
@@ -459,26 +577,26 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
 
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
-    bits = args.bits
-    if bits <= 0 or bits % 32 != 0:
-        print("bits must be a positive multiple of 32", file=sys.stderr)
+    err = MpWidth.validate(args.bits)
+    if err:
+        print(err, file=sys.stderr)
         return 1
+    width = MpWidth(args.bits)
 
     kernel_iterations = int(args.positional[0]) if len(args.positional) >= 1 else 10000
     instances = int(args.positional[1]) if len(args.positional) >= 2 else 128
     launch_repeats = int(args.positional[2]) if len(args.positional) >= 3 else 2
-    limbs = bits // 32
 
     print(
-        f"NPU add/sub microbench: {bits}-bit, kernel_iterations={kernel_iterations}, "
-        f"instances={instances}, launch_repeats={launch_repeats}, limbs={limbs}"
+        f"NPU add/sub microbench: {width.bits}-bit, kernel_iterations={kernel_iterations}, "
+        f"instances={instances}, launch_repeats={launch_repeats}, limbs={width.limbs}"
     )
     if HAS_ORT:
         print(f"  onnxruntime={ort.__version__}, EPs={ort.get_available_providers()}")
     else:
         print("  onnxruntime: NOT INSTALLED (NumPy fallback only)")
 
-    npu = NPUAddSubBackend(limbs)
+    npu = NPUAddSubBackend(width)
     if args.numpy_only:
         npu.add_session = None
         npu.sub_session = None
@@ -491,17 +609,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     else:
         print("  >>> ONNX sessions unavailable; NumPy baseline only")
 
-    n_vec, a_vec, b_vec = opencl_test_vectors(bits)
+    n_vec, a_vec, b_vec = opencl_test_vectors(width)
     backends: List[Tuple[str, object]] = [("numpy", NumpyBackend())]
     if npu.active and not args.numpy_only:
         backends.insert(0, ("npu", npu))
 
     print()
-    if not verify_ops(bits, a_vec, b_vec, n_vec, backends):
+    if not verify_ops(width, a_vec, b_vec, n_vec, backends):
         print("\nVerify FAILED")
         return 1
 
-    run_benchmark(bits, instances, kernel_iterations, launch_repeats, args.warmup, npu)
+    run_benchmark(width, instances, kernel_iterations, launch_repeats, args.warmup, npu)
     return 0
 
 
