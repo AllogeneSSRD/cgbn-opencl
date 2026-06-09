@@ -82,8 +82,25 @@ tasks.register<Copy>("syncAddsubKernelsFlat") {
     into(layout.projectDirectory.dir("src/main/assets/kernels"))
 }
 
+val montsqrKernelIncludes = arrayOf(
+    "mont_priv.cl",
+    "mont_priv_opt.cl",
+    "mont_mul_unroll_only_512_manual_generated.cl",
+    "mont_priv_bench.cl",
+    "mont_priv_opt_bench.cl",
+    "mont_wg.cl",
+    "mont_wg_bench.cl",
+)
+
+tasks.register<Copy>("syncMontsqrKernels") {
+    from(mpaRoot.resolve("cgbn/backends/opencl/kernels")) {
+        montsqrKernelIncludes.forEach { include(it) }
+    }
+    into(layout.projectDirectory.dir("src/main/assets/kernels/cgbn/backends/opencl/kernels"))
+}
+
 tasks.named("preBuild") {
-    dependsOn("syncAddsubKernels", "syncAddsubKernelsFlat")
+    dependsOn("syncAddsubKernels", "syncAddsubKernelsFlat", "syncMontsqrKernels")
 }
 
 dependencies {

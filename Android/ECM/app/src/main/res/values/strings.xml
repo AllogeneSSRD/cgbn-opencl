@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">ECM OpenCL</string>
-    <string name="subtitle">GPU OpenCL probe &amp; ECM add/sub bench</string>
+    <string name="subtitle">GPU OpenCL probe &amp; ECM bench</string>
     <string name="perf_section_title">设备性能</string>
     <string name="perf_loading">读取中…</string>
     <string name="perf_updated">更新: %1$s</string>
@@ -20,6 +20,8 @@
     <string name="default_launch_repeats">1</string>
     <string name="btn_addsub_bench">32-bit limb 全路径</string>
     <string name="btn_addsub_bench_24">24-bit limb（fused + unroll）</string>
+    <string name="montsqr_section_title">ECM mont mul/sqr 微基准</string>
+    <string name="btn_montsqr_bench">mont mul/sqr（WG, tpi=4）</string>
     <string name="default_bits_24">504</string>
     <string name="btn_bench_16">16-bit 性能</string>
     <string name="btn_bench_24">24-bit 性能</string>

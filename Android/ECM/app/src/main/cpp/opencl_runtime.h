@@ -14,3 +14,7 @@ std::string run_bit_bench(int limb_bits, int elements, int kernel_iters, int lau
 // ECM mp_add_mod / mp_sub_mod microbench (limb_bits 24 or 32).
 std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int launch_repeats,
                              int limb_bits);
+
+// ECM Montgomery mul/sqr microbench (use_wg default true, tpi=4 like desktop).
+std::string run_montsqr_bench(int bits, int kernel_iterations, int instances, int launch_repeats,
+                              bool use_wg, int tpi);

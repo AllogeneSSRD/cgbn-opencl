@@ -74,6 +74,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btn_addsub_bench_24).setOnClickListener {
             runAddSubBench(limbBits = 24)
         }
+        findViewById<MaterialButton>(R.id.btn_montsqr_bench).setOnClickListener {
+            runMontSqrBench()
+        }
         findViewById<MaterialButton>(R.id.btn_bench_16).setOnClickListener {
             runBench(16)
         }
@@ -124,6 +127,32 @@ class MainActivity : AppCompatActivity() {
         if (raw.isEmpty()) return fallback
         val value = raw.toIntOrNull() ?: return null
         return if (value > 0) value else null
+    }
+
+    private fun runMontSqrBench() {
+        val bits = parsePositiveInt(inputBits, 512) ?: run {
+            toastInvalid()
+            return
+        }
+        val kernelIters = parsePositiveInt(inputKernelIters, 10000) ?: run {
+            toastInvalid()
+            return
+        }
+        val instances = parsePositiveInt(inputInstances, 128) ?: run {
+            toastInvalid()
+            return
+        }
+        val launchRepeats = parsePositiveInt(inputLaunchRepeats, 1) ?: run {
+            toastInvalid()
+            return
+        }
+        if (bits % 32 != 0) {
+            Toast.makeText(this, "bits 必须是 32 的倍数", Toast.LENGTH_SHORT).show()
+            return
+        }
+        runNative {
+            nativeMontSqrBench(bits, kernelIters, instances, launchRepeats, useWg = true, tpi = 4)
+        }
     }
 
     private fun runAddSubBench(limbBits: Int) {
@@ -189,6 +218,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btn_short).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_addsub_bench).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_addsub_bench_24).isEnabled = !busy
+        findViewById<MaterialButton>(R.id.btn_montsqr_bench).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_bench_16).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_bench_24).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_bench_32).isEnabled = !busy
@@ -208,6 +238,15 @@ class MainActivity : AppCompatActivity() {
     private external fun nativeInitAssets(assetManager: android.content.res.AssetManager)
     private external fun nativeProbe(openClLoadError: String?): String
     private external fun nativeShortTest(): String
+    private external fun nativeMontSqrBench(
+        bits: Int,
+        kernelIters: Int,
+        instances: Int,
+        launchRepeats: Int,
+        useWg: Boolean,
+        tpi: Int,
+    ): String
+
     private external fun nativeAddSubBench(
         bits: Int,
         kernelIters: Int,

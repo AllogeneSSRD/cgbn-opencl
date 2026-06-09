@@ -9,9 +9,11 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         opencl_probe.cpp
         opencl_bench.cpp
         opencl_addsub_bench.cpp
+        opencl_montsqr_bench.cpp
         kernel_assets.cpp
         sys_gpu_stats.cpp
-        "${MPA_ROOT}/src/opencl_ecm_addsub_manifest.cpp")
+        "${MPA_ROOT}/src/opencl_ecm_addsub_manifest.cpp"
+        "${MPA_ROOT}/src/opencl_ecm_montsqr_manifest.cpp")
 
 target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_17)
 
