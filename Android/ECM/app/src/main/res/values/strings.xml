@@ -1,3 +1,11 @@
 <resources>
-    <string name="app_name">ECM</string>
+    <string name="app_name">ECM OpenCL</string>
+    <string name="subtitle">GPU OpenCL probe &amp; limb bench</string>
+    <string name="btn_probe">设备探测</string>
+    <string name="btn_short">简短测试</string>
+    <string name="btn_bench_16">16-bit 性能</string>
+    <string name="btn_bench_24">24-bit 性能</string>
+    <string name="btn_bench_32">32-bit 性能</string>
+    <string name="output_hint">点击按钮运行测试…</string>
+    <string name="running">运行中…</string>
 </resources>
