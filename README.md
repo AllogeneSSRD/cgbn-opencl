@@ -1,263 +1,197 @@
-# 📑 重构文档索引 —— 第一步完成
+# ECM-OpenCl
 
-## 🗺️ 快速导航
+OpenCL implementation of **ECM stage-1** (Elliptic Curve Method factorization) with a large library of Montgomery and modular add/sub kernels. The project targets high-throughput GPU factorization on desktop GPUs and includes an **Android** port for on-device OpenCL microbenchmarks and probing.
 
-| 我想要... | 查看文件 | 阅读时间 |
-|----------|--------|--------|
-| **快速了解现在的状况** | [`QUICK_START.md`](QUICK_START.md) | 5 分钟 |
-| **理解 CGBN 的整体架构** | [`ARCHITECTURE.md`](ARCHITECTURE.md) | 15 分钟 |
-| **找某个算子的调用链** | [`OPERATOR_DISPATCH.md`](OPERATOR_DISPATCH.md) | 5 分钟（查表） |
-| **理解某个 CUDA 特性如何替换** | [`OPERATOR_DISPATCH.md` 附录](OPERATOR_DISPATCH.md#附录cuda-依赖点详解) | 5-10 分钟 |
-| **了解接口冻结的细节** | [`STEP_1_INTERFACE_FREEZE.md`](STEP_1_INTERFACE_FREEZE.md) | 30 分钟 |
-| **查看第一步的完成总结** | [`COMPLETION_SUMMARY.md`](COMPLETION_SUMMARY.md) | 10 分钟 |
-| **了解下一步计划** | [`STEP_2_PLAN.md`](STEP_2_PLAN.md)（待创建） | - |
+Montgomery multiply/square dominate ECM stage-1 runtime; this repository invests heavily in multiple kernel variants (private-memory CIOS, loop unrolling, work-group tiling, FIPS-style paths, inline assembly on AMD) and provides standalone benches to compare them before selecting defaults for full stage-1 runs.
 
----
+## Features
 
-## 📂 文件清单
+- **GPU ECM stage-1 driver** (`ecm.exe`) — batch curves on OpenCL, checkpoint/resume, optional kernel path overrides
+- **Operator microbenchmarks** — `opencl_ecm_addsub`, `opencl_ecm_montsqr` sweep all registered kernel paths for a given modulus width
+- **Pluggable kernel paths** — compile-time `-D` flags and runtime CLI/env selection for mul/sqr/add/sub implementations
+- **OpenCL program binary cache** — FNV-1a keyed disk cache (Windows desktop and Android)
+- **Android ECM app** — device probe, add/sub bench, mont mul/sqr bench on vendor `libOpenCL.so`
+- **Codegen & ISA tooling** — Python generators and disassembly helpers under `tools/`
 
-### 核心规范文档
-
-#### 1. **QUICK_START.md** (必读)
-- **长度**: ~400 行
-- **用途**: 快速启动和全景导航
-- **关键内容**:
-  - 目录结构总览
-  - 核心文档说明
-  - 第一步成果
-  - 下一步计划
-  - 常见问题解答
-- **适合人群**: 所有人（第一次接触）
-
-#### 2. **ARCHITECTURE.md** (必读)
-- **长度**: ~350 行
-- **用途**: 理解设计和分层架构
-- **关键内容**:
-  - 整体布局（后端隔离结构）
-  - 四层分层职责详解
-  - 第一步任务
-  - 输出物清单
-  - 快速开始指南
-- **适合人群**: 需要理解设计的人
-
-#### 3. **OPERATOR_DISPATCH.md** (重要)
-- **长度**: ~500 行
-- **用途**: 算子分类、链路追踪、迁移参考
-- **关键内容**:
-  - 低风险算子（19 个）详表
-  - 中风险算子（20 个）详表
-  - 高风险算子（30+ 个）详表
-  - 累加器和内存操作
-  - 快速参考（按阶段分类）
-  - **附录 A**: CUDA 依赖点详解（shuffle、ballot、carry chain 等）
-- **适合人群**: 需要实现算子的开发者
-
-#### 4. **STEP_1_INTERFACE_FREEZE.md** (参考)
-- **长度**: ~450 行
-- **用途**: 接口冻结的完整清单和验证方法
-- **关键内容**:
-  - 部分 A: 公共 API 层审查（错误报告、模板函数、数据类型）
-  - 部分 B: 后端适配层审查（context_t、env_t、内存类型）
-  - 部分 C: 后端依赖点清单（8 大类依赖）
-  - 部分 D: 算子调度映射（所有 ~60+ 个方法）
-  - 部分 E-H: 行动项、验证方法、进度跟踪
-- **适合人群**: 需要深入理解接口的人
-
-#### 5. **COMPLETION_SUMMARY.md** (总结)
-- **长度**: ~300 行
-- **用途**: 第一步的成果总结和快速参考
-- **关键内容**:
-  - 已完成工作列表
-  - 分析成果总结（API、接口、分类、依赖、路线图）
-  - 关键发现
-  - 文档使用建议
-  - 快速参考（常见问题）
-  - 第二步预览
-  - 验证清单
-- **适合人群**: 需要了解全局进度的人
-
----
-
-## 🎯 典型使用场景
-
-### 场景 1：入职新员工，需要快速了解项目
-```
-1. 读 QUICK_START.md (5 分钟)
-   ↓ 了解全景、文档结构、核心概念
-2. 读 ARCHITECTURE.md 的"分层职责" (10 分钟)
-   ↓ 理解为什么这样设计、后端隔离的意义
-3. 扫一眼 OPERATOR_DISPATCH.md 的三个主表格 (5 分钟)
-   ↓ 了解算子分类和风险等级
-→ 总用时: 20 分钟，获得足够上手的知识
-```
-
-### 场景 2：需要实现某个算子（如 cgbn_add）的 OpenCL 版本
-```
-1. 打开 OPERATOR_DISPATCH.md，第三部分（高风险）
-   → 查到 cgbn_add，依赖: carry chain + threadIdx resolve
-2. 打开 OPERATOR_DISPATCH.md 附录 A4（Carry Chain 依赖）
-   → 查看 CUDA 代码示例和 OpenCL 替换策略
-3. 查看 STEP_1_INTERFACE_FREEZE.md 部分 C2
-   → 确认 carry chain 出现在哪些文件
-4. 打开 cgbn/core/core_add_sub.cu，查看 carry 链式调用
-5. 参照示例，在 OpenCL kernel 中实现 portable carry
-→ 总用时: 30-60 分钟，获得完整的迁移方案
-```
-
-### 场景 3：需要理解 CUDA 特性在 OpenCL 中怎么处理
-```
-# 问题：CUDA 的 __shfl_sync() 在 OpenCL 中怎么实现？
-1. 打开 OPERATOR_DISPATCH.md 附录 A2（Shuffle 依赖）
-   → 查看 CUDA 模式、出现位置、OpenCL 替换、代码示例
-2. 如果需要更多上下文，打开 STEP_1_INTERFACE_FREEZE.md 部分 C
-   → 确认 shuffle 的风险等级、影响范围
-3. 决定是用 subgroup extension 还是 local memory 方案
-→ 总用时: 15 分钟，获得清晰的替换方案
-```
-
-### 场景 4：追踪某个高风险的复合操作（如 Montgomery 乘法）
-```
-1. 打开 OPERATOR_DISPATCH.md，第三部分
-   → 查到 cgbn_mont_mul，优先级 P5，依赖: __shfl_sync, carry chain, mont algo
-2. 打开 OPERATOR_DISPATCH.md 附录 A2 和 A4
-   → 逐个查看 shuffle 和 carry chain 的 OpenCL 方案
-3. 打开 cgbn/core/core_mont.cu，查看 Montgomery 算法
-4. 打开 mpaKernel_32bits.cl，查看现有 OpenCL Montgomery 实现（参考）
-5. 比对 CUDA 版和现有 OpenCL 版，设计新的 OpenCL backend 实现
-→ 总用时: 1-2 小时，获得完整的迁移规划
-```
-
----
-
-## 📊 文档内容对应关系
+## Repository layout
 
 ```
-ARCHITECTURE.md
-├── 整体布局 ─────────→ 理解目录结构
-├── 分层职责 ─────────→ 理解四层设计
-├── 第一步任务 ──────→ 了解本阶段目标
-└── 输出物清单 ──────→ 参考交付物
-
-STEP_1_INTERFACE_FREEZE.md
-├── 公共 API 层 ────→ 冻结的模板函数
-├── 后端适配层 ────→ 必须实现的接口
-├── 后端依赖点 ────→ CUDA 特性分类
-├── 算子映射 ──────→ 调用链路
-└── 行动项 ────────→ 代码审查检查表
-
-OPERATOR_DISPATCH.md
-├── 低风险算子 ────→ 可快速移植的 19 个
-├── 中风险算子 ────→ 需部分适配的 20 个
-├── 高风险算子 ────→ 需重设计的 30+ 个
-├── 快速参考 ──────→ 按优先级分类
-└── 附录 A ────────→ CUDA 依赖点详解
-
-COMPLETION_SUMMARY.md
-├── 已完成工作 ────→ 第一步成果
-├── 分析成果 ──────→ 量化结果
-├── 关键发现 ──────→ 项目瓶颈和机遇
-└── 第二步预览 ────→ 下一阶段方向
+ECM-OpenCl/
+├── CMakeLists.txt              # Windows/desktop build (OpenCL, OpenSSL, GMP)
+├── cgbn/backends/opencl/
+│   ├── impl_opencl.cpp         # OpenCL context, program build, binary cache
+│   └── kernels/                # .cl sources (ecm_stage1, mont_*, mp_*)
+├── include/                    # Manifest headers, path enums, ECM API
+├── src/
+│   ├── cgbn_stage1_opencl.cpp  # Stage-1 OpenCL host driver
+│   ├── ecm_driver.cpp          # ecm.exe CLI
+│   ├── opencl_ecm_*_bench.cpp  # Standalone microbenchmarks
+│   └── opencl_ecm_*_manifest.cpp
+├── Android/
+│   ├── README.md               # Android OpenCL loading notes (16 KB pages)
+│   └── ECM/                    # Android Studio app — see ECM/README.md
+├── tools/                      # Kernel/asm generators, disasm scripts
+├── test/                       # CUDA/OpenCL correctness & throughput tests
+├── ECM_OPERATOR_ANALYSIS.md    # Hotspot analysis and bench baselines
+└── README_zh.md                # Chinese documentation
 ```
 
----
+## Prerequisites (Windows / desktop)
 
-## ✨ 快速查询表
+| Dependency | Notes |
+|------------|--------|
+| CMake 3.20+ | Visual Studio 2022 (x64) recommended |
+| OpenCL ICD | GPU vendor runtime (NVIDIA, AMD, Intel) |
+| OpenSSL | Via CMake `find_package(OpenSSL)` |
+| GMP | Currently linked via **hardcoded vcpkg paths** in `CMakeLists.txt` |
 
-### 我需要查找...
+Before building, edit `CMakeLists.txt` if your vcpkg install is not at `D:/code/vcpkg/installed/x64-windows/` — update `link_directories(...)` and the `gmp.lib` paths for `ecm`, `main`, and the bench targets.
 
-| 需求 | 查看位置 |
-|------|--------|
-| 某个算子的调用链 | `OPERATOR_DISPATCH.md` → 第一/二/三部分 → 按算子名查表 |
-| 某个算子的风险等级 | `OPERATOR_DISPATCH.md` → 风险列 |
-| 某个 CUDA 特性的替换方案 | `OPERATOR_DISPATCH.md` → 附录 A → 特性名 |
-| 所有低风险算子 | `OPERATOR_DISPATCH.md` → 第一部分 → 19 个 |
-| OpenCL 后端需实现的接口 | `STEP_1_INTERFACE_FREEZE.md` → B.2 |
-| 公共 API 的完整列表 | `STEP_1_INTERFACE_FREEZE.md` → A.2 |
-| CUDA 依赖分布统计 | `STEP_1_INTERFACE_FREEZE.md` → C.2 |
-| 算子迁移优先级 | `OPERATOR_DISPATCH.md` → 第三部分 → 优先级列 |
-| 推荐阅读顺序 | `QUICK_START.md` → 如何使用这些文档 |
+Optional: [Pari/GP](https://pari.math.u-bordeaux.fr/) for `--go` group-order diagnostics (`ECM_GP_BIN` env var).
 
----
+## Build (Windows)
 
-## 🔗 跨文档参考链接
+```powershell
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --config Debug
+```
 
-### 从 ARCHITECTURE 跳转
-- "第一步任务" → `STEP_1_INTERFACE_FREEZE.md`
-- "输出物清单" → 列出的每个文件
+Binaries appear under `build/Debug/` (MSVC multi-config generator).
 
-### 从 STEP_1_INTERFACE_FREEZE 跳转
-- "CUDA 特性" → `OPERATOR_DISPATCH.md` 附录
-- "算子映射" → `OPERATOR_DISPATCH.md` 主表格
+## Executables
 
-### 从 OPERATOR_DISPATCH 跳转
-- "低风险算子" → 第一部分表格
-- "迁移策略" → 附录 A 对应小节
+| Target | Purpose |
+|--------|---------|
+| `ecm.exe` | ECM stage-1 factorization driver (reads `N` from stdin) |
+| `opencl_ecm_addsub.exe` | Modular add/sub kernel throughput sweep |
+| `opencl_ecm_montsqr.exe` | Montgomery mul/sqr kernel throughput sweep |
+| `main.exe` | Low-risk OpenCL smoke tests |
+| `opencl_asm_selftest.exe` | Inline-asm kernel self-test |
+| `opencl_mont_isa_export.exe` | Export compiled ISA for mont kernels |
+| `opencl_addsub_isa_export.exe` | Export compiled ISA for add/sub kernels |
 
----
+## ECM driver (`ecm.exe`)
 
-## 📚 推荐学习路径
+Reads composite **N** from stdin (decimal or expression), then runs stage-1 with optional GPU batching.
 
-### 路径 A：全面理解（2-3 小时）
-1. QUICK_START.md (5 min)
-2. ARCHITECTURE.md (20 min)
-3. OPERATOR_DISPATCH.md (30 min 专注第一部分)
-4. STEP_1_INTERFACE_FREEZE.md (60 min)
-5. COMPLETION_SUMMARY.md (10 min)
+```powershell
+echo "(2^991-1)" | build\Debug\ecm.exe -v --go -gpu -gpucurves 384 1e6 0
+build\Debug\ecm.exe --showkernel
+```
 
-### 路径 B：快速上手（30 分钟）
-1. QUICK_START.md (5 min)
-2. ARCHITECTURE.md 的"分层职责" (10 min)
-3. OPERATOR_DISPATCH.md 的表格快速浏览 (10 min)
-4. QUICK_START.md 的"常见问题" (5 min)
+Common options:
 
-### 路径 C：针对性学习（15-30 分钟）
-1. 确定你的角色（架构师/开发者/测试）
-2. 从快速参考表找相关文档
-3. 用 Ctrl+F 查找关键词
-4. 按需深入相关章节
+| Option | Description |
+|--------|-------------|
+| `-gpu` | Enable GPU stage-1 (requires `-gpucurves`) |
+| `-gpucurves <n>` | Curves per GPU launch |
+| `-d <index>` | OpenCL device index |
+| `--mul`, `--sqr`, `--add`, `--sub <path>` | Override kernel paths |
+| `--showkernel` | List all registered paths and exit |
 
----
+Add/sub path names include `default`, `fused`, `fused_unroll`, `fused_unroll_b32`, `asm_b32`, etc. Run `--showkernel` for the full Montgomery and add/sub lists.
 
-## ⚙️ 文档维护和更新
+## Microbenchmarks
 
-### 何时更新
-- [ ] 实现第二步后，更新所有文档中的"步骤 2 预览"
-- [ ] 发现冻结的接口有遗漏时，立即更新 `STEP_1_INTERFACE_FREEZE.md`
-- [ ] 算子迁移遇到问题时，更新 `OPERATOR_DISPATCH.md` 的替换策略
-- [ ] 完成每个阶段后，更新 `COMPLETION_SUMMARY.md` 的进度
+Both benches share the argument pattern:
 
-### 更新优先级
-1. 🔴 **高**: 接口规范、依赖点映射（影响下游）
-2. 🟡 **中**: 快速参考、阅读建议
-3. 🟢 **低**: 示例代码、详细说明
+```text
+<exe> [--bits <bits>] <kernel_iterations> <instances> <launch_repeats>
+```
 
----
+Total work ≈ `instances × kernel_iterations × launch_repeats` per path.
 
-## 📞 常见问题
+```powershell
+# 512-bit modular add/sub — all manifest paths
+build\Debug\opencl_ecm_addsub.exe --bits 512 10000 128 3
 
-**Q: 文档太多了，我从哪里开始？**  
-A: 从 `QUICK_START.md` 开始，它会告诉你其他文档的用途。
+# 512-bit Montgomery mul/sqr — WG mode, tpi=4 default
+build\Debug\opencl_ecm_montsqr.exe --bits 512 1000 128 1
+```
 
-**Q: 我只需要实现一个算子，需要读所有文档吗？**  
-A: 不需要。按场景 2（需要实现某个算子）的路径，只需 30-60 分钟。
+Set `ECM_BENCH_CSV=<file>` to append CSV results. MSVC links `opencl_ecm_montsqr` with a 16 MB stack because large `.cl` JIT can overflow the default 1 MB thread stack on NVIDIA.
 
-**Q: 哪个文档更新最频繁？**  
-A: 预期是 `OPERATOR_DISPATCH.md` 和 `STEP_1_INTERFACE_FREEZE.md`，因为涉及具体实现细节。
+## Kernel architecture
 
-**Q: 文档和代码怎么同步？**  
-A: 建议在 git commit 中引用相关文档，在 PR description 中说明哪些文档需要更新。
+1. **`.cl` sources** live in `cgbn/backends/opencl/kernels/`.
+2. **Manifests** (`opencl_ecm_addsub_manifest`, `opencl_ecm_montsqr_manifest`) register named paths, source files, and extra `-D` compile flags.
+3. **Path enums** (`opencl_ecm_*_path.h`) map CLI names to compile-time constants used in `ecm_stage1.cl` dispatch.
+4. **Stage-1 host** (`cgbn_stage1_opencl.cpp`) concatenates kernel sources, applies modulus-width-specific defaults (256 / 512 / 4096 bit), and launches `kernel_double_add`.
 
----
+Stage-1 selects default mul/sqr/add/sub paths by modulus size. For **512-bit** modulus on recent Adreno GPUs, prefer **`unroll_only_512`** / **`unroll_only_512_manual`** over `priv_opt` or generic work-group paths — see [Operator analysis](#operator-analysis) and `ECM_OPERATOR_ANALYSIS.md`.
 
-## 🎓 相关资源
+## Environment variables
 
-- **原始计划**: `.github/prompts/plan-cgbnOpenCl.prompt.md`
-- **CGBN 源代码**: `cgbn/` 目录
-- **现有 OpenCL 参考**: `mpa_*.c`, `mpaKernel_*.cl`
-- **OpenCL 标准**: https://www.khronos.org/opencl/
-- **CUDA 文档**: https://docs.nvidia.com/cuda/
+| Variable | Component | Description |
+|----------|-----------|-------------|
+| `CGBN_KERNEL_ROOT` | All | Override directory containing `.cl` kernel tree |
+| `CGBN_OPENCL_DEVICE_INDEX` | All | Default OpenCL device index |
+| `CGBN_OPENCL_CACHE_DIR` | Desktop cache | Directory for `.opencl_cache/opencl_{hash}.bin` |
+| `CGBN_OPENCL_CACHE_DISABLE` | Desktop cache | Disable binary cache when set |
+| `CGBN_OPENCL_CACHE_VERBOSE` | Desktop cache | Log cache hit/miss details |
+| `CGBN_OPENCL_COMPILE_VERBOSE` | Desktop cache | Log full compile options |
+| `ECM_OPENCL_TPI` | Stage-1 | Threads per instance (power of two; default 8) |
+| `ECM_STAGE1_FORCE_NORMALIZE` | Stage-1 | Force normalize path |
+| `ECM_MP_ADD_MOD_FUSED_UNROLL` | Stage-1 / addsub bench | Fused unroll variant |
+| `ECM_PROFILE_OPS` | Stage-1 | Print per-op counters |
+| `ECM_PROFILE_OPS_FILE` | Stage-1 | CSV path for op profile (default `ecm_ops_profile.csv`) |
+| `ECM_VERIFY_GPU_RESULTS` | Stage-1 | CPU cross-check GPU results |
+| `ECM_VERIFY_GPU_STRICT` | Stage-1 | Fail on verification mismatch |
+| `ECM_BENCH_CSV` | Benches | Append bench results to CSV |
+| `ECM_ADDSUB_ASM_DISABLE` | Addsub bench | Skip asm paths |
+| `ECM_MONT_WG_IMPL` | Mont bench | Work-group implementation selector |
+| `ECM_LOG_TIMESTAMP` | Logging | Prefix log lines with timestamps |
+| `ECM_GP_BIN` | ecm driver | Path to `gp` executable for `--go` |
 
----
+## OpenCL compile cache
 
-**🚀 准备好深入了吗？选择上面任何一个文档开始阅读吧！**
+Desktop builds use `cgbn::opencl::build_program_from_source` in `cgbn/backends/opencl/impl_opencl.cpp`:
 
+- Cache file: `{CGBN_OPENCL_CACHE_DIR or cwd}/.opencl_cache/opencl_{fnv1a64}.bin`
+- Key: GPU name/vendor/driver + build options + full concatenated source
+- Flow: try `clCreateProgramWithBinary` on hit; on miss compile, query binary, write atomically
+
+The Android app uses the same hash algorithm under `{codeCacheDir}/opencl_cache/`. When drivers cannot export binaries, a **live program cache** retains compiled `cl_program` objects for the app process lifetime. Details: [Android/ECM/README.md](Android/ECM/README.md).
+
+## Android
+
+Open **`Android/ECM`** in Android Studio (not the repo root). The app:
+
+- Loads vendor OpenCL via `uses-native-library` (do **not** bundle `libOpenCL.so` — breaks 16 KB page devices)
+- Runs device probe, ECM add/sub bench, and mont mul/sqr bench (same kernels as desktop, minus AMD asm)
+- Passes `codeCacheDir` into native code for OpenCL binary cache
+
+See [Android/README.md](Android/README.md) for 16 KB page constraints and [Android/ECM/README.md](Android/ECM/README.md) for UI parameters, cache debugging, and adb commands.
+
+```bash
+adb logcat ECM-OpenCL:I *:S
+adb shell run-as com.example.ecm ls -la code_cache/opencl_cache/
+```
+
+## Operator analysis
+
+ECM stage-1 spends most time in **Montgomery mul/sqr**, not modular add/sub. Measured operator mix and microbench numbers are documented in **[ECM_OPERATOR_ANALYSIS.md](ECM_OPERATOR_ANALYSIS.md)**.
+
+Mobile GPU guidance (512-bit, typical bench config `128 × 1000 × 1`):
+
+| GPU | Recommended mul path | Notes |
+|-----|----------------------|-------|
+| Adreno 830 | `unroll_only_512_manual` | ~8.5M ops/s; auto `unroll_only_512` close second |
+| Adreno 642 | `unroll_only_512` (auto) | ~1.4M ops/s; **avoid** `manual` on older compiler (~5× slower) |
+
+Do not use `priv_opt` or generic `wg` paths as 512-bit defaults on mobile when 512-specific paths are available.
+
+## Tools
+
+The `tools/` directory contains Python generators for unrolled mont/add/sub kernels, NPU test vectors, and PowerShell scripts for ISA disassembly (`disasm_mont_isa.ps1`, `disasm_addsub_isa.ps1`). See `tools/DISASM_SETUP.md` for installing objdump/llvm-objdump on Windows.
+
+The `test/` directory holds Makefile-based CUDA/OpenCL correctness suites (`opencl_mont_tests.cpp`, `opencl_addsub_tests.cpp`, etc.) used during kernel development.
+
+## Related documentation
+
+| Document | Content |
+|----------|---------|
+| [README_zh.md](README_zh.md) | Chinese version of this file |
+| [ECM_OPERATOR_ANALYSIS.md](ECM_OPERATOR_ANALYSIS.md) | Hotspot breakdown, path inventory, bench CSV |
+| [Android/ECM/README.md](Android/ECM/README.md) | Android app build, cache, mont/addsub UI |
+| [Android/README.md](Android/README.md) | OpenCL loading on Android 15+ |
