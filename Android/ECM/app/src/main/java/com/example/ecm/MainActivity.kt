@@ -16,7 +16,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         binding.sampleText.text = try {
-            stringFromJNI()
+            stringFromJNI(openClLoadError)
         } catch (e: UnsatisfiedLinkError) {
             "Native library error:\n${e.message}"
         } catch (e: Exception) {
@@ -28,11 +28,20 @@ class MainActivity : AppCompatActivity() {
      * A native method that is implemented by the 'ecm' native library,
      * which is packaged with this application.
      */
-    external fun stringFromJNI(): String
+    external fun stringFromJNI(openClLoadError: String?): String
 
     companion object {
+        /** Set when vendor libOpenCL is not exposed to this app (see uses-native-library). */
+        @JvmField
+        var openClLoadError: String? = null
+
         init {
-            // OpenCL loads from /vendor/lib64 at runtime (not packaged — 16 KB page safe).
+            // Must load before ecm: uses-native-library whitelists vendor libOpenCL.so (API 31+).
+            try {
+                System.loadLibrary("OpenCL")
+            } catch (e: UnsatisfiedLinkError) {
+                openClLoadError = e.message
+            }
             System.loadLibrary("ecm")
         }
     }

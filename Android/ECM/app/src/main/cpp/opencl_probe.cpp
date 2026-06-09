@@ -37,6 +37,8 @@ constexpr cl_uint CL_DEVICE_NOT_FOUND = -1;
 constexpr cl_ulong CL_DEVICE_TYPE_GPU = 1 << 2;
 constexpr cl_ulong CL_DEVICE_TYPE_CPU = 1 << 1;
 constexpr cl_ulong CL_DEVICE_TYPE_DEFAULT = 1 << 0;
+constexpr cl_ulong CL_DEVICE_TYPE_ALL = 0xFFFFFFFFUL;
+constexpr cl_int CL_INVALID_DEVICE_TYPE = -31;
 constexpr cl_uint CL_PLATFORM_NAME = 0x0902;
 constexpr cl_uint CL_PLATFORM_VERSION = 0x0901;
 constexpr cl_uint CL_PLATFORM_VENDOR = 0x0903;
@@ -76,40 +78,49 @@ static bool load_symbol(void* lib, const char* name, void** out) {
     return *out != nullptr;
 }
 
-static void preload_vendor_deps(std::ostringstream& log) {
-    // Load from device vendor partition (never from APK — pulled .so may fail 16 KB page alignment).
-    static const char* kDeps[] = {
-        "/vendor/lib64/libvndksupport.so",
-        "/system/vendor/lib64/libvndksupport.so",
-        "/vendor/lib64/libcutils.so",
-        "/system/vendor/lib64/libcutils.so",
-    };
-    for (const char* path : kDeps) {
-        void* h = dlopen(path, RTLD_NOW | RTLD_GLOBAL);
-        if (h) {
-            log << "preload OK: " << path << "\n";
-        }
+static bool try_dlopen_name(const char* name, void** handle, std::ostringstream& log) {
+    dlerror();
+    *handle = dlopen(name, RTLD_NOW | RTLD_GLOBAL);
+    if (*handle != nullptr) {
+        log << "dlopen OK: " << name << "\n";
+        return true;
     }
+    const char* err = dlerror();
+    log << "dlopen fail: " << name << " -> " << (err != nullptr ? err : "?") << "\n";
+    return false;
 }
 
-static bool load_opencl_api(OpenCLApi& api, std::ostringstream& log) {
-    preload_vendor_deps(log);
+static bool load_opencl_api(OpenCLApi& api, bool& own_lib, std::ostringstream& log) {
+    // Do NOT use absolute /vendor/... paths — linker namespace blocks them from app code.
+    // Use short name after AndroidManifest <uses-native-library libOpenCL.so> (API 31+)
+    // and/or System.loadLibrary("OpenCL") from Java.
+    own_lib = false;
+    log << "hint: vendor OpenCL via uses-native-library + loadLibrary, not /vendor/... dlopen\n";
 
-    // Device vendor ICD only — do not bundle libOpenCL.so in APK (16 KB page size alignment).
-    static const char* kPaths[] = {
-        "/vendor/lib64/libOpenCL.so",
-        "/system/vendor/lib64/libOpenCL.so",
+    static const char* kNames[] = {
+        "libOpenCL.so",
+        "OpenCL",
     };
 
-    for (const char* path : kPaths) {
-        api.lib = dlopen(path, RTLD_NOW | RTLD_LOCAL);
-        if (api.lib) {
-            log << "dlopen OK: " << path << "\n";
+    for (const char* name : kNames) {
+        if (try_dlopen_name(name, &api.lib, log)) {
+            own_lib = true;
             break;
         }
-        log << "dlopen fail: " << path << " -> " << dlerror() << "\n";
     }
-    if (!api.lib) {
+
+    if (api.lib == nullptr) {
+        dlerror();
+        api.lib = dlopen("libOpenCL.so", RTLD_NOLOAD | RTLD_GLOBAL);
+        if (api.lib != nullptr) {
+            log << "dlopen NOLOAD OK: libOpenCL.so (preloaded)\n";
+        }
+    }
+
+    if (api.lib == nullptr && dlsym(nullptr, "clGetPlatformIDs") != nullptr) {
+        log << "symbols OK via RTLD_DEFAULT (Java loadLibrary)\n";
+        // api.lib stays nullptr; dlsym(nullptr, ...) resolves exported symbols.
+    } else if (api.lib == nullptr) {
         return false;
     }
 
@@ -166,6 +177,55 @@ static std::string query_device_string(OpenCLApi& api, cl_device_id dev, cl_uint
     return std::string(buf.data(), buf.size());
 }
 
+static const char* cl_err_str(cl_int err) {
+    switch (err) {
+        case 0:
+            return "CL_SUCCESS";
+        case -1:
+            return "CL_DEVICE_NOT_FOUND";
+        case -31:
+            return "CL_INVALID_DEVICE_TYPE";
+        case -32:
+            return "CL_INVALID_PLATFORM";
+        default:
+            return "CL_ERROR";
+    }
+}
+
+static bool collect_devices(
+        OpenCLApi& api,
+        cl_platform_id plat,
+        cl_ulong dev_type,
+        const char* label,
+        std::vector<cl_device_id>& devices,
+        std::ostringstream& out) {
+    cl_uint count = 0;
+    cl_int err = api.clGetDeviceIDs(plat, dev_type, 0, nullptr, &count);
+    out << "  query " << label << ": err=" << err << " (" << cl_err_str(err) << ") count=" << count << "\n";
+    if (err != CL_SUCCESS || count == 0) {
+        return false;
+    }
+    std::vector<cl_device_id> batch(count);
+    err = api.clGetDeviceIDs(plat, dev_type, count, batch.data(), nullptr);
+    if (err != CL_SUCCESS) {
+        out << "  query " << label << " fill failed: err=" << err << "\n";
+        return false;
+    }
+    for (cl_device_id dev : batch) {
+        bool seen = false;
+        for (cl_device_id existing : devices) {
+            if (existing == dev) {
+                seen = true;
+                break;
+            }
+        }
+        if (!seen) {
+            devices.push_back(dev);
+        }
+    }
+    return true;
+}
+
 static const char* device_type_str(cl_ulong type) {
     if (type & CL_DEVICE_TYPE_GPU) {
         return "GPU";
@@ -184,7 +244,8 @@ std::string probe_opencl() {
     out << "=== OpenCL probe (Android) ===\n";
 
     OpenCLApi api{};
-    if (!load_opencl_api(api, out)) {
+    bool own_lib = false;
+    if (!load_opencl_api(api, own_lib, out)) {
         out << "RESULT: FAIL (cannot load OpenCL library or symbols)\n";
         LOGI("%s", out.str().c_str());
         return out.str();
@@ -195,7 +256,9 @@ std::string probe_opencl() {
     out << "clGetPlatformIDs: err=" << err << " platforms=" << num_platforms << "\n";
     if (err != CL_SUCCESS || num_platforms == 0) {
         out << "RESULT: FAIL (no OpenCL platforms)\n";
-        dlclose(api.lib);
+        if (own_lib && api.lib != nullptr) {
+            dlclose(api.lib);
+        }
         LOGI("%s", out.str().c_str());
         return out.str();
     }
@@ -204,7 +267,9 @@ std::string probe_opencl() {
     err = api.clGetPlatformIDs(num_platforms, platforms.data(), nullptr);
     if (err != CL_SUCCESS) {
         out << "RESULT: FAIL (platform enum err=" << err << ")\n";
-        dlclose(api.lib);
+        if (own_lib && api.lib != nullptr) {
+            dlclose(api.lib);
+        }
         return out.str();
     }
 
@@ -216,21 +281,18 @@ std::string probe_opencl() {
         out << "  vendor: " << query_platform_string(api, plat, CL_PLATFORM_VENDOR) << "\n";
         out << "  version: " << query_platform_string(api, plat, CL_PLATFORM_VERSION) << "\n";
 
-        cl_uint num_devices = 0;
-        err = api.clGetDeviceIDs(plat, CL_DEVICE_TYPE_GPU | CL_DEVICE_TYPE_CPU, 0, nullptr, &num_devices);
-        out << "  devices: err=" << err << " count=" << num_devices << "\n";
-        if (err != CL_SUCCESS || num_devices == 0) {
+        std::vector<cl_device_id> devices;
+        // Qualcomm Android rejects GPU|CPU combined mask (CL_INVALID_DEVICE_TYPE); query separately.
+        collect_devices(api, plat, CL_DEVICE_TYPE_GPU, "GPU", devices, out);
+        collect_devices(api, plat, CL_DEVICE_TYPE_CPU, "CPU", devices, out);
+        collect_devices(api, plat, CL_DEVICE_TYPE_DEFAULT, "DEFAULT", devices, out);
+        collect_devices(api, plat, CL_DEVICE_TYPE_ALL, "ALL", devices, out);
+        out << "  unique devices: " << devices.size() << "\n";
+        if (devices.empty()) {
             continue;
         }
 
-        std::vector<cl_device_id> devices(num_devices);
-        err = api.clGetDeviceIDs(plat, CL_DEVICE_TYPE_GPU | CL_DEVICE_TYPE_CPU, num_devices, devices.data(), nullptr);
-        if (err != CL_SUCCESS) {
-            out << "  device enum failed err=" << err << "\n";
-            continue;
-        }
-
-        for (cl_uint di = 0; di < num_devices; ++di) {
+        for (cl_uint di = 0; di < devices.size(); ++di) {
             cl_device_id dev = devices[di];
             cl_ulong dev_type = 0;
             api.clGetDeviceInfo(dev, CL_DEVICE_TYPE, sizeof(dev_type), &dev_type, nullptr);
@@ -289,6 +351,8 @@ std::string probe_opencl() {
 
     out << "\nRESULT: " << (any_device_ok ? "PASS (OpenCL usable)" : "PARTIAL (loaded but no working device)") << "\n";
     LOGI("%s", out.str().c_str());
-    dlclose(api.lib);
+    if (own_lib && api.lib != nullptr) {
+        dlclose(api.lib);
+    }
     return out.str();
 }

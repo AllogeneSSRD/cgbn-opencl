@@ -5,12 +5,9 @@
 **Do not bundle `libOpenCL.so` in the APK.** Vendor libraries pulled via `adb` are usually
 4 KB-aligned and will crash on 16 KB-page devices when packaged in `jniLibs/`.
 
-The app loads OpenCL at runtime from the **device's own** vendor partition:
-
-```
-/vendor/lib64/libOpenCL.so
-/system/vendor/lib64/libOpenCL.so
-```
+The app loads OpenCL via **`uses-native-library` + `System.loadLibrary("OpenCL")`**.
+Do not use absolute `/vendor/...` paths (linker namespace blocks them) and do not bundle
+the `.so` in the APK (16 KB alignment).
 
 `get_libOpenCL.bat` is for **inspection only** (objdump NEEDED / LOAD alignment).
 

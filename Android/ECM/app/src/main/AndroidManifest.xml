@@ -11,6 +11,11 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.ECM">
+
+        <!-- API 31+: allow dlopen/System.loadLibrary of device vendor OpenCL (no APK copy). -->
+        <uses-native-library
+            android:name="libOpenCL.so"
+            android:required="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true">
