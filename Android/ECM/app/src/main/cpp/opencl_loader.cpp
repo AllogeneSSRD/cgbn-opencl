@@ -120,6 +120,10 @@ const char* cl_err_str(cl_int err) {
             return "CL_BUILD_PROGRAM_FAILURE";
         case -30:
             return "CL_INVALID_VALUE";
+        case -46:
+            return "CL_INVALID_KERNEL_NAME";
+        case -48:
+            return "CL_INVALID_KERNEL";
         case -31:
             return "CL_INVALID_DEVICE_TYPE";
         case -32:

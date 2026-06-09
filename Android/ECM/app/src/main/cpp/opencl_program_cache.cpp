@@ -1,5 +1,7 @@
 #include "opencl_program_cache.h"
 
+#include "jni_utf8.h"
+
 #include <android/log.h>
 
 #include <chrono>
@@ -124,7 +126,7 @@ std::string program_build_log(OpenCLApi& api, cl_program prog, cl_device_id dev)
     }
     std::vector<char> buf(need);
     api.clGetProgramBuildInfo(prog, dev, CL_PROGRAM_BUILD_LOG, need, buf.data(), nullptr);
-    return std::string(buf.data());
+    return sanitize_modified_utf8(std::string(buf.data()));
 }
 
 struct SaveResult {

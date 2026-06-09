@@ -1,25 +1,31 @@
 #include "opencl_ecm_montsqr_manifest.h"
 
+#include <cstdio>
+#include <string>
+
 namespace {
 
 void push(std::vector<std::string>& paths, const char* rel) {
     paths.emplace_back(rel);
 }
 
-EcmMontSqrBenchKernel kspec(const char* name, const char* label, bool is_mul, MontDispatch dispatch,
-                            uint32_t required_words = 0, uint32_t mt_local = 0) {
-    return {name, label, is_mul, dispatch, required_words, mt_local};
+EcmMontSqrBenchKernel kspec(
+        std::string name,
+        std::string label,
+        bool is_mul,
+        MontDispatch dispatch,
+        uint32_t required_words = 0,
+        uint32_t mt_local = 0) {
+    return {std::move(name), std::move(label), is_mul, dispatch, required_words, mt_local};
 }
 
 void push_512_kernels(std::vector<EcmMontSqrBenchKernel>& out, bool is_mul) {
     const char* op = is_mul ? "mul" : "sqr";
-    char kname[96];
-    char label[64];
     auto add = [&](const char* suffix, const char* disp, MontDispatch d, uint32_t req = 16u,
                    uint32_t mt = 0) {
-        snprintf(kname, sizeof(kname), "ecm_mont_%s_priv_%s_bench", op, suffix);
-        snprintf(label, sizeof(label), "%s", disp);
-        out.push_back(kspec(kname, label, is_mul, d, req, mt));
+        char kname[96];
+        std::snprintf(kname, sizeof(kname), "ecm_mont_%s_priv_%s_bench", op, suffix);
+        out.push_back(kspec(kname, disp, is_mul, d, req, mt));
     };
     if (is_mul) {
         add("unroll_only_512", "mont_mul_priv_unroll_only_512", MontDispatch::PrivUnroll);

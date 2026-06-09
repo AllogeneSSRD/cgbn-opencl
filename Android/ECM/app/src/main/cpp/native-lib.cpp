@@ -5,6 +5,7 @@
 #include <string>
 
 #include "kernel_assets.h"
+#include "jni_utf8.h"
 #include "opencl_program_cache.h"
 #include "opencl_runtime.h"
 
@@ -28,12 +29,12 @@ Java_com_example_ecm_MainActivity_nativeProbe(JNIEnv* env, jobject /* this */, j
     std::string body = get_opencl_cache_status();
     body += "\n";
     body += probe_opencl();
-    return env->NewStringUTF(prepend_opencl_error(env, j_opencl_load_error, body).c_str());
+    return new_jstring_utf8(env, prepend_opencl_error(env, j_opencl_load_error, body));
 }
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_example_ecm_MainActivity_nativeShortTest(JNIEnv* env, jobject /* this */) {
-    return env->NewStringUTF(run_short_test().c_str());
+    return new_jstring_utf8(env, run_short_test());
 }
 
 extern "C" void ecm_read_gpu_stats_ex(int* out_busy_percent, long long* out_freq_hz, int* out_busy_src,
@@ -82,8 +83,8 @@ Java_com_example_ecm_MainActivity_nativeAddSubBench(
         jint instances,
         jint launch_repeats,
         jint limb_bits) {
-    return env->NewStringUTF(
-        run_addsub_bench(bits, kernel_iters, instances, launch_repeats, limb_bits).c_str());
+    return new_jstring_utf8(
+        env, run_addsub_bench(bits, kernel_iters, instances, launch_repeats, limb_bits));
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -96,9 +97,9 @@ Java_com_example_ecm_MainActivity_nativeMontSqrBench(
         jint launch_repeats,
         jboolean use_wg,
         jint tpi) {
-    return env->NewStringUTF(
-        run_montsqr_bench(bits, kernel_iters, instances, launch_repeats, use_wg == JNI_TRUE, tpi)
-            .c_str());
+    return new_jstring_utf8(
+        env,
+        run_montsqr_bench(bits, kernel_iters, instances, launch_repeats, use_wg == JNI_TRUE, tpi));
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -109,6 +110,6 @@ Java_com_example_ecm_MainActivity_nativeBitBench(
         jint elements,
         jint kernel_iters,
         jint launch_repeats) {
-  return env->NewStringUTF(
-      run_bit_bench(limb_bits, elements, kernel_iters, launch_repeats).c_str());
+    return new_jstring_utf8(
+        env, run_bit_bench(limb_bits, elements, kernel_iters, launch_repeats));
 }

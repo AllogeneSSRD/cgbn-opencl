@@ -54,7 +54,9 @@ opencl_ecm_addsub.exe [--bits <bits>] <kernel_iterations> <instances> <launch_re
 opencl_ecm_montsqr.exe --bits 512 <kernel_iterations> <instances> <launch_repeats>
 ```
 
-默认 **WG mode**、`tpi=4`（与桌面默认一致）。512-bit 会跑 `unroll_only_512`、`fips512`、`local_only_512`、`mont_*_wg` 等；**跳过** `*_asm` 与 4096 专用路径（除非 `bits=4096` 后续扩展）。
+默认 **WG mode**、`tpi=4`（与桌面默认一致）。512-bit 会跑完整路径列表（`priv`/`priv_opt`、`unroll_only_512*`、`fips512*`、`local_only_512`、`opt2_512_local`、`unroll32/64`、`mont_*_wg` 等）；**跳过** `*_asm` 与 4096 专用路径。
+
+输出开头有 **`--- planned 512-bit mont paths ---`**（mul≈15、sqr≈14 条）；未跑的路径会打印 **`skipped (...)`** 原因（limb 不匹配、`clCreateKernel` 失败、enqueue 失败）。末尾 **`--- summary ---`** 统计 ran/skipped。
 
 首次编译 `mont_priv*.cl` 体积大，手机上可能需要 **1–3 分钟**。二次运行走 **OpenCL 二进制缓存**（与桌面 `CGBN_OPENCL_CACHE` 同算法）。
 

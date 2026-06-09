@@ -5,6 +5,7 @@ set(MPA_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../../..")
 
 add_library(${CMAKE_PROJECT_NAME} SHARED
         native-lib.cpp
+        jni_utf8.cpp
         opencl_loader.cpp
         opencl_program_cache.cpp
         opencl_probe.cpp

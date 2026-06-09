@@ -16,8 +16,8 @@ enum class MontDispatch : uint8_t {
 };
 
 struct EcmMontSqrBenchKernel {
-    const char* kernel_name;
-    const char* path_label;
+    std::string kernel_name;
+    std::string path_label;
     bool is_mul;
     MontDispatch dispatch;
     uint32_t required_words; // 0 = match current limb count

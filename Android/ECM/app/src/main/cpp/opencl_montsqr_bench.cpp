@@ -157,13 +157,35 @@ size_t fips_local_u32(MontDispatch dispatch, uint32_t mt_local) {
     return kFips512MtLocalU32;
 }
 
+void print_mont_kernel_plan(
+        std::ostringstream& out,
+        const char* section,
+        const std::vector<EcmMontSqrBenchKernel>& specs,
+        uint32_t words) {
+    out << section << " (" << specs.size() << " paths, limbs=" << words << "):\n";
+    for (const EcmMontSqrBenchKernel& spec : specs) {
+        out << "  " << spec.path_label << " [" << spec.kernel_name << "]";
+        if (spec.required_words != 0u && spec.required_words != words) {
+            out << " (needs " << spec.required_words << " limbs)";
+        }
+        if (spec.mt_local_size != 0u) {
+            out << " local=" << spec.mt_local_size;
+        }
+        out << "\n";
+    }
+}
+
 bool run_mont_kernel(MontBenchCtx& ctx, const EcmMontSqrBenchKernel& spec, double& ms_out) {
     if (spec.required_words != 0u && spec.required_words != ctx.words) {
+        ctx.out << spec.path_label << ": skipped (requires " << spec.required_words
+                << " limbs, have " << ctx.words << ")\n";
         return false;
     }
     cl_int kerr = CL_SUCCESS;
-    cl_kernel k = ctx.api.clCreateKernel(ctx.program, spec.kernel_name, &kerr);
-    if (kerr != CL_SUCCESS) {
+    cl_kernel k = ctx.api.clCreateKernel(ctx.program, spec.kernel_name.c_str(), &kerr);
+    if (kerr != CL_SUCCESS || k == nullptr) {
+        ctx.out << spec.path_label << ": skipped (clCreateKernel \"" << spec.kernel_name << "\" err="
+                << kerr << " " << cl_err_str(kerr) << ")\n";
         return false;
     }
 
@@ -294,7 +316,7 @@ bool run_mont_kernel(MontBenchCtx& ctx, const EcmMontSqrBenchKernel& spec, doubl
 
     ctx.api.clReleaseKernel(k);
     if (!ok) {
-        ctx.out << spec.path_label << ": enqueue failed\n";
+        ctx.out << spec.path_label << ": skipped (enqueue failed)\n";
         return false;
     }
     const double ops_s = ctx.op_count / (ms_out / 1000.0);
@@ -302,10 +324,24 @@ bool run_mont_kernel(MontBenchCtx& ctx, const EcmMontSqrBenchKernel& spec, doubl
     return true;
 }
 
-void run_mont_section(MontBenchCtx& ctx, const std::vector<EcmMontSqrBenchKernel>& specs) {
+struct MontSectionStats {
+    int ran = 0;
+    int skipped = 0;
+};
+
+void run_mont_section(
+        MontBenchCtx& ctx,
+        const std::vector<EcmMontSqrBenchKernel>& specs,
+        MontSectionStats& stats) {
+    stats.ran = 0;
+    stats.skipped = 0;
     for (const EcmMontSqrBenchKernel& spec : specs) {
         double ms = 0.0;
-        run_mont_kernel(ctx, spec, ms);
+        if (run_mont_kernel(ctx, spec, ms)) {
+            ++stats.ran;
+        } else {
+            ++stats.skipped;
+        }
     }
 }
 
@@ -437,11 +473,36 @@ std::string run_montsqr_bench(int bits, int kernel_iterations, int instances, in
                           launch_repeats,
                       out};
 
+    const std::vector<EcmMontSqrBenchKernel> mul_specs =
+        opencl_ecm_montsqr_mul_kernels(words, use_wg);
+    const std::vector<EcmMontSqrBenchKernel> sqr_specs =
+        opencl_ecm_montsqr_sqr_kernels(words, use_wg);
+
+    if (words == 16u) {
+        out << "\n--- planned 512-bit mont paths ---\n";
+        print_mont_kernel_plan(out, "mont_mul", mul_specs, words);
+        print_mont_kernel_plan(out, "mont_sqr", sqr_specs, words);
+    } else {
+        out << "\n--- planned mont paths ---\n";
+        print_mont_kernel_plan(out, "mont_mul", mul_specs, words);
+        print_mont_kernel_plan(out, "mont_sqr", sqr_specs, words);
+    }
+
     out << std::fixed << std::setprecision(3);
     out << "\n--- mont_mul ---\n";
-    run_mont_section(mctx, opencl_ecm_montsqr_mul_kernels(words, use_wg));
+    MontSectionStats mul_stats{};
+    run_mont_section(mctx, mul_specs, mul_stats);
     out << "\n--- mont_sqr ---\n";
-    run_mont_section(mctx, opencl_ecm_montsqr_sqr_kernels(words, use_wg));
+    MontSectionStats sqr_stats{};
+    run_mont_section(mctx, sqr_specs, sqr_stats);
+    out << "\n--- summary ---\n";
+    out << "mont_mul: " << mul_stats.ran << " ran, " << mul_stats.skipped << " skipped (of "
+        << mul_specs.size() << ")\n";
+    out << "mont_sqr: " << sqr_stats.ran << " ran, " << sqr_stats.skipped << " skipped (of "
+        << sqr_specs.size() << ")\n";
+    if (mul_stats.skipped > 0 || sqr_stats.skipped > 0) {
+        out << "hint: skipped lines above show clCreateKernel / limb / enqueue reasons\n";
+    }
     out << "\nRESULT: PASS\n";
 
     api.clReleaseMemObject(buf_a);
