@@ -20,6 +20,12 @@ the `.so` in the APK (16 KB alignment).
 
 Success: `RESULT: PASS (OpenCL usable)`
 
+## ECM add/sub microbench
+
+详见 **[ECM/README.md](ECM/README.md)**（中文开发文档：用法、与 Windows 复用/独立组件、构建说明）。
+
+Gradle `syncAddsubKernels` 在构建前同步 `cgbn/backends/opencl/kernels/` 中的 addsub 内核到 APK assets。
+
 ## If OpenCL fails to load
 
 - Device must expose `/vendor/lib64/libOpenCL.so` (most Adreno/Mali phones)

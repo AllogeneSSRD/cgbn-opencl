@@ -53,6 +53,22 @@ android {
     }
 }
 
+val mpaRoot = rootProject.projectDir.parentFile.parentFile
+
+tasks.register<Copy>("syncAddsubKernels") {
+    from(mpaRoot.resolve("cgbn/backends/opencl/kernels")) {
+        include("ecm_addsub_bench.cl")
+        include("mp_addsub/generated/add_fused_unroll_manual.cl")
+        include("mp_addsub/generated/sub_fused_unroll_manual.cl")
+        include("mp_addsub/generated/fused_unroll_auto.cl")
+    }
+    into(layout.projectDirectory.dir("src/main/assets/kernels/cgbn/backends/opencl/kernels"))
+}
+
+tasks.named("preBuild") {
+    dependsOn("syncAddsubKernels")
+}
+
 dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.constraintlayout)
