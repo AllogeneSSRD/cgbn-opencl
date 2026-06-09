@@ -22,6 +22,7 @@
 
 | 区域 | 说明 |
 |------|------|
+| **设备性能**（顶部卡片） | 独立后台线程约每 1.5s 刷新：GPU 占用/频率优先读 **高通系统属性**（`vendor.gpu.*`，不受 SELinux 限制），再回退 sysfs；显示数据源 |
 | 设备探测 | 枚举平台/设备、读写 buffer 冒烟测试 |
 | 简短测试 | GPU 名称 + buffer ping |
 | **ECM add/sub 微基准** | 与桌面 `opencl_ecm_addsub.exe` 同参的 4 项可编辑参数 |
@@ -120,6 +121,25 @@ Android/ECM/
 - 修改仓库内 `cgbn/.../kernels` 后需重新构建 APK（或先跑 `syncAddsubKernels`）。
 - 大位宽（如 4096-bit）首次 OpenCL 编译可能需数十秒至数分钟，属正常现象。
 - 日志：`adb logcat -s ECM-OpenCL`
+
+## GPU 占用 / 频率（Adreno）
+
+读取顺序：
+
+1. **sysfs**（`kgsl/gpubusy`、`gpuclk`）优先——Adreno 642 高负载时准确；空闲时可能读不到（显示 `—`）。
+2. **系统属性白名单**（仅 `vendor.gpu.freq` 等显式列表，**不**扫描全表，避免 MIUI `persist.sys.computility.gpulevel` 误当占用率）。
+3. 当前频率不可读时，尝试显示 **max_gpuclk** 为 `— (max xxx MHz)`。
+
+8 Elite (830) 上 `getprop` 无 `vendor.gpu.freq`，且 sysfs 常被 SELinux 拒绝，占用/频率可能长期为 `—`，属机型限制。
+
+面板会显示 `GPU 数据源: 占用=系统属性, 频率=系统属性` 等来源标签。
+
+若仍为 `—`，在电脑上查找本机属性名并反馈或自行加入 `sys_gpu_stats.cpp` 的 `kFreqProps`：
+
+```bash
+adb shell getprop | grep -i gpu
+adb logcat -s ECM-GPUStats
+```
 
 ## 输出示例
 

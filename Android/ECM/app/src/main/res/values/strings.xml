@@ -1,6 +1,9 @@
 <resources>
     <string name="app_name">ECM OpenCL</string>
     <string name="subtitle">GPU OpenCL probe &amp; ECM add/sub bench</string>
+    <string name="perf_section_title">设备性能</string>
+    <string name="perf_loading">读取中…</string>
+    <string name="perf_updated">更新: %1$s</string>
     <string name="btn_probe">设备探测</string>
     <string name="btn_short">简短测试</string>
     <string name="addsub_section_title">ECM add/sub 微基准</string>

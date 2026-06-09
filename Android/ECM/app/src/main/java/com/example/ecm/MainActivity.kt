@@ -1,6 +1,8 @@
 package com.example.ecm
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -10,18 +12,35 @@ import androidx.core.widget.NestedScrollView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.textfield.TextInputEditText
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var outputText: TextView
+    private lateinit var perfText: TextView
+    private lateinit var perfUpdated: TextView
     private lateinit var progress: ProgressBar
     private lateinit var scroll: NestedScrollView
     private lateinit var inputBits: TextInputEditText
     private lateinit var inputKernelIters: TextInputEditText
     private lateinit var inputInstances: TextInputEditText
     private lateinit var inputLaunchRepeats: TextInputEditText
-    private val executor = Executors.newSingleThreadExecutor()
+    private val benchExecutor = Executors.newSingleThreadExecutor()
+    private val perfExecutor = Executors.newSingleThreadExecutor()
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    @Volatile
+    private var perfSampleRunning = false
+
+    private val perfRefreshRunnable = object : Runnable {
+        override fun run() {
+            refreshPerfStats()
+            mainHandler.postDelayed(this, PERF_REFRESH_MS)
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,6 +51,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         outputText = findViewById(R.id.output_text)
+        perfText = findViewById(R.id.perf_text)
+        perfUpdated = findViewById(R.id.perf_updated)
         progress = findViewById(R.id.progress)
         scroll = findViewById(R.id.nestedScrollView)
         inputBits = findViewById(R.id.input_bits)
@@ -61,6 +82,38 @@ class MainActivity : AppCompatActivity() {
         }
 
         runNative { nativeProbe(openClLoadError) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mainHandler.removeCallbacks(perfRefreshRunnable)
+        refreshPerfStats()
+        mainHandler.postDelayed(perfRefreshRunnable, PERF_REFRESH_MS)
+    }
+
+    override fun onPause() {
+        mainHandler.removeCallbacks(perfRefreshRunnable)
+        super.onPause()
+    }
+
+    private fun refreshPerfStats() {
+        if (perfSampleRunning) {
+            return
+        }
+        perfSampleRunning = true
+        perfExecutor.execute {
+            try {
+                val snapshot = DevicePerfMonitor.sample(applicationContext)
+                val body = DevicePerfMonitor.format(snapshot)
+                val stamp = getString(R.string.perf_updated, timeFormat.format(Date()))
+                runOnUiThread {
+                    perfText.text = body
+                    perfUpdated.text = stamp
+                }
+            } finally {
+                perfSampleRunning = false
+            }
+        }
     }
 
     private fun parsePositiveInt(edit: TextInputEditText, fallback: Int): Int? {
@@ -108,7 +161,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun runNative(block: () -> String) {
         setBusy(true)
-        executor.execute {
+        benchExecutor.execute {
             val result = try {
                 block()
             } catch (e: Exception) {
@@ -137,7 +190,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        executor.shutdownNow()
+        mainHandler.removeCallbacks(perfRefreshRunnable)
+        benchExecutor.shutdownNow()
+        perfExecutor.shutdownNow()
         super.onDestroy()
     }
 
@@ -158,6 +213,8 @@ class MainActivity : AppCompatActivity() {
     ): String
 
     companion object {
+        private const val PERF_REFRESH_MS = 1500L
+
         @JvmField
         var openClLoadError: String? = null
 
