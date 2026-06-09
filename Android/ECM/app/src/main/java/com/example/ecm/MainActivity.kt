@@ -60,7 +60,7 @@ class MainActivity : AppCompatActivity() {
         inputInstances = findViewById(R.id.input_instances)
         inputLaunchRepeats = findViewById(R.id.input_launch_repeats)
 
-        nativeInitAssets(assets)
+        nativeInitAssets(assets, codeCacheDir.absolutePath)
 
         findViewById<MaterialButton>(R.id.btn_probe).setOnClickListener {
             runNative { nativeProbe(openClLoadError) }
@@ -235,7 +235,10 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
-    private external fun nativeInitAssets(assetManager: android.content.res.AssetManager)
+    private external fun nativeInitAssets(
+        assetManager: android.content.res.AssetManager,
+        cacheDir: String,
+    )
     private external fun nativeProbe(openClLoadError: String?): String
     private external fun nativeShortTest(): String
     private external fun nativeMontSqrBench(

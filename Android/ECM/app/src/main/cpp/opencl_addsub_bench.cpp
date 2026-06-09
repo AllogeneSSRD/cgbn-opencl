@@ -3,6 +3,7 @@
 #include "kernel_assets.h"
 #include "opencl_ecm_addsub_manifest.h"
 #include "opencl_loader.h"
+#include "opencl_program_cache.h"
 
 #include <chrono>
 #include <cstdint>
@@ -277,7 +278,7 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
 
     cl_device_id dev = nullptr;
     if (!acquire_gpu_device(api, dev, out)) {
-        unload_opencl_api(api, own_lib);
+        maybe_unload_opencl_api(api, own_lib);
         out << "FAIL: no GPU\n";
         return out.str();
     }
@@ -285,15 +286,15 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
 
     const std::string src = build_addsub_source(words, limb_bits, out);
     if (src.empty()) {
-        unload_opencl_api(api, own_lib);
+        maybe_unload_opencl_api(api, own_lib);
         out << "FAIL: kernel sources\n";
         return out.str();
     }
 
     cl_context ctx = nullptr;
     cl_command_queue q = nullptr;
-    if (!create_context_queue(api, dev, ctx, q, out)) {
-        unload_opencl_api(api, own_lib);
+    if (!acquire_opencl_cache_session(api, dev, ctx, q, out)) {
+        maybe_unload_opencl_api(api, own_lib);
         return out.str();
     }
 
@@ -308,30 +309,15 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
     out << "build: MAX_LIMBS=" << words << " limb_bits=" << limb_bits
         << " src_kib=" << (src.size() / 1024u) << "\n";
 
-    cl_int err = 0;
-    const char* src_ptr = src.c_str();
-    const size_t src_len = src.size();
-    cl_program program = api.clCreateProgramWithSource(ctx, 1, &src_ptr, &src_len, &err);
-    if (!program || err != CL_SUCCESS) {
-        out << "clCreateProgramWithSource err=" << err << "\n";
-        api.clReleaseContext(ctx);
-        unload_opencl_api(api, own_lib);
+    double compile_ms = 0.0;
+    bool cache_hit = false;
+    cl_program program = build_opencl_program_cached(
+        api, ctx, dev, src.c_str(), src.size(), build_opts, out, compile_ms, cache_hit);
+    if (!program) {
+        maybe_unload_opencl_api(api, own_lib);
+        out << "FAIL: program build\n";
         return out.str();
     }
-
-    const auto compile_t0 = std::chrono::steady_clock::now();
-    err = api.clBuildProgram(program, 1, &dev, build_opts, nullptr, nullptr);
-    const double compile_ms =
-        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - compile_t0).count();
-    if (err != CL_SUCCESS) {
-        out << "clBuildProgram err=" << err << " (" << cl_err_str(err) << ")\n";
-        out << program_build_log(api, program, dev) << "\n";
-        api.clReleaseProgram(program);
-        api.clReleaseContext(ctx);
-        unload_opencl_api(api, own_lib);
-        return out.str();
-    }
-    out << "compile: " << compile_ms << " ms\n";
 
     std::vector<uint32_t> n_words(words), a_words(words), b_words(words);
     if (limb24) {
@@ -353,6 +339,7 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
     }
 
     const size_t bytes = sizeof(uint32_t) * total_words;
+    cl_int err = CL_SUCCESS;
     cl_mem buf_a = api.clCreateBuffer(ctx, CL_MEM_READ_ONLY, bytes, nullptr, &err);
     cl_mem buf_b = api.clCreateBuffer(ctx, CL_MEM_READ_ONLY, bytes, nullptr, &err);
     cl_mem buf_n = api.clCreateBuffer(ctx, CL_MEM_READ_ONLY, bytes, nullptr, &err);
@@ -360,8 +347,7 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
     if (!buf_a || !buf_b || !buf_n || !buf_out) {
         out << "buffer alloc failed\n";
         api.clReleaseProgram(program);
-        api.clReleaseContext(ctx);
-        unload_opencl_api(api, own_lib);
+        maybe_unload_opencl_api(api, own_lib);
         return out.str();
     }
     api.clEnqueueWriteBuffer(q, buf_a, 1, 0, bytes, host_a.data(), 0, nullptr, nullptr);
@@ -470,8 +456,7 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
         api.clReleaseMemObject(buf_n);
         api.clReleaseMemObject(buf_out);
         api.clReleaseProgram(program);
-        api.clReleaseContext(ctx);
-        unload_opencl_api(api, own_lib);
+        maybe_unload_opencl_api(api, own_lib);
         return out.str();
     }
     for (const EcmAddSubBenchKernel& spec :
@@ -512,7 +497,6 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
     api.clReleaseMemObject(buf_n);
     api.clReleaseMemObject(buf_out);
     api.clReleaseProgram(program);
-    api.clReleaseContext(ctx);
-    unload_opencl_api(api, own_lib);
+    maybe_unload_opencl_api(api, own_lib);
     return out.str();
 }

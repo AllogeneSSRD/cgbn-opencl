@@ -56,7 +56,33 @@ opencl_ecm_montsqr.exe --bits 512 <kernel_iterations> <instances> <launch_repeat
 
 默认 **WG mode**、`tpi=4`（与桌面默认一致）。512-bit 会跑 `unroll_only_512`、`fips512`、`local_only_512`、`mont_*_wg` 等；**跳过** `*_asm` 与 4096 专用路径（除非 `bits=4096` 后续扩展）。
 
-首次编译 `mont_priv*.cl` 体积大，手机上可能需要 **1–3 分钟**。
+首次编译 `mont_priv*.cl` 体积大，手机上可能需要 **1–3 分钟**。二次运行走 **OpenCL 二进制缓存**（与桌面 `CGBN_OPENCL_CACHE` 同算法）。
+
+### OpenCL 编译缓存
+
+与 Windows `cgbn::opencl::build_program_from_source` 一致：
+
+- 缓存目录：`{Context.codeCacheDir}/opencl_cache/opencl_{fnv1a64}.bin`
+- 缓存键：GPU 名称/厂商/驱动版本 + `build_opts` + 完整拼接源码
+- 命中时：`clCreateProgramWithBinary` + `clBuildProgram`（通常远快于全量编译）
+- 输出含 `compile: cache hit ... ms` 与 `cache: ...` 路径
+
+桌面可通过 `CGBN_OPENCL_CACHE_DIR` / `CGBN_OPENCL_CACHE_DISABLE` 控制；Android 默认启用（`nativeInitAssets` 传入 `codeCacheDir`）。
+
+部分手机 GPU 驱动**不支持导出** OpenCL program binary（`CL_PROGRAM_BINARIES` 恒失败）。此时自动改用 **live program cache**：在同一 App 进程内保留已编译的 `cl_program` + 持久 `cl_context`，第二次跑相同 bench 跳过 `clBuildProgram`（**杀进程后仍需重编译**）。
+
+**检查手机上的缓存目录：**
+
+1. App 内点 **OpenCL 探测**：输出顶部有 `cache_dir:` 与 `.bin` 文件列表。
+2. 任意 bench 输出含 `cache_enabled:`、`cache_key:`、`cache save:` 或 `compile: cache hit`。
+3. adb（debug 包）：
+
+```bash
+adb shell run-as com.example.ecm ls -la code_cache/opencl_cache/
+adb logcat ECM-OpenCL:I *:S
+```
+
+启动 App 后 logcat 应立刻出现 `OpenCL cache root: /data/user/0/com.example.ecm/code_cache`；首次编译后有 `OpenCL cache save:`。
 
 输出中 **ms** 为固定小数；**ops/s ≥ 1e6** 时使用科学计数法（与 Windows `opencl_ecm_addsub` 一致，例如 `1.2224e+07 ops/s`）。
 

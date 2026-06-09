@@ -5,6 +5,7 @@
 #include <string>
 
 #include "kernel_assets.h"
+#include "opencl_program_cache.h"
 #include "opencl_runtime.h"
 
 static std::string prepend_opencl_error(JNIEnv* env, jstring j_err, const std::string& body) {
@@ -24,7 +25,10 @@ static std::string prepend_opencl_error(JNIEnv* env, jstring j_err, const std::s
 
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_example_ecm_MainActivity_nativeProbe(JNIEnv* env, jobject /* this */, jstring j_opencl_load_error) {
-    return env->NewStringUTF(prepend_opencl_error(env, j_opencl_load_error, probe_opencl()).c_str());
+    std::string body = get_opencl_cache_status();
+    body += "\n";
+    body += probe_opencl();
+    return env->NewStringUTF(prepend_opencl_error(env, j_opencl_load_error, body).c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -36,8 +40,19 @@ extern "C" void ecm_read_gpu_stats_ex(int* out_busy_percent, long long* out_freq
                                       int* out_freq_src, long long* out_max_freq_hz);
 
 extern "C" JNIEXPORT void JNICALL
-Java_com_example_ecm_MainActivity_nativeInitAssets(JNIEnv* env, jobject /* this */, jobject asset_manager) {
+Java_com_example_ecm_MainActivity_nativeInitAssets(
+        JNIEnv* env,
+        jobject /* this */,
+        jobject asset_manager,
+        jstring cache_dir) {
     set_kernel_asset_manager(AAssetManager_fromJava(env, asset_manager));
+    if (cache_dir != nullptr) {
+        const char* path = env->GetStringUTFChars(cache_dir, nullptr);
+        if (path != nullptr) {
+            set_opencl_cache_dir(path);
+            env->ReleaseStringUTFChars(cache_dir, path);
+        }
+    }
 }
 
 extern "C" JNIEXPORT jlongArray JNICALL

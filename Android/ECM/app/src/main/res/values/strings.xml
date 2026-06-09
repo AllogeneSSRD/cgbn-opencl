@@ -15,7 +15,7 @@
     <string name="hint_instances">instances</string>
     <string name="hint_launch_repeats">launch_repeats</string>
     <string name="default_bits">512</string>
-    <string name="default_kernel_iters">10000</string>
+    <string name="default_kernel_iters">100</string>
     <string name="default_instances">128</string>
     <string name="default_launch_repeats">1</string>
     <string name="btn_addsub_bench">32-bit limb 全路径</string>

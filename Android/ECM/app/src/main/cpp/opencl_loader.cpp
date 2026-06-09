@@ -59,8 +59,11 @@ bool load_opencl_api(OpenCLApi& api, bool& own_lib, std::ostringstream& log) {
     LOAD(clEnqueueReadBuffer, "clEnqueueReadBuffer");
     LOAD(clFinish, "clFinish");
     LOAD(clCreateProgramWithSource, "clCreateProgramWithSource");
+    LOAD(clCreateProgramWithBinary, "clCreateProgramWithBinary");
     LOAD(clBuildProgram, "clBuildProgram");
+    LOAD(clGetProgramInfo, "clGetProgramInfo");
     LOAD(clGetProgramBuildInfo, "clGetProgramBuildInfo");
+    LOAD(clRetainProgram, "clRetainProgram");
     LOAD(clReleaseProgram, "clReleaseProgram");
     LOAD(clCreateKernel, "clCreateKernel");
     LOAD(clSetKernelArg, "clSetKernelArg");
@@ -115,6 +118,8 @@ const char* cl_err_str(cl_int err) {
             return "CL_DEVICE_NOT_FOUND";
         case -11:
             return "CL_BUILD_PROGRAM_FAILURE";
+        case -30:
+            return "CL_INVALID_VALUE";
         case -31:
             return "CL_INVALID_DEVICE_TYPE";
         case -32:

@@ -32,6 +32,7 @@ using cl_context_properties = cl_ulong;
 using cl_command_queue_properties = cl_ulong;
 using cl_mem_flags = cl_ulong;
 using cl_program_build_info = cl_uint;
+using cl_program_info = cl_uint;
 
 constexpr cl_uint CL_SUCCESS = 0;
 constexpr cl_uint CL_DEVICE_NOT_FOUND = -1;
@@ -51,6 +52,11 @@ constexpr cl_uint CL_DEVICE_VERSION = 0x102D;
 constexpr cl_uint CL_DRIVER_VERSION = 0x1101;
 constexpr cl_ulong CL_MEM_READ_WRITE = 1 << 0;
 constexpr cl_ulong CL_MEM_READ_ONLY = 1 << 2;
+constexpr cl_uint CL_PROGRAM_NUM_DEVICES = 0x1164;
+constexpr cl_uint CL_PROGRAM_BINARY_SIZES = 0x1167;
+constexpr cl_uint CL_PROGRAM_BINARIES = 0x1168;
+constexpr cl_uint CL_PROGRAM_BUILD_STATUS = 0x1181;
+constexpr cl_uint CL_PROGRAM_BUILD_OPTIONS = 0x1182;
 constexpr cl_uint CL_PROGRAM_BUILD_LOG = 0x1183;
 
 struct OpenCLApi {
@@ -75,9 +81,13 @@ struct OpenCLApi {
         nullptr;
     cl_int (*clFinish)(cl_command_queue) = nullptr;
     cl_program (*clCreateProgramWithSource)(cl_context, cl_uint, const char**, const size_t*, cl_int*) = nullptr;
+    cl_program (*clCreateProgramWithBinary)(
+        cl_context, cl_uint, const cl_device_id*, const size_t*, const unsigned char**, cl_int*, cl_int*) = nullptr;
     cl_int (*clBuildProgram)(cl_program, cl_uint, const cl_device_id*, const char*, void (*)(cl_program, void*), void*) =
         nullptr;
+    cl_int (*clGetProgramInfo)(cl_program, cl_program_info, size_t, void*, size_t*) = nullptr;
     cl_int (*clGetProgramBuildInfo)(cl_program, cl_device_id, cl_program_build_info, size_t, void*, size_t*) = nullptr;
+    cl_int (*clRetainProgram)(cl_program) = nullptr;
     cl_int (*clReleaseProgram)(cl_program) = nullptr;
     cl_kernel (*clCreateKernel)(cl_program, const char*, cl_int*) = nullptr;
     cl_int (*clSetKernelArg)(cl_kernel, cl_uint, size_t, const void*) = nullptr;
