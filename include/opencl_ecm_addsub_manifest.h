@@ -23,6 +23,7 @@ struct EcmAddSubBenchKernel {
     bool use_wg;               // requires local work-group (LPT)
     int lpt_chunk;             // 0 if N/A
     const char *compare_label; // vs reference for printed speedup line
+    bool hot_inner_loop;       // arg5 = inner_iters; 1 enqueue per launch_repeat
 };
 
 struct EcmAddSubBuildManifest {

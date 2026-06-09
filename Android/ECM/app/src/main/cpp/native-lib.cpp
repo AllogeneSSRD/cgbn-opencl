@@ -72,6 +72,21 @@ Java_com_example_ecm_MainActivity_nativeAddSubBench(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
+Java_com_example_ecm_MainActivity_nativeMontSqrBench(
+        JNIEnv* env,
+        jobject /* this */,
+        jint bits,
+        jint kernel_iters,
+        jint instances,
+        jint launch_repeats,
+        jboolean use_wg,
+        jint tpi) {
+    return env->NewStringUTF(
+        run_montsqr_bench(bits, kernel_iters, instances, launch_repeats, use_wg == JNI_TRUE, tpi)
+            .c_str());
+}
+
+extern "C" JNIEXPORT jstring JNICALL
 Java_com_example_ecm_MainActivity_nativeBitBench(
         JNIEnv* env,
         jobject /* this */,

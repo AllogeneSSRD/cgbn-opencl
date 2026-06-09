@@ -257,6 +257,39 @@ __kernel void ecm_mp_add_mod_fused(
     }
 }
 
+// Hot loop: load once, inner_iters x mp_add_mod in private, store once.
+__kernel void ecm_mp_add_mod_fused_hot(
+    __global const uint *a,
+    __global const uint *b,
+    __global const uint *n,
+    __global uint *out,
+    uint limbs,
+    uint inner_iters)
+{
+    if (inner_iters == 0u) {
+        return;
+    }
+    uint gid = get_global_id(0);
+    uint base = gid * limbs;
+
+    uint x[MAX_LIMBS], y[MAX_LIMBS], m[MAX_LIMBS], r[MAX_LIMBS];
+    for (uint i = 0u; i < limbs; ++i) {
+        x[i] = a[base + i];
+        y[i] = b[base + i];
+        m[i] = n[base + i];
+    }
+    for (uint k = 0u; k < inner_iters; ++k) {
+        mp_add_mod(r, x, y, m, limbs);
+        for (uint i = 0u; i < limbs; ++i) {
+            x[i] = r[i];
+        }
+        y[0] = y[0] + 1u;
+    }
+    for (uint i = 0u; i < limbs; ++i) {
+        out[base + i] = r[i];
+    }
+}
+
 // r = (a - b) mod N
 __kernel void ecm_mp_sub_mod(
     __global const uint *a,

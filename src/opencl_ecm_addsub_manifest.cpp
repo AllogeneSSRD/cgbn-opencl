@@ -11,6 +11,12 @@ void push_if(std::vector<std::string> &paths, const char *rel) {
     paths.emplace_back(std::string(kKernelsRoot) + "/" + rel);
 }
 
+EcmAddSubBenchKernel kspec(const char *kname, const char *label, EcmAddSubTier tier, bool is_add,
+                           bool amd_only, bool use_wg, int lpt_chunk, const char *compare,
+                           bool hot_inner_loop = false) {
+    return {kname, label, tier, is_add, amd_only, use_wg, lpt_chunk, compare, hot_inner_loop};
+}
+
 } // namespace
 
 EcmAddSubBuildManifest opencl_ecm_addsub_build_manifest(uint32_t words, bool asm_enabled,
@@ -40,7 +46,7 @@ EcmAddSubBuildManifest opencl_ecm_addsub_build_manifest(uint32_t words, bool asm
 static void push_add_asm(std::vector<EcmAddSubBenchKernel> &k, uint32_t words, bool asm_b64,
                          bool bench_unroll_only) {
     auto add = [&](const char *kname, const char *label) {
-        k.push_back({kname, label, EcmAddSubTier::Asm, true, true, false, 0, "fused_unroll"});
+        k.push_back(kspec(kname, label, EcmAddSubTier::Asm, true, true, false, 0, "fused_unroll"));
     };
     if (words == 128u) {
         if (asm_b64) {
@@ -69,6 +75,10 @@ std::vector<EcmAddSubBenchKernel> opencl_ecm_addsub_add_kernels(uint32_t words, 
                                                               bool asm_b64_enabled,
                                                               bool bench_unroll_only) {
     std::vector<EcmAddSubBenchKernel> k;
+    k.push_back(kspec("ecm_mp_add_mod_fused_unroll_auto_hot", "fused_unroll_auto_hot",
+                      EcmAddSubTier::FusedUnrollAuto, true, false, false, 0, "fused_unroll_auto", true));
+    k.push_back(kspec("ecm_mp_add_mod_fused_hot", "fused_hot", EcmAddSubTier::Fused, true, false, false, 0,
+                      "fused_unroll_auto_hot", true));
     if (asm_enabled) {
         push_add_asm(k, words, asm_b64_enabled, bench_unroll_only);
     }
@@ -81,20 +91,20 @@ std::vector<EcmAddSubBenchKernel> opencl_ecm_addsub_add_kernels(uint32_t words, 
         char label[32];
         snprintf(kname, sizeof(kname), "ecm_mp_add_mod_fused_lpt%d", chunk);
         snprintf(label, sizeof(label), "fused_lpt%d", chunk);
-        k.push_back({kname, label, EcmAddSubTier::Lpt, true, false, true, chunk, "fused_unroll"});
+        k.push_back(kspec(kname, label, EcmAddSubTier::Lpt, true, false, true, chunk, "fused_unroll"));
     }
-    k.push_back({"ecm_mp_add_mod_fused_unroll", "fused_unroll", EcmAddSubTier::FusedUnrollManual, true,
-                 false, false, 0, "fused"});
-    k.push_back({"ecm_mp_add_mod_fused_unroll_priv", "fused_unroll_priv",
-                 EcmAddSubTier::FusedUnrollManual, true, false, false, 0, "fused_unroll"});
-    k.push_back({"ecm_mp_add_mod_fused_unroll_auto", "fused_unroll_auto", EcmAddSubTier::FusedUnrollAuto,
-                 true, false, false, 0, "fused_unroll"});
+    k.push_back(kspec("ecm_mp_add_mod_fused_unroll", "fused_unroll", EcmAddSubTier::FusedUnrollManual, true,
+                      false, false, 0, "fused"));
+    k.push_back(kspec("ecm_mp_add_mod_fused_unroll_priv", "fused_unroll_priv",
+                      EcmAddSubTier::FusedUnrollManual, true, false, false, 0, "fused_unroll"));
+    k.push_back(kspec("ecm_mp_add_mod_fused_unroll_auto", "fused_unroll_auto", EcmAddSubTier::FusedUnrollAuto,
+                      true, false, false, 0, "fused_unroll"));
     if (!bench_unroll_only) {
-        k.push_back({"ecm_mp_add_mod_fused", "fused", EcmAddSubTier::Fused, true, false, false, 0,
-                     "fused_unroll_auto"});
-        k.push_back({"ecm_mp_add_mod_mask", "mask", EcmAddSubTier::Basic, true, false, false, 0, "fused"});
-        k.push_back({"ecm_mp_add_mod_legacy", "legacy", EcmAddSubTier::Basic, true, false, false, 0,
-                     "fused"});
+        k.push_back(kspec("ecm_mp_add_mod_fused", "fused", EcmAddSubTier::Fused, true, false, false, 0,
+                          "fused_unroll_auto"));
+        k.push_back(kspec("ecm_mp_add_mod_mask", "mask", EcmAddSubTier::Basic, true, false, false, 0, "fused"));
+        k.push_back(kspec("ecm_mp_add_mod_legacy", "legacy", EcmAddSubTier::Basic, true, false, false, 0,
+                          "fused"));
     }
     return k;
 }
@@ -102,21 +112,23 @@ std::vector<EcmAddSubBenchKernel> opencl_ecm_addsub_add_kernels(uint32_t words, 
 std::vector<EcmAddSubBenchKernel> opencl_ecm_addsub_sub_kernels(uint32_t words, bool asm_enabled,
                                                               bool asm_b64_enabled) {
     std::vector<EcmAddSubBenchKernel> k;
+    k.push_back(kspec("ecm_mp_sub_mod_fused_unroll_auto_hot", "fused_unroll_auto_hot",
+                      EcmAddSubTier::FusedUnrollAuto, false, false, false, 0, "fused_unroll_auto", true));
     if (asm_enabled && words == 128u) {
         if (asm_b64_enabled) {
-            k.push_back({"ecm_mp_sub_mod_fused_unroll_asm_b64", "fused_unroll_asm_b64",
-                         EcmAddSubTier::Asm, false, true, false, 0, "fused_unroll"});
+            k.push_back(kspec("ecm_mp_sub_mod_fused_unroll_asm_b64", "fused_unroll_asm_b64",
+                              EcmAddSubTier::Asm, false, true, false, 0, "fused_unroll"));
         }
-        k.push_back({"ecm_mp_sub_mod_fused_unroll_asm_b32", "fused_unroll_asm_b32", EcmAddSubTier::Asm,
-                     false, true, false, 0, "fused_unroll"});
+        k.push_back(kspec("ecm_mp_sub_mod_fused_unroll_asm_b32", "fused_unroll_asm_b32", EcmAddSubTier::Asm,
+                          false, true, false, 0, "fused_unroll"));
     }
-    k.push_back({"ecm_mp_sub_mod_fused_unroll", "fused_unroll", EcmAddSubTier::FusedUnrollManual, false,
-                 false, false, 0, "ecm_mp_sub_mod"});
-    k.push_back({"ecm_mp_sub_mod_fused_unroll_priv", "fused_unroll_priv", EcmAddSubTier::FusedUnrollManual,
-                 false, false, false, 0, "fused_unroll"});
-    k.push_back({"ecm_mp_sub_mod_fused_unroll_auto", "fused_unroll_auto", EcmAddSubTier::FusedUnrollAuto,
-                 false, false, false, 0, "fused_unroll"});
-    k.push_back({"ecm_mp_sub_mod", "fused_loop", EcmAddSubTier::Fused, false, false, false, 0,
-                 "fused_unroll_auto"});
+    k.push_back(kspec("ecm_mp_sub_mod_fused_unroll", "fused_unroll", EcmAddSubTier::FusedUnrollManual, false,
+                      false, false, 0, "ecm_mp_sub_mod"));
+    k.push_back(kspec("ecm_mp_sub_mod_fused_unroll_priv", "fused_unroll_priv",
+                      EcmAddSubTier::FusedUnrollManual, false, false, false, 0, "fused_unroll"));
+    k.push_back(kspec("ecm_mp_sub_mod_fused_unroll_auto", "fused_unroll_auto", EcmAddSubTier::FusedUnrollAuto,
+                      false, false, false, 0, "fused_unroll"));
+    k.push_back(kspec("ecm_mp_sub_mod", "fused_loop", EcmAddSubTier::Fused, false, false, false, 0,
+                      "fused_unroll_auto"));
     return k;
 }

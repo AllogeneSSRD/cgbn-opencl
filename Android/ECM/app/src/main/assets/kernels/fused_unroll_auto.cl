@@ -105,3 +105,51 @@ __kernel void ecm_mp_sub_mod_fused_unroll_auto(__global const uint *a, __global 
     (void)mp_sub_mod_fused_unroll_auto(r, x, y, m);
     for (uint i = 0u; i < MAX_LIMBS; ++i) out[base + i] = r[i];
 }
+
+__kernel void ecm_mp_add_mod_fused_unroll_auto_hot(__global const uint *a, __global const uint *b,
+                                                   __global const uint *n, __global uint *out,
+                                                   uint limbs, uint inner_iters) {
+    if (limbs != MAX_LIMBS || inner_iters == 0u) return;
+    uint gid = get_global_id(0);
+    uint base = gid * MAX_LIMBS;
+    uint x[MAX_LIMBS], y[MAX_LIMBS], m[MAX_LIMBS], r[MAX_LIMBS];
+    for (uint i = 0u; i < MAX_LIMBS; ++i) {
+        x[i] = a[base + i];
+        y[i] = b[base + i];
+        m[i] = n[base + i];
+    }
+    for (uint k = 0u; k < inner_iters; ++k) {
+        mp_add_mod_fused_unroll_auto(r, x, y, m);
+        for (uint i = 0u; i < MAX_LIMBS; ++i) {
+            x[i] = r[i];
+        }
+        y[0] = y[0] + 1u;
+    }
+    for (uint i = 0u; i < MAX_LIMBS; ++i) {
+        out[base + i] = r[i];
+    }
+}
+
+__kernel void ecm_mp_sub_mod_fused_unroll_auto_hot(__global const uint *a, __global const uint *b,
+                                                   __global const uint *n, __global uint *out,
+                                                   uint limbs, uint inner_iters) {
+    if (limbs != MAX_LIMBS || inner_iters == 0u) return;
+    uint gid = get_global_id(0);
+    uint base = gid * MAX_LIMBS;
+    uint x[MAX_LIMBS], y[MAX_LIMBS], m[MAX_LIMBS], r[MAX_LIMBS];
+    for (uint i = 0u; i < MAX_LIMBS; ++i) {
+        x[i] = a[base + i];
+        y[i] = b[base + i];
+        m[i] = n[base + i];
+    }
+    for (uint k = 0u; k < inner_iters; ++k) {
+        (void)mp_sub_mod_fused_unroll_auto(r, x, y, m);
+        for (uint i = 0u; i < MAX_LIMBS; ++i) {
+            x[i] = r[i];
+        }
+        y[0] = y[0] + 1u;
+    }
+    for (uint i = 0u; i < MAX_LIMBS; ++i) {
+        out[base + i] = r[i];
+    }
+}

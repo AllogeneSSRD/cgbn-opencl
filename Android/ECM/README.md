@@ -26,6 +26,7 @@
 | 设备探测 | 枚举平台/设备、读写 buffer 冒烟测试 |
 | 简短测试 | GPU 名称 + buffer ping |
 | **ECM add/sub 微基准** | 32-bit limb 全路径；**24-bit limb** 仅 `fused` + `fused_unroll` |
+| **ECM mont mul/sqr** | 与 `opencl_ecm_montsqr.exe` 同源（WG mode, tpi=4）；**不含 AMD asm** |
 | Limb add-mod 微基准 | 独立的小型 16/24/32-bit 单内核测试（非 ECM 完整路径） |
 
 ### add/sub 四个参数
@@ -45,9 +46,33 @@ opencl_ecm_addsub.exe [--bits <bits>] <kernel_iterations> <instances> <launch_re
 
 总运算量：`instances × kernel_iterations × launch_repeats`。
 
+### mont mul/sqr
+
+对应桌面：
+
+```text
+opencl_ecm_montsqr.exe --bits 512 <kernel_iterations> <instances> <launch_repeats>
+```
+
+默认 **WG mode**、`tpi=4`（与桌面默认一致）。512-bit 会跑 `unroll_only_512`、`fips512`、`local_only_512`、`mont_*_wg` 等；**跳过** `*_asm` 与 4096 专用路径（除非 `bits=4096` 后续扩展）。
+
+首次编译 `mont_priv*.cl` 体积大，手机上可能需要 **1–3 分钟**。
+
 输出中 **ms** 为固定小数；**ops/s ≥ 1e6** 时使用科学计数法（与 Windows `opencl_ecm_addsub` 一致，例如 `1.2224e+07 ops/s`）。
 
-**24-bit limb（Adreno）**：点「24-bit limb（fused + unroll）」；`bits` 建议 **504**（21 limb × 24 bit）。每个 `uint` 存一个 24-bit limb（`& 0xFFFFFF`），利用 GPU 24-bit 整数 ALU 相对 32-bit 的吞吐优势（CLPeak 上常见约 3×）。
+**24-bit limb（Adreno）**：点「24-bit limb（fused + unroll）」；`bits` 建议 **504**（21 limb）或 **288**（12 limb，与 384@32 公平对比）。每个 `uint` 低 24 位为 limb。
+
+**为何 ECM bench 可能看不出 CLPeak 的 3× 优势：**
+
+1. **口径不同**：CLPeak 24-bit 是单元素、内核内 hot loop；ECM bench 默认每次 enqueue 从 global 重载全部 limb。
+2. **limb 数不等**：同 bit 宽度下 24-bit limb 更多（384@24=16 limb，384@32=12 limb，多约 33% 运算）。
+3. **OpenCL 无 `add24`**：仅 `mul24`/`mad24` 保证 24-bit 路径；加法依赖编译器对「值域 &lt; 2²⁴」的推断，显式 `& 0xFFFFFF` 会阻碍优化。
+
+**改进路径（已实现）**：
+
+- 24-bit：去掉 hot path mask；`fused_hot` / `fused_unroll_hot` 内核内 `inner=kernel_iterations`。
+- 32-bit：同样提供 `fused_hot`、`fused_unroll_auto_hot`（及 sub 对应 hot）；冷路径仍为每次 enqueue 重载 global。
+- 公平 limb 数：**288-bit@24** vs **384-bit@32**（12 limb）；hot 段 ops/s 可与 CLPeak 口径对照。
 
 ## 与 Windows 的复用关系
 

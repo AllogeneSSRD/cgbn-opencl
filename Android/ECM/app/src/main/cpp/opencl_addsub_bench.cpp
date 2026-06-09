@@ -19,11 +19,18 @@ constexpr uint32_t kLimb24Mask = (1u << 24) - 1u;
 struct Limb24AddBenchKernel {
     const char* kernel_name;
     const char* path_label;
+    bool hot_inner_loop;
 };
 
 constexpr Limb24AddBenchKernel kLimb24AddKernels[] = {
-    {"ecm_mp_add_mod_fused", "fused"},
-    {"ecm_mp_add_mod_fused_unroll", "fused_unroll"},
+    {"ecm_mp_add_mod_fused", "fused", false},
+    {"ecm_mp_add_mod_fused_u2", "fused_u2", false},
+    {"ecm_mp_add_mod_fused_unroll", "fused_unroll", false},
+};
+
+constexpr Limb24AddBenchKernel kLimb24AddHotKernels[] = {
+    {"ecm_mp_add_mod_fused_hot", "fused_hot", true},
+    {"ecm_mp_add_mod_fused_unroll_hot", "fused_unroll_hot", true},
 };
 
 std::string program_build_log(OpenCLApi& api, cl_program prog, cl_device_id dev) {
@@ -60,27 +67,33 @@ void mp_add_mod_fused_host_limb24(uint32_t* r, const uint32_t* a, const uint32_t
     uint64_t carry_add = 0;
     uint64_t carry_sub = 1;
     for (uint32_t i = 0; i < limbs; ++i) {
-        const uint64_t av = static_cast<uint64_t>(a[i] & kLimb24Mask);
-        const uint64_t bv = static_cast<uint64_t>(b[i] & kLimb24Mask);
-        const uint64_t nv = static_cast<uint64_t>(n[i] & kLimb24Mask);
-        const uint64_t sum = av + bv + carry_add;
+        const uint64_t sum = static_cast<uint64_t>(a[i]) + b[i] + carry_add;
         carry_add = sum >> 24;
-        const uint64_t limb_sum = sum & kLimb24Mask;
-        const uint64_t temp = limb_sum + ((~nv) & kLimb24Mask) + carry_sub;
+        const uint64_t temp = static_cast<uint64_t>(static_cast<uint32_t>(sum)) + (~n[i]) + carry_sub;
         carry_sub = temp >> 24;
-        r[i] = static_cast<uint32_t>(temp & kLimb24Mask);
+        r[i] = static_cast<uint32_t>(temp);
     }
     if ((carry_add | carry_sub) != 0) {
         return;
     }
     uint64_t c = 0;
     for (uint32_t i = 0; i < limbs; ++i) {
-        const uint64_t nv = static_cast<uint64_t>(n[i] & kLimb24Mask);
-        const uint64_t rv = static_cast<uint64_t>(r[i] & kLimb24Mask);
-        const uint64_t s = rv + nv + c;
-        r[i] = static_cast<uint32_t>(s & kLimb24Mask);
+        const uint64_t s = static_cast<uint64_t>(r[i]) + n[i] + c;
+        r[i] = static_cast<uint32_t>(s);
         c = s >> 24;
     }
+}
+
+void print_limb24_analysis(std::ostringstream& out, int bits, uint32_t words) {
+    const int fair_bits = static_cast<int>(words) * 32;
+    out << "\n--- limb24 analysis ---\n";
+    out << "limbs=" << words << " global_words/instance=" << words << " bytes/instance="
+        << (sizeof(uint32_t) * words * 4u) << " (a,b,n,out)\n";
+    out << "384@32 uses 12 limbs; 384@24 uses 16 limbs => +33% limb ops per add_mod.\n";
+    out << "Fair limb-count compare: " << fair_bits << "-bit@32 (" << words
+        << " limbs) vs " << bits << "-bit@24 (" << words << " limbs).\n";
+    out << "Each enqueue reloads global; CLPeak 24b tests in-register hot loops.\n";
+    out << "See fused_hot (1 enqueue, inner=kernel_iterations) for ALU-only estimate.\n";
 }
 
 bool buffers_equal_limb24(const uint32_t* a, const uint32_t* b, uint32_t limbs) {
@@ -286,9 +299,11 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
 
     char build_opts[128];
     if (limb24) {
-        std::snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DMP_LIMB_BITS=24", words);
+        std::snprintf(build_opts, sizeof(build_opts),
+                      "-DMAX_LIMBS=%u -DMP_LIMB_BITS=24 -cl-fast-relaxed-math", words);
     } else {
-        std::snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DMP_ADD_MOD_FUSED_UNROLL=2", words);
+        std::snprintf(build_opts, sizeof(build_opts),
+                      "-DMAX_LIMBS=%u -DMP_ADD_MOD_FUSED_UNROLL=2 -cl-fast-relaxed-math", words);
     }
     out << "build: MAX_LIMBS=" << words << " limb_bits=" << limb_bits
         << " src_kib=" << (src.size() / 1024u) << "\n";
@@ -389,30 +404,65 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
         out << "verify ecm_mp_add_mod_fused: " << (ok_verify ? "PASS" : "FAIL") << "\n";
     }
 
+    const cl_uint inner_iters = static_cast<cl_uint>(kernel_iterations);
+    const double hot_op_count =
+        static_cast<double>(instances) * static_cast<double>(kernel_iterations) * launch_repeats;
+
+    auto run_add_kernel = [&](const char* kernel_name, const char* path_label, bool hot_inner_loop,
+                              bool use_wg, int lpt_chunk) -> bool {
+        cl_int kerr = CL_SUCCESS;
+        cl_kernel k = api.clCreateKernel(program, kernel_name, &kerr);
+        if (kerr != CL_SUCCESS) {
+            if (hot_inner_loop) {
+                out << path_label << ": kernel missing\n";
+            }
+            return false;
+        }
+        api.clSetKernelArg(k, 0, sizeof(cl_mem), &buf_a);
+        api.clSetKernelArg(k, 1, sizeof(cl_mem), &buf_b);
+        api.clSetKernelArg(k, 2, sizeof(cl_mem), &buf_n);
+        api.clSetKernelArg(k, 3, sizeof(cl_mem), &buf_out);
+        api.clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+        double ms = 0.0;
+        bool ok = false;
+        double measured_ops = op_count;
+        size_t gws = global;
+        const size_t* local = nullptr;
+        size_t local_sz = 0;
+        if (use_wg) {
+            local_sz = static_cast<size_t>(words / static_cast<uint32_t>(lpt_chunk));
+            gws = global * local_sz;
+            local = &local_sz;
+        }
+        if (hot_inner_loop) {
+            api.clSetKernelArg(k, 5, sizeof(cl_uint), &inner_iters);
+            measured_ops = hot_op_count;
+            ok = run_kernel_timed(api, q, k, gws, local, launch_repeats, ms);
+        } else {
+            ok = run_kernel_timed(api, q, k, gws, local, total_enqueues, ms);
+        }
+        api.clReleaseKernel(k);
+        if (!ok) {
+            out << path_label << ": enqueue failed\n";
+            return false;
+        }
+        const double ops_s = measured_ops / (ms / 1000.0);
+        out << path_label << ": " << ms << " ms, " << format_ops_per_s(ops_s) << " ops/s\n";
+        return true;
+    };
+
     out << std::fixed << std::setprecision(3);
+    if (limb24) {
+        print_limb24_analysis(out, bits, words);
+    }
     out << "\n--- mp_add_mod ---\n";
     if (limb24) {
         for (const Limb24AddBenchKernel& spec : kLimb24AddKernels) {
-            cl_int kerr = CL_SUCCESS;
-            cl_kernel k = api.clCreateKernel(program, spec.kernel_name, &kerr);
-            if (kerr != CL_SUCCESS) {
-                out << spec.path_label << ": kernel missing\n";
-                continue;
-            }
-            api.clSetKernelArg(k, 0, sizeof(cl_mem), &buf_a);
-            api.clSetKernelArg(k, 1, sizeof(cl_mem), &buf_b);
-            api.clSetKernelArg(k, 2, sizeof(cl_mem), &buf_n);
-            api.clSetKernelArg(k, 3, sizeof(cl_mem), &buf_out);
-            api.clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
-            double ms = 0.0;
-            const bool ok = run_kernel_timed(api, q, k, global, nullptr, total_enqueues, ms);
-            api.clReleaseKernel(k);
-            if (!ok) {
-                out << spec.path_label << ": enqueue failed\n";
-                continue;
-            }
-            const double ops_s = op_count / (ms / 1000.0);
-            out << spec.path_label << ": " << ms << " ms, " << format_ops_per_s(ops_s) << " ops/s\n";
+            run_add_kernel(spec.kernel_name, spec.path_label, false, false, 0);
+        }
+        out << "\n--- mp_add_mod (hot, inner=" << kernel_iterations << ") ---\n";
+        for (const Limb24AddBenchKernel& spec : kLimb24AddHotKernels) {
+            run_add_kernel(spec.kernel_name, spec.path_label, true, false, 0);
         }
         out << "\nRESULT: PASS\n";
         api.clReleaseMemObject(buf_a);
@@ -426,56 +476,33 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
     }
     for (const EcmAddSubBenchKernel& spec :
          opencl_ecm_addsub_add_kernels(words, false, false, false)) {
-        cl_int kerr = CL_SUCCESS;
-        cl_kernel k = api.clCreateKernel(program, spec.kernel_name, &kerr);
-        if (kerr != CL_SUCCESS) {
+        if (spec.hot_inner_loop) {
             continue;
         }
-        api.clSetKernelArg(k, 0, sizeof(cl_mem), &buf_a);
-        api.clSetKernelArg(k, 1, sizeof(cl_mem), &buf_b);
-        api.clSetKernelArg(k, 2, sizeof(cl_mem), &buf_n);
-        api.clSetKernelArg(k, 3, sizeof(cl_mem), &buf_out);
-        api.clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
-        double ms = 0.0;
-        size_t gws = global;
-        const size_t* local = nullptr;
-        size_t local_sz = 0;
-        if (spec.use_wg) {
-            local_sz = static_cast<size_t>(words / static_cast<uint32_t>(spec.lpt_chunk));
-            gws = global * local_sz;
-            local = &local_sz;
-        }
-        const bool ok = run_kernel_timed(api, q, k, gws, local, total_enqueues, ms);
-        api.clReleaseKernel(k);
-        if (!ok) {
-            out << spec.path_label << ": enqueue failed\n";
+        run_add_kernel(spec.kernel_name, spec.path_label, false, spec.use_wg, spec.lpt_chunk);
+    }
+    out << "\n--- mp_add_mod (hot, inner=" << kernel_iterations << ") ---\n";
+    for (const EcmAddSubBenchKernel& spec :
+         opencl_ecm_addsub_add_kernels(words, false, false, false)) {
+        if (!spec.hot_inner_loop) {
             continue;
         }
-        const double ops_s = op_count / (ms / 1000.0);
-        out << spec.path_label << ": " << ms << " ms, " << format_ops_per_s(ops_s) << " ops/s\n";
+        run_add_kernel(spec.kernel_name, spec.path_label, true, spec.use_wg, spec.lpt_chunk);
     }
 
     out << "\n--- mp_sub_mod ---\n";
     for (const EcmAddSubBenchKernel& spec : opencl_ecm_addsub_sub_kernels(words, false, false)) {
-        cl_int kerr = CL_SUCCESS;
-        cl_kernel k = api.clCreateKernel(program, spec.kernel_name, &kerr);
-        if (kerr != CL_SUCCESS) {
+        if (spec.hot_inner_loop) {
             continue;
         }
-        api.clSetKernelArg(k, 0, sizeof(cl_mem), &buf_a);
-        api.clSetKernelArg(k, 1, sizeof(cl_mem), &buf_b);
-        api.clSetKernelArg(k, 2, sizeof(cl_mem), &buf_n);
-        api.clSetKernelArg(k, 3, sizeof(cl_mem), &buf_out);
-        api.clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
-        double ms = 0.0;
-        const bool ok = run_kernel_timed(api, q, k, global, nullptr, total_enqueues, ms);
-        api.clReleaseKernel(k);
-        if (!ok) {
-            out << spec.path_label << ": enqueue failed\n";
+        run_add_kernel(spec.kernel_name, spec.path_label, false, spec.use_wg, spec.lpt_chunk);
+    }
+    out << "\n--- mp_sub_mod (hot, inner=" << kernel_iterations << ") ---\n";
+    for (const EcmAddSubBenchKernel& spec : opencl_ecm_addsub_sub_kernels(words, false, false)) {
+        if (!spec.hot_inner_loop) {
             continue;
         }
-        const double ops_s = op_count / (ms / 1000.0);
-        out << spec.path_label << ": " << ms << " ms, " << format_ops_per_s(ops_s) << " ops/s\n";
+        run_add_kernel(spec.kernel_name, spec.path_label, true, spec.use_wg, spec.lpt_chunk);
     }
 
     out << "\nRESULT: PASS\n";
