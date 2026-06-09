@@ -6,6 +6,6 @@
 */__pycache__/
 test/bench
 build/
-ecm/
+docs/ecm/
 *.save
 *-*signature.txt
