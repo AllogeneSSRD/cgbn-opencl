@@ -1,0 +1,1 @@
+# Do not place libOpenCL.so here — load from device /vendor/lib64 at runtime.

@@ -15,8 +15,13 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Example of a call to a native method
-        binding.sampleText.text = stringFromJNI()
+        binding.sampleText.text = try {
+            stringFromJNI()
+        } catch (e: UnsatisfiedLinkError) {
+            "Native library error:\n${e.message}"
+        } catch (e: Exception) {
+            "Error:\n${e.message}"
+        }
     }
 
     /**
@@ -26,8 +31,8 @@ class MainActivity : AppCompatActivity() {
     external fun stringFromJNI(): String
 
     companion object {
-        // Used to load the 'ecm' library on application startup.
         init {
+            // OpenCL loads from /vendor/lib64 at runtime (not packaged — 16 KB page safe).
             System.loadLibrary("ecm")
         }
     }
