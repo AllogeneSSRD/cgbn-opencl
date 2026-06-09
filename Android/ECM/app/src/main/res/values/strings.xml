@@ -8,7 +8,9 @@
     <string name="btn_short">简短测试</string>
     <string name="addsub_section_title">ECM add/sub 微基准</string>
     <string name="limb_section_title">Limb add-mod 微基准</string>
-    <string name="hint_bits">位数 bits（32 的倍数）</string>
+    <string name="hint_bits">位数 bits</string>
+    <string name="hint_bits_32">位数 bits（32 的倍数）</string>
+    <string name="hint_bits_24">位数 bits（24 的倍数，如 504）</string>
     <string name="hint_kernel_iters">kernel_iterations</string>
     <string name="hint_instances">instances</string>
     <string name="hint_launch_repeats">launch_repeats</string>
@@ -16,7 +18,9 @@
     <string name="default_kernel_iters">10000</string>
     <string name="default_instances">128</string>
     <string name="default_launch_repeats">1</string>
-    <string name="btn_addsub_bench">运行 add/sub 基准</string>
+    <string name="btn_addsub_bench">32-bit limb 全路径</string>
+    <string name="btn_addsub_bench_24">24-bit limb（fused + unroll）</string>
+    <string name="default_bits_24">504</string>
     <string name="btn_bench_16">16-bit 性能</string>
     <string name="btn_bench_24">24-bit 性能</string>
     <string name="btn_bench_32">32-bit 性能</string>

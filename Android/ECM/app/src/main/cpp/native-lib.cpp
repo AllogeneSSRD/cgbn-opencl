@@ -65,9 +65,10 @@ Java_com_example_ecm_MainActivity_nativeAddSubBench(
         jint bits,
         jint kernel_iters,
         jint instances,
-        jint launch_repeats) {
+        jint launch_repeats,
+        jint limb_bits) {
     return env->NewStringUTF(
-        run_addsub_bench(bits, kernel_iters, instances, launch_repeats).c_str());
+        run_addsub_bench(bits, kernel_iters, instances, launch_repeats, limb_bits).c_str());
 }
 
 extern "C" JNIEXPORT jstring JNICALL

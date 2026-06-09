@@ -69,7 +69,10 @@ class MainActivity : AppCompatActivity() {
             runNative { nativeShortTest() }
         }
         findViewById<MaterialButton>(R.id.btn_addsub_bench).setOnClickListener {
-            runAddSubBench()
+            runAddSubBench(limbBits = 32)
+        }
+        findViewById<MaterialButton>(R.id.btn_addsub_bench_24).setOnClickListener {
+            runAddSubBench(limbBits = 24)
         }
         findViewById<MaterialButton>(R.id.btn_bench_16).setOnClickListener {
             runBench(16)
@@ -123,8 +126,9 @@ class MainActivity : AppCompatActivity() {
         return if (value > 0) value else null
     }
 
-    private fun runAddSubBench() {
-        val bits = parsePositiveInt(inputBits, 512) ?: run {
+    private fun runAddSubBench(limbBits: Int) {
+        val defaultBits = if (limbBits == 24) 504 else 512
+        val bits = parsePositiveInt(inputBits, defaultBits) ?: run {
             toastInvalid()
             return
         }
@@ -140,12 +144,16 @@ class MainActivity : AppCompatActivity() {
             toastInvalid()
             return
         }
-        if (bits % 32 != 0) {
-            Toast.makeText(this, "bits 必须是 32 的倍数", Toast.LENGTH_SHORT).show()
+        if (bits % limbBits != 0) {
+            Toast.makeText(
+                this,
+                "bits 必须是 $limbBits 的倍数",
+                Toast.LENGTH_SHORT,
+            ).show()
             return
         }
         runNative {
-            nativeAddSubBench(bits, kernelIters, instances, launchRepeats)
+            nativeAddSubBench(bits, kernelIters, instances, launchRepeats, limbBits)
         }
     }
 
@@ -180,6 +188,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btn_probe).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_short).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_addsub_bench).isEnabled = !busy
+        findViewById<MaterialButton>(R.id.btn_addsub_bench_24).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_bench_16).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_bench_24).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_bench_32).isEnabled = !busy
@@ -204,6 +213,7 @@ class MainActivity : AppCompatActivity() {
         kernelIters: Int,
         instances: Int,
         launchRepeats: Int,
+        limbBits: Int,
     ): String
     private external fun nativeBitBench(
         limbBits: Int,

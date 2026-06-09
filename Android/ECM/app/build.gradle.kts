@@ -55,18 +55,35 @@ android {
 
 val mpaRoot = rootProject.projectDir.parentFile.parentFile
 
+val addsubKernelIncludes = arrayOf(
+    "ecm_addsub_bench.cl",
+    "mp_addsub/generated/add_fused_unroll_manual.cl",
+    "mp_addsub/generated/sub_fused_unroll_manual.cl",
+    "mp_addsub/generated/fused_unroll_auto.cl",
+    "mp_addsub/limb24_addsub.cl",
+)
+
 tasks.register<Copy>("syncAddsubKernels") {
     from(mpaRoot.resolve("cgbn/backends/opencl/kernels")) {
-        include("ecm_addsub_bench.cl")
-        include("mp_addsub/generated/add_fused_unroll_manual.cl")
-        include("mp_addsub/generated/sub_fused_unroll_manual.cl")
-        include("mp_addsub/generated/fused_unroll_auto.cl")
+        addsubKernelIncludes.forEach { include(it) }
     }
     into(layout.projectDirectory.dir("src/main/assets/kernels/cgbn/backends/opencl/kernels"))
 }
 
+// Flat mirror (kernels/<name>.cl) for legacy asset paths on device.
+tasks.register<Copy>("syncAddsubKernelsFlat") {
+    from(mpaRoot.resolve("cgbn/backends/opencl/kernels")) {
+        addsubKernelIncludes.forEach { include(it) }
+        eachFile {
+            path = name
+        }
+        includeEmptyDirs = false
+    }
+    into(layout.projectDirectory.dir("src/main/assets/kernels"))
+}
+
 tasks.named("preBuild") {
-    dependsOn("syncAddsubKernels")
+    dependsOn("syncAddsubKernels", "syncAddsubKernelsFlat")
 }
 
 dependencies {

@@ -215,6 +215,14 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:text="@string/btn_addsub_bench" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_addsub_bench_24"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/btn_addsub_bench_24" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

@@ -25,7 +25,7 @@
 | **设备性能**（顶部卡片） | 独立后台线程约每 1.5s 刷新：GPU 占用/频率优先读 **高通系统属性**（`vendor.gpu.*`，不受 SELinux 限制），再回退 sysfs；显示数据源 |
 | 设备探测 | 枚举平台/设备、读写 buffer 冒烟测试 |
 | 简短测试 | GPU 名称 + buffer ping |
-| **ECM add/sub 微基准** | 与桌面 `opencl_ecm_addsub.exe` 同参的 4 项可编辑参数 |
+| **ECM add/sub 微基准** | 32-bit limb 全路径；**24-bit limb** 仅 `fused` + `fused_unroll` |
 | Limb add-mod 微基准 | 独立的小型 16/24/32-bit 单内核测试（非 ECM 完整路径） |
 
 ### add/sub 四个参数
@@ -38,7 +38,7 @@ opencl_ecm_addsub.exe [--bits <bits>] <kernel_iterations> <instances> <launch_re
 
 | UI 字段 | 含义 | 默认（手机友好） | 桌面常见示例 |
 |---------|------|----------------|--------------|
-| bits | 模数位宽，须为 32 的倍数 | 512 | 512 / 4096 |
+| bits | 模数位宽；32-bit limb 须为 32 的倍数；24-bit limb 须为 24 的倍数 | 512 / 504 | 512 / 504 |
 | kernel_iterations | 单次 launch 内核内循环次数 | 1000 | 10000 |
 | instances | 并行实例数（global size） | 64 | 128 |
 | launch_repeats | 重复 enqueue 次数 | 3 | 3 |
@@ -46,6 +46,8 @@ opencl_ecm_addsub.exe [--bits <bits>] <kernel_iterations> <instances> <launch_re
 总运算量：`instances × kernel_iterations × launch_repeats`。
 
 输出中 **ms** 为固定小数；**ops/s ≥ 1e6** 时使用科学计数法（与 Windows `opencl_ecm_addsub` 一致，例如 `1.2224e+07 ops/s`）。
+
+**24-bit limb（Adreno）**：点「24-bit limb（fused + unroll）」；`bits` 建议 **504**（21 limb × 24 bit）。每个 `uint` 存一个 24-bit limb（`& 0xFFFFFF`），利用 GPU 24-bit 整数 ALU 相对 32-bit 的吞吐优势（CLPeak 上常见约 3×）。
 
 ## 与 Windows 的复用关系
 
@@ -63,7 +65,8 @@ MPA-OpenCl/
 
 | 资源 | 用途 |
 |------|------|
-| `ecm_addsub_bench.cl` | 基础 add/sub/mod 内核与 bench entry |
+| `ecm_addsub_bench.cl` | 基础 add/sub/mod 内核与 bench entry（32-bit limb） |
+| `mp_addsub/limb24_addsub.cl` | 24-bit limb `fused` / `fused_unroll`（Adreno 24-bit ALU） |
 | `mp_addsub/generated/*.cl` | `fused_unroll`、`fused_unroll_auto`、priv 等展开实现 |
 | `opencl_ecm_addsub_manifest.*` | 决定编译拼接哪些 `.cl`、bench 跑哪些 kernel 名 |
 | 内核算法与路径命名 | `fused_unroll`、`fused_unroll_auto`、`legacy`、`mask` 等与桌面一致 |

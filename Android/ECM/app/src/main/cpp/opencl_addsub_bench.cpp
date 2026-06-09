@@ -14,6 +14,17 @@
 namespace {
 
 constexpr uint32_t kMaxBenchBits = 8192;
+constexpr uint32_t kLimb24Mask = (1u << 24) - 1u;
+
+struct Limb24AddBenchKernel {
+    const char* kernel_name;
+    const char* path_label;
+};
+
+constexpr Limb24AddBenchKernel kLimb24AddKernels[] = {
+    {"ecm_mp_add_mod_fused", "fused"},
+    {"ecm_mp_add_mod_fused_unroll", "fused_unroll"},
+};
 
 std::string program_build_log(OpenCLApi& api, cl_program prog, cl_device_id dev) {
     size_t need = 0;
@@ -24,6 +35,61 @@ std::string program_build_log(OpenCLApi& api, cl_program prog, cl_device_id dev)
     std::vector<char> buf(need);
     api.clGetProgramBuildInfo(prog, dev, CL_PROGRAM_BUILD_LOG, need, buf.data(), nullptr);
     return std::string(buf.data());
+}
+
+void set_pow2_minus_ui_limb24(uint32_t* out, uint32_t limbs, uint32_t bits, uint64_t k) {
+    std::memset(out, 0, sizeof(uint32_t) * limbs);
+    const uint32_t hi = (bits - 1u) / 24u;
+    const uint32_t bit = (bits - 1u) % 24u;
+    out[hi] = 1u << bit;
+    uint64_t borrow = k;
+    for (uint32_t i = 0; i < limbs && borrow != 0; ++i) {
+        const uint64_t v = static_cast<uint64_t>(out[i] & kLimb24Mask);
+        if (v >= borrow) {
+            out[i] = static_cast<uint32_t>((v - borrow) & kLimb24Mask);
+            borrow = 0;
+        } else {
+            out[i] = static_cast<uint32_t>((v + (1ull << 24) - borrow) & kLimb24Mask);
+            borrow = 1;
+        }
+    }
+}
+
+void mp_add_mod_fused_host_limb24(uint32_t* r, const uint32_t* a, const uint32_t* b,
+                                  const uint32_t* n, uint32_t limbs) {
+    uint64_t carry_add = 0;
+    uint64_t carry_sub = 1;
+    for (uint32_t i = 0; i < limbs; ++i) {
+        const uint64_t av = static_cast<uint64_t>(a[i] & kLimb24Mask);
+        const uint64_t bv = static_cast<uint64_t>(b[i] & kLimb24Mask);
+        const uint64_t nv = static_cast<uint64_t>(n[i] & kLimb24Mask);
+        const uint64_t sum = av + bv + carry_add;
+        carry_add = sum >> 24;
+        const uint64_t limb_sum = sum & kLimb24Mask;
+        const uint64_t temp = limb_sum + ((~nv) & kLimb24Mask) + carry_sub;
+        carry_sub = temp >> 24;
+        r[i] = static_cast<uint32_t>(temp & kLimb24Mask);
+    }
+    if ((carry_add | carry_sub) != 0) {
+        return;
+    }
+    uint64_t c = 0;
+    for (uint32_t i = 0; i < limbs; ++i) {
+        const uint64_t nv = static_cast<uint64_t>(n[i] & kLimb24Mask);
+        const uint64_t rv = static_cast<uint64_t>(r[i] & kLimb24Mask);
+        const uint64_t s = rv + nv + c;
+        r[i] = static_cast<uint32_t>(s & kLimb24Mask);
+        c = s >> 24;
+    }
+}
+
+bool buffers_equal_limb24(const uint32_t* a, const uint32_t* b, uint32_t limbs) {
+    for (uint32_t i = 0; i < limbs; ++i) {
+        if ((a[i] & kLimb24Mask) != (b[i] & kLimb24Mask)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 void set_pow2_minus_ui(uint32_t* out, uint32_t limbs, uint32_t bits, uint64_t k) {
@@ -103,9 +169,18 @@ bool buffers_equal(const uint32_t* a, const uint32_t* b, uint32_t limbs) {
     return std::memcmp(a, b, sizeof(uint32_t) * limbs) == 0;
 }
 
-std::string build_addsub_source(uint32_t words, std::ostringstream& log) {
-    const EcmAddSubBuildManifest manifest = opencl_ecm_addsub_build_manifest(words, false, false);
+std::string build_addsub_source(uint32_t words, int limb_bits, std::ostringstream& log) {
     std::string src;
+    if (limb_bits == 24) {
+        const char* rel = "mp_addsub/limb24_addsub.cl";
+        src = load_kernel_asset(rel);
+        if (src.empty()) {
+            log << "missing kernel asset: " << rel << "\n";
+            log << "run Gradle syncAddsubKernels or rebuild the app\n";
+        }
+        return src;
+    }
+    const EcmAddSubBuildManifest manifest = opencl_ecm_addsub_build_manifest(words, false, false);
     for (const std::string& rel : manifest.source_paths) {
         const std::string part = load_kernel_asset(rel.c_str());
         if (part.empty()) {
@@ -154,10 +229,18 @@ bool run_kernel_timed(
 
 } // namespace
 
-std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int launch_repeats) {
+std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int launch_repeats,
+                             int limb_bits) {
     std::ostringstream out;
-    if (bits <= 0 || (bits % 32) != 0 || static_cast<uint32_t>(bits) > kMaxBenchBits) {
-        out << "bits must be a positive multiple of 32 and <= " << kMaxBenchBits << "\n";
+    if (limb_bits != 24 && limb_bits != 32) {
+        out << "limb_bits must be 24 or 32\n";
+        return out.str();
+    }
+    const uint32_t limb_divisor = static_cast<uint32_t>(limb_bits);
+    if (bits <= 0 || (bits % static_cast<int>(limb_divisor)) != 0 ||
+        static_cast<uint32_t>(bits) > kMaxBenchBits) {
+        out << "bits must be a positive multiple of " << limb_bits << " and <= " << kMaxBenchBits
+            << "\n";
         return out.str();
     }
     if (kernel_iterations <= 0 || instances <= 0 || launch_repeats <= 0) {
@@ -165,9 +248,11 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
         return out.str();
     }
 
-    const uint32_t words = static_cast<uint32_t>(bits) / 32u;
+    const uint32_t words = static_cast<uint32_t>(bits) / limb_divisor;
+    const bool limb24 = limb_bits == 24;
     out << "=== ECM add/sub microbench ===\n";
-    out << bits << "-bit, kernel_iterations=" << kernel_iterations << ", instances=" << instances
+    out << bits << "-bit, limb_bits=" << limb_bits << ", limbs=" << words
+        << ", kernel_iterations=" << kernel_iterations << ", instances=" << instances
         << ", launch_repeats=" << launch_repeats << "\n";
 
     OpenCLApi api{};
@@ -185,7 +270,7 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
     }
     out << "device: " << query_device_string(api, dev, CL_DEVICE_NAME) << "\n";
 
-    const std::string src = build_addsub_source(words, out);
+    const std::string src = build_addsub_source(words, limb_bits, out);
     if (src.empty()) {
         unload_opencl_api(api, own_lib);
         out << "FAIL: kernel sources\n";
@@ -199,9 +284,14 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
         return out.str();
     }
 
-    char build_opts[96];
-    std::snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DMP_ADD_MOD_FUSED_UNROLL=2", words);
-    out << "build: MAX_LIMBS=" << words << " src_kib=" << (src.size() / 1024u) << "\n";
+    char build_opts[128];
+    if (limb24) {
+        std::snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DMP_LIMB_BITS=24", words);
+    } else {
+        std::snprintf(build_opts, sizeof(build_opts), "-DMAX_LIMBS=%u -DMP_ADD_MOD_FUSED_UNROLL=2", words);
+    }
+    out << "build: MAX_LIMBS=" << words << " limb_bits=" << limb_bits
+        << " src_kib=" << (src.size() / 1024u) << "\n";
 
     cl_int err = 0;
     const char* src_ptr = src.c_str();
@@ -229,9 +319,15 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
     out << "compile: " << compile_ms << " ms\n";
 
     std::vector<uint32_t> n_words(words), a_words(words), b_words(words);
-    set_pow2_minus_ui(n_words.data(), words, static_cast<uint32_t>(bits), 109ull);
-    set_pow2_minus_ui(a_words.data(), words, static_cast<uint32_t>(bits), 991ull);
-    set_pow2_minus_ui(b_words.data(), words, static_cast<uint32_t>(bits), 8218291649ull);
+    if (limb24) {
+        set_pow2_minus_ui_limb24(n_words.data(), words, static_cast<uint32_t>(bits), 109ull);
+        set_pow2_minus_ui_limb24(a_words.data(), words, static_cast<uint32_t>(bits), 991ull);
+        set_pow2_minus_ui_limb24(b_words.data(), words, static_cast<uint32_t>(bits), 8218291649ull);
+    } else {
+        set_pow2_minus_ui(n_words.data(), words, static_cast<uint32_t>(bits), 109ull);
+        set_pow2_minus_ui(a_words.data(), words, static_cast<uint32_t>(bits), 991ull);
+        set_pow2_minus_ui(b_words.data(), words, static_cast<uint32_t>(bits), 8218291649ull);
+    }
 
     const size_t total_words = static_cast<size_t>(instances) * words;
     std::vector<uint32_t> host_a(total_words), host_b(total_words), host_n(total_words);
@@ -281,15 +377,53 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
     };
 
     std::vector<uint32_t> expect(words), got(words);
-    mp_add_mod_legacy_host(expect.data(), a_words.data(), b_words.data(), n_words.data(), words);
+    if (limb24) {
+        mp_add_mod_fused_host_limb24(expect.data(), a_words.data(), b_words.data(), n_words.data(), words);
+    } else {
+        mp_add_mod_legacy_host(expect.data(), a_words.data(), b_words.data(), n_words.data(), words);
+    }
     if (run_once("ecm_mp_add_mod_fused", nullptr, 1u)) {
         api.clEnqueueReadBuffer(q, buf_out, 1, 0, sizeof(uint32_t) * words, got.data(), 0, nullptr, nullptr);
-        out << "verify ecm_mp_add_mod_fused: " << (buffers_equal(expect.data(), got.data(), words) ? "PASS" : "FAIL")
-            << "\n";
+        const bool ok_verify = limb24 ? buffers_equal_limb24(expect.data(), got.data(), words)
+                                      : buffers_equal(expect.data(), got.data(), words);
+        out << "verify ecm_mp_add_mod_fused: " << (ok_verify ? "PASS" : "FAIL") << "\n";
     }
 
     out << std::fixed << std::setprecision(3);
     out << "\n--- mp_add_mod ---\n";
+    if (limb24) {
+        for (const Limb24AddBenchKernel& spec : kLimb24AddKernels) {
+            cl_int kerr = CL_SUCCESS;
+            cl_kernel k = api.clCreateKernel(program, spec.kernel_name, &kerr);
+            if (kerr != CL_SUCCESS) {
+                out << spec.path_label << ": kernel missing\n";
+                continue;
+            }
+            api.clSetKernelArg(k, 0, sizeof(cl_mem), &buf_a);
+            api.clSetKernelArg(k, 1, sizeof(cl_mem), &buf_b);
+            api.clSetKernelArg(k, 2, sizeof(cl_mem), &buf_n);
+            api.clSetKernelArg(k, 3, sizeof(cl_mem), &buf_out);
+            api.clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+            double ms = 0.0;
+            const bool ok = run_kernel_timed(api, q, k, global, nullptr, total_enqueues, ms);
+            api.clReleaseKernel(k);
+            if (!ok) {
+                out << spec.path_label << ": enqueue failed\n";
+                continue;
+            }
+            const double ops_s = op_count / (ms / 1000.0);
+            out << spec.path_label << ": " << ms << " ms, " << format_ops_per_s(ops_s) << " ops/s\n";
+        }
+        out << "\nRESULT: PASS\n";
+        api.clReleaseMemObject(buf_a);
+        api.clReleaseMemObject(buf_b);
+        api.clReleaseMemObject(buf_n);
+        api.clReleaseMemObject(buf_out);
+        api.clReleaseProgram(program);
+        api.clReleaseContext(ctx);
+        unload_opencl_api(api, own_lib);
+        return out.str();
+    }
     for (const EcmAddSubBenchKernel& spec :
          opencl_ecm_addsub_add_kernels(words, false, false, false)) {
         cl_int kerr = CL_SUCCESS;
