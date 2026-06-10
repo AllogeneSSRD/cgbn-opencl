@@ -26,14 +26,11 @@ static inline ulong mont_i24_mul_full(uint a, uint b) {
     const uint b1 = b >> 12;
 
     const uint p00 = mul24(a0, b0);
-    const uint p01 = mul24(a0, b1);
-    const uint p10 = mul24(a1, b0);
-    const uint p11 = mul24(a1, b1);
-
-    ulong mid = (ulong)p01 + (ulong)p10 + (ulong)(p00 >> 12);
-    const ulong lo48 = ((ulong)(p00 & mask12)) | ((mid & mask12) << 12);
-    const ulong hi48 = (ulong)p11 + (mid >> 12);
-    return (hi48 << 24) | lo48;
+    const uint mid1 = mad24(a0, b1, p00 >> 12);
+    const uint mid2 = mad24(a1, b0, mid1);
+    const uint lo48 = (p00 & mask12) | ((mid2 & mask12) << 12);
+    const uint hi48 = mad24(a1, b1, mid2 >> 12);
+    return ((ulong)hi48 << 24) | lo48;
 }
 
 static inline ulong mont_i24_add3(ulong x, ulong y, ulong z) {

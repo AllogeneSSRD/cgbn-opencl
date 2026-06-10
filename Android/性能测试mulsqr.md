@@ -38,16 +38,29 @@
 
 ---
 
-## 2. 新增：24-bit limb（`mont_mul_unroll_i24`）实测
+## 2. 24-bit limb（`mont_mul_unroll_i24`）实测
 
-内核：`mont_mul_unroll_i24.cl`，CIOS + `#pragma unroll`，内乘用 `mul24`（12-bit 分解实现 24×24→48）；支持任意 `bits % 24 == 0`（512 固定 22 limbs）。
+内核：`mont_mul_unroll_i24.cl`，CIOS + `#pragma unroll`，内乘 `mont_i24_mul_full`（12-bit 分解 + `mul24`/`mad24`）；支持任意 `bits % 24 == 0`（512 固定 22 limbs）。
+
+> **Level 1 优化（mad24 融合）**：详见 [`docs/MONT_UNROLL_I24_MAD24_OPTIMIZATION_CN.md`](../docs/MONT_UNROLL_I24_MAD24_OPTIMIZATION_CN.md)。下表 **「mad24 后」** 为 `kernel_iterations=10000`；**「优化前」** 为同路径初版实现、`kernel_iterations=1000`。
+
+### 2.1 mad24 优化后（当前默认）
 
 | 配置 | limbs | Adreno **830** mul | Adreno **830** sqr | Adreno **642** mul | Adreno **642** sqr |
 |------|-------|--------------------|--------------------|--------------------|--------------------|
-| **512-bit @24** | 22 | **1.57M** | **1.59M** | 541K | 542K |
-| **384-bit @24** | 16 | **3.56M** | **3.61M** | 881K | 881K |
+| **512-bit @24** | 22 | **2.38M** | **2.39M** | **767K** | **765K** |
+| **384-bit @24** | 16 | **5.77M** | **5.79M** | **1.21M** | **1.26M** |
 
-**830/642 @24**：512-bit mul 约 **2.9×**；384-bit mul 约 **4.0×** — 与 §1 中 830 整体强于 642 一致。
+**830/642 @24（mad24 后）**：512-bit mul 约 **3.1×**；384-bit mul 约 **4.8×**。
+
+### 2.2 优化前基线（历史）
+
+| 配置 | limbs | Adreno **830** mul | Adreno **642** mul |
+|------|-------|--------------------|--------------------|
+| **512-bit @24** | 22 | 1.57M | 541K |
+| **384-bit @24** | 16 | 3.56M | 881K |
+
+**提升（mul）**：830 @384 **~1.62×**，@512 **~1.52×**；642 @384 **~1.37×**，@512 **~1.42×**。
 
 对照：**384-bit @32**（同次 bench，通用路径，12 limbs）：
 
@@ -78,30 +91,30 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 ### 3.2 与各自「同位宽、同 GPU 最优」对比（mul）
 
-| GPU | 位宽 | 24b unroll_i24 | 32b 最优（本仓库） | unroll_i24 / 32b 最优 |
-|-----|------|------------|-------------------|-------------------|
-| **830** | 512 | **1.57M** | unroll_only **7.73–8.47M** | **~20%**（慢约 **5×**） |
-| **830** | 384 | **3.56M** | priv_opt **2.61M** | **~136%**（快 **1.36×**） |
-| **642** | 512 | 541K | unroll_only **1.43M** | **~38%**（慢约 **2.6×**） |
-| **642** | 384 | 881K | priv_opt 482K | **~183%**（快 **1.83×**） |
+| GPU | 位宽 | 24b unroll_i24（mad24） | 32b 最优（本仓库） | unroll_i24 / 32b 最优 |
+|-----|------|-------------------------|-------------------|----------------------|
+| **830** | 512 | **2.38M** | unroll_only **7.73–8.47M** | **~28%**（慢约 **3.6×**） |
+| **830** | 384 | **5.77M** | priv_opt **2.61M** | **~221%**（快 **2.2×**） |
+| **642** | 512 | **767K** | unroll_only **1.43M** | **~54%**（慢约 **1.9×**） |
+| **642** | 384 | **1.21M** | priv_opt 482K | **~252%**（快 **2.5×**） |
 
 ### 3.3 修正后的判断（两台机共性 + 差异）
 
 **共性（生产 @512-bit）**
 
 - **两台机 @512-bit 均应使用 32b `unroll_only_512*`**，**不要**用 unroll_i24 作 Mont 生产路径。
-- unroll_i24 @512 仅为 unroll_only 最优的 **20%（830）～38%（642）**；此前误写「642 上 unroll_i24 略快于 unroll_only」系 GPU 标反所致。
+- mad24 后 unroll_i24 @512 约为 unroll_only 最优的 **28%（830）～54%（642）**（较优化前 20% / 38% 已明显缩小差距）。
 
 **830（绝对性能高）**
 
-- @512：unroll_only manual **8.47M** 仍为终极档；unroll_i24 **1.57M** 有 mul24 但仍远落后。
-- @384：unroll_i24 **3.56M** > priv_opt **2.61M**，绝对值也远高于 642 的 881K。
-- 若模数 <512 且无专用 unroll，**830 上 unroll_i24 值得评估**；@512 仍坚持 32b unroll。
+- @512：unroll_only manual **8.47M** 仍为终极档；unroll_i24 **2.38M**（mad24）仍落后约 **3.6×**。
+- @384：unroll_i24 **5.77M** >> priv_opt **2.61M**（**2.2×**），**可作为 <512 首选 Mont 路径**。
+- 若模数 <512 且无专用 unroll，**830 上优先 unroll_i24**；@512 仍坚持 32b unroll。
 
 **642（绝对性能低）**
 
-- @512：unroll_only auto **1.43M** >> unroll_i24 **541K**（约 **2.6×**）。
-- @384：unroll_i24 **881K** 仍优于 priv_opt **482K**，但绝对值仅为 830 同配置的四分之一左右。
+- @512：unroll_only auto **1.43M** >> unroll_i24 **767K**（约 **1.9×**）。
+- @384：unroll_i24 **1.21M** 优于 priv_opt **482K**（**2.5×**），绝对值约为 830 同配置的 **21%**。
 - **manual unroll** 在 642 上仍劣于 auto（§1），与 unroll_i24 选型无关。
 
 ### 3.4 为何 unroll_i24 @512 无法替代 32b unroll_only（两台机）
@@ -111,13 +124,13 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 | Limb 数 | 22 vs 16 → CIOS 约 **1.9×** 工作量 |
 | 乘法语义 | `u24_mul_full` 每步 **4× mul24** + 组合；32b unroll 为单条 32×32→64 |
 | 专用展开 | `unroll_only_512_body` 为 16-limb 深度优化；unroll_i24 为通用 22-limb CIOS |
-| 绝对算力 | 830 把 32b unroll 推到 **8M+** ops/s；unroll_i24 在 830 上虽达 **1.57M**（仍强于 642），但相对自身最优仍差 **5×** |
+| 绝对算力 | 830 把 32b unroll 推到 **8M+** ops/s；mad24 后 unroll_i24 **2.38M**，相对 32b 最优仍差 **~3.6×**（结构差距为主） |
 
 ### 3.5 为何 unroll_i24 @384 能赢 generic 32b（两台机，830 赢得更多）
 
 - `priv_opt` / `unroll32` 无固定位宽展开，带 `limbs` 循环。
 - unroll_i24 全展开 + mul24，在 **384@24（16 limb）** 上弥补 limb 数增加的开销。
-- **830** 上绝对 **3.56M vs 2.61M**；**642** 上 **881K vs 482K** — 相对提升类似，绝对差距由 GPU 算力决定。
+- **830** 上绝对 **5.77M vs 2.61M**（**2.2×**）；**642** 上 **1.21M vs 482K**（**2.5×**）— mad24 后优势进一步扩大。
 
 ### 3.6 sqr
 
@@ -143,8 +156,8 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 | 类别 | 路径 | 建议 |
 |------|------|------|
 | **两台机生产默认 @512** | `unroll_only_512` 32b | 830 mul→**manual**；642→**auto**；**均不用 unroll_i24** |
-| **830 @384 及以下** | unroll_i24 或补 12-limb unroll | unroll_i24 已优于 priv_opt（3.56M vs 2.61M） |
-| **642 @384 及以下** | unroll_i24 优于 priv_opt | 绝对性能低，端到端仍受 GPU 限制 |
+| **830 @384 及以下** | **unroll_i24（mad24）首选** | **5.77M** vs priv_opt **2.61M**（**2.2×**） |
+| **642 @384 及以下** | unroll_i24 优于 priv_opt | **1.21M** vs 482K；绝对性能仍低 |
 | **禁止 @512 生产** | `mont_mul_unroll_i24` | 两台机均显著慢于 32b unroll |
 | bench 已剔除 | `fips512_mt*`、`wg` @512 | 手机上全面落后 |
 | 642 慎用 | `unroll_only_512_manual` | 实测比 auto 慢 4.4× |
@@ -173,8 +186,8 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 ### P1 — unroll_i24 内核（research / 非 512 生产）
 
-5. **`u24_mul_full` 减负**：`mad24`、更短 24×24→48 分解
-6. **22-limb 全手动展开**（仿 512_manual 生成器）— 目标拉高 830 上 1.57M，仍难追 8M unroll
+5. ~~**`mont_i24_mul_full` mad24 融合**~~ — **已完成**（见 `docs/MONT_UNROLL_I24_MAD24_OPTIMIZATION_CN.md`）
+6. **22-limb 全手动展开**（仿 512_manual 生成器）— 目标在 2.38M 基础上再挖；仍难追 8M unroll
 7. **专用 sqr body**（24-bit `sqr_basecase` + REDC）
 8. **hot 内核**（对齐 addsub `fused_hot`）
 
@@ -203,8 +216,8 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 |------|----------------|----------------|---------|
 | 512 @32 unroll_only_manual | **8.47M** | 323K | 26× |
 | 512 @32 unroll_only auto | 7.73M | **1.43M** | 5.4× |
-| 512 @24 unroll_i24 | **1.57M** | 541K | 2.9× |
-| 384 @24 unroll_i24 | **3.56M** | 881K | 4.0× |
+| 512 @24 unroll_i24（mad24） | **2.38M** | **767K** | 3.1× |
+| 384 @24 unroll_i24（mad24） | **5.77M** | **1.21M** | 4.8× |
 | 384 @32 priv_opt | **2.61M** | 482K | 5.4× |
 | 384 @32 unroll32 | 1.51M | 485K | 3.1× |
 | 512 @32 priv_opt | 1.60M | 282K | 5.7× |
@@ -214,9 +227,9 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 | 配置 | 830 | 642 |
 |------|-----|-----|
-| 512 @24 unroll_i24 | **0.19×** | **0.38×** |
-| 384 @24 unroll_i24 vs 512 最优 | 0.42× | 0.62× |
-| 384 @24 unroll_i24 vs 384 priv_opt | **1.36×** | **1.83×** |
+| 512 @24 unroll_i24（mad24） | **0.28×** | **0.54×** |
+| 384 @24 unroll_i24 vs 512 最优 | 0.68× | 0.85× |
+| 384 @24 unroll_i24 vs 384 priv_opt | **2.21×** | **2.52×** |
 
 ---
 
@@ -224,8 +237,8 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 | GPU | 512-bit mul（生产） | 512-bit sqr | 384-bit 及以下 | 避免 @512 |
 |-----|---------------------|-------------|----------------|-----------|
-| **Adreno 830** | `unroll_only_512_manual` | `unroll_only_512` | unroll_i24 或补 unroll（**3.56M** 档） | **unroll_i24**、wg、priv_opt |
-| **Adreno 642** | `unroll_only_512` auto | `unroll_only_512` | unroll_i24 > priv_opt（**881K** 档） | **unroll_i24**、manual、wg |
+| **Adreno 830** | `unroll_only_512_manual` | `unroll_only_512` | **unroll_i24**（**5.77M** @384） | unroll_i24@512、wg、priv_opt |
+| **Adreno 642** | `unroll_only_512` auto | `unroll_only_512` | unroll_i24（**1.21M** @384） | unroll_i24@512、manual、wg |
 
 **两台机 @512-bit：Mont 一律 32b `unroll_only_512*`，不用 unroll_i24。**
 
@@ -238,6 +251,6 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 add/sub 在 Adreno 上可从 limb24 + `fused_hot` 获益。Montgomery CIOS **以内层乘为主**：
 
 - **@512**：add/sub 可用 24b；**Mont 必须用 32b unroll_only**（两台机 `mont_mul_unroll_i24` 均远慢于 unroll）
-- **@384**：两台机 Mont unroll_i24 均可优于 priv_opt；**830 绝对 3.56M vs 642 881K**，端到端瓶颈仍在 642 算力
+- **@384**：两台机 Mont unroll_i24（mad24）大幅优于 priv_opt；**830 5.77M vs 642 1.21M**，端到端瓶颈仍在 642 算力
 
 stage1 应对 **add/sub 与 mont 分开配置**；勿假设 unroll_i24 对 Mont @512 有效。
