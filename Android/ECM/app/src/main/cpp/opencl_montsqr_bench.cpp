@@ -422,7 +422,7 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
     out << "=== ECM mont mul/sqr microbench (unroll_i24) ===\n";
     out << bits << "-bit, limbs=" << words << ", kernel_iterations=" << kernel_iterations
         << ", instances=" << instances << ", launch_repeats=" << launch_repeats << "\n";
-    out << "path: mont_mul_unroll_i24 (ulong CIOS) vs mont_mul_unroll_i24_u32 (32-bit CIOS MAC)\n";
+    out << "path: L1 ulong | L2 u32 MAC | L3 nocopy (no priv B/N) | L2+3 u32_nocopy\n";
 
     OpenCLApi api{};
     bool own_lib = false;
@@ -531,14 +531,19 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
     constexpr MontI24BenchKernel kSpecs[] = {
         {"ecm_mont_mul_unroll_i24_bench", "mont_mul_unroll_i24", true},
         {"ecm_mont_mul_unroll_i24_u32_bench", "mont_mul_unroll_i24_u32", true},
+        {"ecm_mont_mul_unroll_i24_nocopy_bench", "mont_mul_unroll_i24_nocopy", true},
+        {"ecm_mont_mul_unroll_i24_u32_nocopy_bench", "mont_mul_unroll_i24_u32_nocopy", true},
         {"ecm_mont_sqr_unroll_i24_bench", "mont_sqr_unroll_i24", false},
         {"ecm_mont_sqr_unroll_i24_u32_bench", "mont_sqr_unroll_i24_u32", false},
+        {"ecm_mont_sqr_unroll_i24_nocopy_bench", "mont_sqr_unroll_i24_nocopy", false},
+        {"ecm_mont_sqr_unroll_i24_u32_nocopy_bench", "mont_sqr_unroll_i24_u32_nocopy", false},
     };
+    constexpr int kSpecCount = static_cast<int>(sizeof(kSpecs) / sizeof(kSpecs[0]));
 
     out << std::fixed << std::setprecision(3);
     int ran = 0;
     out << "\n--- mont_mul ---\n";
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 4; ++i) {
         EcmMontSqrBenchKernel spec{
             kSpecs[i].kernel_name, kSpecs[i].path_label, kSpecs[i].is_mul,
             MontDispatch::PrivUnroll, words, 0};
@@ -549,7 +554,7 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
     }
 
     out << "\n--- mont_sqr ---\n";
-    for (int i = 2; i < 4; ++i) {
+    for (int i = 4; i < kSpecCount; ++i) {
         EcmMontSqrBenchKernel spec{
             kSpecs[i].kernel_name, kSpecs[i].path_label, kSpecs[i].is_mul,
             MontDispatch::PrivUnroll, words, 0};
@@ -560,10 +565,10 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
     }
 
     out << "\n--- summary ---\n";
-    out << "kernels ran: " << ran << " / 4\n";
-    out << "note: ulong=Level1 mad24 mul; u32=Level2 32-bit CIOS MAC (no mad24 on carry)\n";
+    out << "kernels ran: " << ran << " / " << kSpecCount << "\n";
+    out << "note: L1=ulong+priv B/N; L2=u32 MAC+priv; L3=nocopy; L2+3=u32_nocopy\n";
     out << "note: 512@32 uses 16 limbs; 512@i24 uses 22 limbs\n";
-    out << "\nRESULT: " << (ran == 4 ? "PASS" : "FAIL") << "\n";
+    out << "\nRESULT: " << (ran == kSpecCount ? "PASS" : "FAIL") << "\n";
 
     api.clReleaseMemObject(buf_a);
     api.clReleaseMemObject(buf_b);

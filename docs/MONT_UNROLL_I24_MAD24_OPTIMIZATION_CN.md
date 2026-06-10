@@ -218,15 +218,64 @@ Level 1 首轮（mad24 后）与 Level 2 同次 bench 中的 **ulong 基线** �
 2. **跨日期对比**应固定 `kernel_iterations`、`launch_repeats`，并注明 `src_kib`；推荐报告 **`1000×10` 与 `10000×1` 各跑一轮** 取区间。
 3. **勿用首轮 2.38M 断言 830@512「当前上限」**；同会话 ulong **2.76M** 更可信；Level 2 u32 **2.69M** 说明 @512 上 u32 无优势。
 
-### Level 3 及以后
+### Level 3：去掉私有 `B[]` / `N[]`（已实现并 bench）
+
+**动机**：@22 limb 时 `t[24]+B[22]+N[22]` 约占 **68 VGPR**（另 `D[22]` 再占 22），Adreno 830 每 lane **128 VGPR**，理论 occupancy 受限。
+
+**做法**：CIOS 内层直接读 `b[base+j]`、`n[j]`，不再预拷贝到私有数组。
+
+| 符号 | 说明 |
+|------|------|
+| `mont_mul_unroll_i24_nocopy_body` | L1 + L3（ulong，无 B/N） |
+| `mont_mul_unroll_i24_u32_nocopy_body` | L2 + L3（u32 MAC，无 B/N） |
+
+**参数**：`kernel_iterations=1000`，`launch_repeats=10`，`instances=128`，`src_kib=15`（8 内核同 program）。
+
+#### Level 3 实测（mul ops/s）
+
+| 配置 | GPU | L1 ulong | L2 u32 | L3 nocopy | L2+3 u32_nocopy | **最优** |
+|------|-----|----------|--------|-----------|-----------------|----------|
+| **384@24** | **830** | 5.84M | **6.58M** | 5.93M | 6.00M | **L2 u32（priv）** |
+| **512@24** | **830** | **2.75M** | 2.70M | 2.17M | 2.66M | **L1 ulong（priv）** |
+| **384@24** | **642** | 1.17M | 1.15M | **1.19M** | 1.16M | **L3 nocopy（ulong）** |
+| **512@24** | **642** | 741K | 779K | 771K | **799K** | **L2+3 u32_nocopy** |
+
+相对同会话 L1 ulong（nocopy/组合 比值）：
+
+| 配置 | GPU | L3 nocopy/ulong | L2+3/ulong |
+|------|-----|-----------------|------------|
+| 384@24 | 830 | 0.98×（**−2%**） | 1.03× |
+| 512@24 | 830 | **0.79×（−21%）** | 0.97× |
+| 384@24 | 642 | **1.02×（+2%）** | 0.99× |
+| 512@24 | 642 | 1.04× | **1.08×（+8%）** |
+
+#### 结论：VGPR 假说仅在弱 GPU / 低位宽成立
+
+**假说被 830 @512 强烈推翻**：去掉 B/N 后 **2.75M → 2.17M（−21%）**，occupancy 理论收益远小于 **global/constant 访存延迟** 代价。
+
+| 现象 | 解释 |
+|------|------|
+| **830 @512 nocopy 暴跌** | 全展开 CIOS 每 limb 乘 **22×22×2** 次内层 MAC；nocopy 每次从 `__global b` / `__constant n` 再加载，**访存次数 ≫ 一次私有拷贝的 22+22 次**；830 ALU 强、带宽/延迟成瓶颈 |
+| **830 @384 nocopy 无收益** | 16 limb 数组压力更小；**L2 u32 + priv B/N（6.58M）仍全胜**；nocopy 无法叠加 u32 收益 |
+| **642 @384 nocopy 微胜 +2%** | 弱 GPU 上略减 VGPR 或拷贝开销略大于 stream 代价；幅度在噪声边缘 |
+| **642 @512 u32_nocopy 最佳** | u32 MAC（+6%）与去掉 B/N（+4%）**同向叠加** 至 **+8%**；仍远低于 32b unroll |
+
+**生产 dispatch（Level 1–3 综合）**：
+
+| GPU | @384 Mont | @512 Mont |
+|-----|-----------|-----------|
+| **830** | **`mont_mul_unroll_i24_u32_body`**（priv B/N，**6.58M**） | **禁止 i24**；用 32b `unroll_only_512*` |
+| **642** | **`mont_mul_unroll_i24_nocopy_body`**（+2%，可选）或 ulong priv | 若必须用 i24：**`u32_nocopy`**（799K）；生产仍用 32b unroll |
+
+**勿在 830 上启用 nocopy**（尤其 @512）。私有 B/N 是 **用 VGPR 换零延迟**，在旗舰 Adreno 上划算。
+
+### Level 4 及以后
 
 | 优先级 | 方向 | 预期 |
 |--------|------|------|
-| P1 | **按 GPU dispatch**：830@384→u32，其余 ulong | 已可由 bench 表驱动 |
-| P1 | 专用 `mont_sqr_unroll_i24_body`（非 `mul(a,a)`） | 小幅 |
-| P2 | 按位宽生成全手动展开体（仿 `unroll_only_512_manual`） | 大工程，@512 仍难追 32b |
-| P2 | hot 内核（`inner=kernel_iterations`，对齐 addsub `fused_hot`） | 剥离 global 重载 |
-| P2 | 最终减法 `borrow` 循环也 32-bit 化 | 小幅（循环外） |
+| P1 | 830：**保持 u32 + priv**；642@512：**u32_nocopy** | 已 bench 定型 |
+| P1 | 去掉 `D[]`（仅当确认不占瓶颈） | 再省 ~22 VGPR；830 @512 已证内存优先 |
+| P2 | hot 内核、专用 sqr、manual 展开 | 见前文 |
 
 ---
 
