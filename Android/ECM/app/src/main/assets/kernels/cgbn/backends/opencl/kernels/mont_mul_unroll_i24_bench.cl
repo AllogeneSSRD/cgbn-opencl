@@ -1,5 +1,5 @@
 // ECM mont mul/sqr microbench — 24-bit limb unroll_i24 (mul24).
-// Level 1: ulong+priv B/N | Level 2: u32 MAC+priv | Level 3: nocopy B/N
+// L1 ulong | L2 u32 MAC | L4 branchless final sub (blsub)
 
 #include "mont_mul_unroll_i24.cl"
 
@@ -42,10 +42,10 @@
 
 ECM_MONT_I24_BENCH_KERNEL(ecm_mont_mul_unroll_i24_bench, mont_mul_unroll_i24_body)
 ECM_MONT_I24_BENCH_KERNEL(ecm_mont_mul_unroll_i24_u32_bench, mont_mul_unroll_i24_u32_body)
-ECM_MONT_I24_BENCH_KERNEL(ecm_mont_mul_unroll_i24_nocopy_bench, mont_mul_unroll_i24_nocopy_body)
-ECM_MONT_I24_BENCH_KERNEL(ecm_mont_mul_unroll_i24_u32_nocopy_bench, mont_mul_unroll_i24_u32_nocopy_body)
+ECM_MONT_I24_BENCH_KERNEL(ecm_mont_mul_unroll_i24_blsub_bench, mont_mul_unroll_i24_blsub_body)
+ECM_MONT_I24_BENCH_KERNEL(ecm_mont_mul_unroll_i24_u32_blsub_bench, mont_mul_unroll_i24_u32_blsub_body)
 
 ECM_MONT_I24_SQR_BENCH_KERNEL(ecm_mont_sqr_unroll_i24_bench, mont_sqr_unroll_i24_body)
 ECM_MONT_I24_SQR_BENCH_KERNEL(ecm_mont_sqr_unroll_i24_u32_bench, mont_sqr_unroll_i24_u32_body)
-ECM_MONT_I24_SQR_BENCH_KERNEL(ecm_mont_sqr_unroll_i24_nocopy_bench, mont_sqr_unroll_i24_nocopy_body)
-ECM_MONT_I24_SQR_BENCH_KERNEL(ecm_mont_sqr_unroll_i24_u32_nocopy_bench, mont_sqr_unroll_i24_u32_nocopy_body)
+ECM_MONT_I24_SQR_BENCH_KERNEL(ecm_mont_sqr_unroll_i24_blsub_bench, mont_sqr_unroll_i24_blsub_body)
+ECM_MONT_I24_SQR_BENCH_KERNEL(ecm_mont_sqr_unroll_i24_u32_blsub_bench, mont_sqr_unroll_i24_u32_blsub_body)

@@ -422,7 +422,7 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
     out << "=== ECM mont mul/sqr microbench (unroll_i24) ===\n";
     out << bits << "-bit, limbs=" << words << ", kernel_iterations=" << kernel_iterations
         << ", instances=" << instances << ", launch_repeats=" << launch_repeats << "\n";
-    out << "path: L1 ulong | L2 u32 MAC | L3 nocopy (no priv B/N) | L2+3 u32_nocopy\n";
+    out << "path: L1 ulong | L2 u32 MAC | L4 blsub (branchless final subtract)\n";
 
     OpenCLApi api{};
     bool own_lib = false;
@@ -531,12 +531,12 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
     constexpr MontI24BenchKernel kSpecs[] = {
         {"ecm_mont_mul_unroll_i24_bench", "mont_mul_unroll_i24", true},
         {"ecm_mont_mul_unroll_i24_u32_bench", "mont_mul_unroll_i24_u32", true},
-        {"ecm_mont_mul_unroll_i24_nocopy_bench", "mont_mul_unroll_i24_nocopy", true},
-        {"ecm_mont_mul_unroll_i24_u32_nocopy_bench", "mont_mul_unroll_i24_u32_nocopy", true},
+        {"ecm_mont_mul_unroll_i24_blsub_bench", "mont_mul_unroll_i24_blsub", true},
+        {"ecm_mont_mul_unroll_i24_u32_blsub_bench", "mont_mul_unroll_i24_u32_blsub", true},
         {"ecm_mont_sqr_unroll_i24_bench", "mont_sqr_unroll_i24", false},
         {"ecm_mont_sqr_unroll_i24_u32_bench", "mont_sqr_unroll_i24_u32", false},
-        {"ecm_mont_sqr_unroll_i24_nocopy_bench", "mont_sqr_unroll_i24_nocopy", false},
-        {"ecm_mont_sqr_unroll_i24_u32_nocopy_bench", "mont_sqr_unroll_i24_u32_nocopy", false},
+        {"ecm_mont_sqr_unroll_i24_blsub_bench", "mont_sqr_unroll_i24_blsub", false},
+        {"ecm_mont_sqr_unroll_i24_u32_blsub_bench", "mont_sqr_unroll_i24_u32_blsub", false},
     };
     constexpr int kSpecCount = static_cast<int>(sizeof(kSpecs) / sizeof(kSpecs[0]));
 
@@ -566,7 +566,7 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
 
     out << "\n--- summary ---\n";
     out << "kernels ran: " << ran << " / " << kSpecCount << "\n";
-    out << "note: L1=ulong+priv B/N; L2=u32 MAC+priv; L3=nocopy; L2+3=u32_nocopy\n";
+    out << "note: L1=ulong+branchy sub; L2=u32 MAC+branchy; L4=branchless final sub\n";
     out << "note: 512@32 uses 16 limbs; 512@i24 uses 22 limbs\n";
     out << "\nRESULT: " << (ran == kSpecCount ? "PASS" : "FAIL") << "\n";
 

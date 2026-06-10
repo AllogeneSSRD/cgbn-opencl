@@ -218,7 +218,14 @@ Level 1 首轮（mad24 后）与 Level 2 同次 bench 中的 **ulong 基线** �
 2. **跨日期对比**应固定 `kernel_iterations`、`launch_repeats`，并注明 `src_kib`；推荐报告 **`1000×10` 与 `10000×1` 各跑一轮** 取区间。
 3. **勿用首轮 2.38M 断言 830@512「当前上限」**；同会话 ulong **2.76M** 更可信；Level 2 u32 **2.69M** 说明 @512 上 u32 无优势。
 
-### Level 3：去掉私有 `B[]` / `N[]`（已实现并 bench）
+### Level 3：去掉私有 `B[]` / `N[]`（已废弃）
+
+实测 **830 @512 nocopy −21%**；访存延迟大于 VGPR 收益。路径已从代码库移除，**保留 priv B/N**。
+
+<details>
+<summary>历史数据（归档）</summary>
+
+### Level 3 历史 bench（已移除）
 
 **动机**：@22 limb 时 `t[24]+B[22]+N[22]` 约占 **68 VGPR**（另 `D[22]` 再占 22），Adreno 830 每 lane **128 VGPR**，理论 occupancy 受限。
 
@@ -260,22 +267,87 @@ Level 1 首轮（mad24 后）与 Level 2 同次 bench 中的 **ulong 基线** �
 | **642 @384 nocopy 微胜 +2%** | 弱 GPU 上略减 VGPR 或拷贝开销略大于 stream 代价；幅度在噪声边缘 |
 | **642 @512 u32_nocopy 最佳** | u32 MAC（+6%）与去掉 B/N（+4%）**同向叠加** 至 **+8%**；仍远低于 32b unroll |
 
-**生产 dispatch（Level 1–3 综合）**：
-
-| GPU | @384 Mont | @512 Mont |
-|-----|-----------|-----------|
-| **830** | **`mont_mul_unroll_i24_u32_body`**（priv B/N，**6.58M**） | **禁止 i24**；用 32b `unroll_only_512*` |
-| **642** | **`mont_mul_unroll_i24_nocopy_body`**（+2%，可选）或 ulong priv | 若必须用 i24：**`u32_nocopy`**（799K）；生产仍用 32b unroll |
-
 **勿在 830 上启用 nocopy**（尤其 @512）。私有 B/N 是 **用 VGPR 换零延迟**，在旗舰 Adreno 上划算。
 
-### Level 4 及以后
+</details>
 
-| 优先级 | 方向 | 预期 |
-|--------|------|------|
-| P1 | 830：**保持 u32 + priv**；642@512：**u32_nocopy** | 已 bench 定型 |
-| P1 | 去掉 `D[]`（仅当确认不占瓶颈） | 再省 ~22 VGPR；830 @512 已证内存优先 |
-| P2 | hot 内核、专用 sqr、manual 展开 | 见前文 |
+### OpenCL 陷阱：勿将私有数组作为函数参数传递
+
+Level 4 初版将 `mont_i24_cios_ulong(uint t[N], uint B[N], ...)` 抽成 `static inline` 函数，导致：
+
+| 现象 | 原因 |
+|------|------|
+| **642 ~1.17M → ~269K（−4.3×）** | Adreno 将按值传入的 `t[]/B[]/N[]` **溢出到 scratch（private mem）**，每次内层 MAC 走内存 |
+| **830 编译 50s → 10min+** | 8 个全展开 `__kernel` × 深层 inline + 数组拷贝语义 → 编译器 IR 爆炸 |
+
+**修复**：CIOS / final sub **完全内联**在各 `*_body` 函数内（`#pragma unroll` 直接写在函数体中）。**勿**用带 `#pragma` 的宏（Adreno BC 编译器报 `'#' is not followed by a macro parameter`）。仅标量 helper（`mont_i24_mul_full` 等）保留为函数。
+
+改后需 **清除 OpenCL program 缓存**（重装 APK 或删 cache）再 bench。
+
+### Level 4：无分支最终减法（branchless final sub，已实现）
+
+**动机**：原最终减法 `borrow = (tv < nv + borrow) ? 1 : 0` 含比较分支，且 `nv + borrow` 在 `uint` 域可能溢出；GPU 上分支与宽比较不利。
+
+**做法**：借位仅用 32-bit 位运算（与 `tv/nv/borrow` 同为 limb 宽度）：
+
+```opencl
+D[i] = tv - nv - borrow;
+borrow = (tv < nv) | ((tv == nv) & borrow);
+```
+
+等价于「`tv < nv` 或 (`tv == nv` 且上一轮有借位`)」。`mont_i24_write_result` 仍用 `need_sub = any_high | (borrow==0)` 的无分支 mask 写回。
+
+| 符号 | 说明 |
+|------|------|
+| `mont_mul_unroll_i24_body` | L1：ulong CIOS + **branchy** final sub（基线） |
+| `mont_mul_unroll_i24_blsub_body` | L4：ulong CIOS + **branchless** final sub |
+| `mont_mul_unroll_i24_u32_blsub_body` | L2+L4：u32 MAC + branchless final sub |
+
+Bench 标签：`mont_mul_unroll_i24_blsub`、`mont_mul_unroll_i24_u32_blsub`（与 L1/L2 同次 8 内核跑分）。
+
+**Bench 结果（`1000×10`，128 instances，同会话 8 内核）**：
+
+#### Adreno 642 — mul ops/s
+
+| bits | limbs | L1 ulong | L2 u32 | L4 blsub | L2+L4 u32_blsub | **选用** |
+|------|-------|----------|--------|----------|-----------------|----------|
+| 192 | 8 | 2.58M | 2.59M | **2.62M** | 2.59M | 任意（≈±1.5%） |
+| 384 | 16 | **1.18M** | 1.16M | **1.18M** | 1.16M | **ulong** |
+| 512 | 22 | 722K | **777K** | 729K | 753K | **u32** |
+| 768 | 32 | 266K | **364K** | 264K | 355K | **u32** |
+
+#### Adreno 830 — mul ops/s
+
+| bits | limbs | L1 ulong | L2 u32 | L4 blsub | L2+L4 u32_blsub | **选用** |
+|------|-------|----------|--------|----------|-----------------|----------|
+| 192 | 8 | 24.3M | 26.9M | 26.8M | **32.3M** | **u32_blsub**（+33% vs L1） |
+| 384 | 16 | 5.77M | 5.83M | 5.92M | **6.93M** | **u32_blsub**（+20% vs L1） |
+| 512 | 22 | 2.68M | 2.74M | **2.82M** | 2.55M | **ulong blsub**（+5%） |
+| 768 | 32 | 963K | **991K** | 596K | 705K | **u32**（**禁用 blsub**） |
+
+#### Level 4 结论
+
+| 观察 | 解释 |
+|------|------|
+| **blsub 单独 ≈ 0～3%** | 8–16 limb 时最终减法占 CIOS 比例极小；642 全位宽、830@512 仅噪声级差异 |
+| **u32_blsub @830 192/384 异常高** | +20～33% 远超「仅改 final sub」的理论上限；疑为 **编译器对 u32 MAC + 无分支尾段联合调度** 的偶然优化，**上线前需 VERIFY** |
+| **830 @768 blsub 暴跌 −38%** | 32 limb 全展开后 IR 体积/寄存器压力激增；额外位运算尾段触发 spill 或坏 schedule。**limbs≥32 勿用 blsub** |
+| **642 @768 u32 +37%** | 与 L2 一致：弱 ALU 上 32b MAC 优于 mul24 链；blsub 无叠加收益 |
+| **sqr 与 mul 同趋势** | 各档位相对排序一致，无独立选型必要 |
+
+**当前生产 dispatch（L1–L4 bench 后）**：
+
+| GPU | 192 | 384 | 512 | 768 |
+|-----|-----|-----|-----|-----|
+| **830** | `u32_blsub`（待 VERIFY） | **`u32_blsub`** | 32b `unroll_only_512*`；i24 用 **ulong blsub** | **`u32`**（禁 blsub） |
+| **642** | ulong | **ulong** | 32b unroll；i24 **u32** | **u32** |
+
+### Level 5 及以后
+
+| 优先级 | 方向 |
+|--------|------|
+| P1 | 830@384 默认切 `u32_blsub`（VERIFY 后）；830@768 显式禁 blsub |
+| P2 | hot 内核、专用 sqr、manual 展开 |
 
 ---
 

@@ -15,10 +15,10 @@
     <string name="hint_kernel_iters">kernel_iterations</string>
     <string name="hint_instances">instances</string>
     <string name="hint_launch_repeats">launch_repeats</string>
-    <string name="default_bits">512</string>
+    <string name="default_bits">384</string>
     <string name="default_kernel_iters">1000</string>
     <string name="default_instances">128</string>
-    <string name="default_launch_repeats">1</string>
+    <string name="default_launch_repeats">10</string>
     <string name="btn_limb_32">32-bit</string>
     <string name="btn_limb_24">24-bit</string>
     <string name="default_bits_24">504</string>

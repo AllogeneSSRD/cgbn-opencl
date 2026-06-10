@@ -53,18 +53,37 @@
 
 > 跨会话差异分析见 [`docs/MONT_UNROLL_I24_MAD24_OPTIMIZATION_CN.md`](../docs/MONT_UNROLL_I24_MAD24_OPTIMIZATION_CN.md)「跨次跑分」。**同会话内**对比 Level 1/2 时以第二列 ulong 为准。
 
-### 2.2 Level 1–3 同会话对比（`1000×10`，src 15KiB，8 内核）
+### 2.2 Level 1–2 同会话对比（`1000×10`，8 内核）
 
-| 配置 | GPU | L1 ulong | L2 u32 | L3 nocopy | L2+3 u32_nocopy | **选用** |
-|------|-----|----------|--------|-----------|-----------------|----------|
-| **384@24** | 830 | 5.84M | **6.58M** | 5.93M | 6.00M | **L2 u32 priv** |
-| **512@24** | 830 | **2.75M** | 2.70M | 2.17M | 2.66M | **L1 ulong priv** |
-| **384@24** | 642 | 1.17M | 1.15M | **1.19M** | 1.16M | **L3 nocopy** |
-| **512@24** | 642 | 741K | 779K | 771K | **799K** | **L2+3 u32_nocopy** |
+| 配置 | GPU | L1 ulong | L2 u32 | **选用** |
+|------|-----|----------|--------|----------|
+| **384@24** | 830 | 5.84M | **6.58M** | **L2 u32** |
+| **512@24** | 830 | **2.75M** | 2.70M | **L1 ulong** |
+| **384@24** | 642 | **1.17M** | 1.15M | **L1 ulong** |
+| **512@24** | 642 | 741K | **779K** | **L2 u32** |
 
-详见 [`docs/MONT_UNROLL_I24_MAD24_OPTIMIZATION_CN.md`](../docs/MONT_UNROLL_I24_MAD24_OPTIMIZATION_CN.md) Level 2/3 章节。
+> Level 3（nocopy）已废弃（830 @512 **−21%**）。Level 4（`blsub`）见 §2.4。
 
-**要点**：830 上 **nocopy @512 慢 21%**——瓶颈是访存而非 VGPR；830 @384 仍 **u32 + 私有 B/N** 最快。
+详见 [`docs/MONT_UNROLL_I24_MAD24_OPTIMIZATION_CN.md`](../docs/MONT_UNROLL_I24_MAD24_OPTIMIZATION_CN.md)。
+
+### 2.4 Level 4 全位宽 bench（`1000×10`，8 内核）
+
+**mul 最优 ops/s**（同档位内粗体为选用路径）：
+
+| bits | **830 最优** | 830 vs L1 | **642 最优** | 642 vs L1 |
+|------|-------------|-----------|-------------|-----------|
+| **192** | **u32_blsub 32.3M** | +33% | blsub 2.62M | +1.5% |
+| **384** | **u32_blsub 6.93M** | +20% | ulong 1.18M | ≈0% |
+| **512** | blsub 2.82M | +5% | **u32 777K** | +8% |
+| **768** | **u32 991K** | +3% | **u32 364K** | **+37%** |
+
+**Level 4 要点**：
+
+- **blsub 单独**：642 全档位、830@512 仅 **0～3%**，可忽略。
+- **u32_blsub**：830 **@192/@384 显著胜出**（+20～33%），需 correctness VERIFY 后再作默认。
+- **830 @768**：blsub **−38%**（596K vs 963K），**必须禁用**；仅用 u32。
+- **642 @768**：u32 相对 ulong **+37%**，与 @512 趋势一致。
+- **生产 @512**：仍用 32b `unroll_only_512*`，i24 仅 bench 参考。
 
 ### 2.3 优化前基线（历史，mad24 之前）
 
@@ -108,8 +127,8 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 |-----|------|-------------|-------------|----------|------|
 | **830** | 512 | ulong priv（**禁用 nocopy**） | **2.75M** | unroll_only **7.73–8.47M** | **~32%** |
 | **830** | 384 | **u32 priv** | **6.58M** | priv_opt **2.61M** | **2.52×** |
-| **642** | 512 | **u32_nocopy** | **799K** | unroll_only **1.43M** | **~56%** |
-| **642** | 384 | **nocopy ulong** | **1.19M** | priv_opt 482K | **2.47×** |
+| **642** | 512 | **u32** | **779K** | unroll_only **1.43M** | **~55%** |
+| **642** | 384 | **ulong** | **1.17M** | priv_opt 482K | **2.43×** |
 
 ### 3.3 修正后的判断（两台机共性 + 差异）
 
@@ -120,14 +139,13 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 **830（绝对性能高）**
 
-- @512：32b unroll_only 终极；i24 仅 ulong priv **2.75M**；**nocopy 2.17M（−21%）勿用**。
-- @384：**u32 priv 6.58M** >> priv_opt；nocopy **无收益**。
-- **结论**：830 保留私有 B/N，用 VGPR 换零延迟。
+- @512：32b unroll_only 终极；i24 ulong priv **2.75M**。
+- @384：**u32 6.58M** >> priv_opt。
 
 **642（绝对性能低）**
 
-- @512：unroll_only **1.43M** >> i24；若必须用 i24：**u32_nocopy 799K**（+8% vs ulong priv）。
-- @384：**nocopy ulong 1.19M** 略胜 priv；**勿 u32**。
+- @512：unroll_only **1.43M** >> i24；若必须用 i24：**u32 779K**。
+- @384：**ulong 1.17M**；勿 u32。
 - 绝对值约为 830 @384 最优的 **18%**。
 - **manual unroll** 在 642 上仍劣于 auto（§1），与 unroll_i24 选型无关。
 
@@ -202,9 +220,10 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 5. ~~**`mont_i24_mul_full` mad24 融合**~~ — **已完成**（Level 1）
 6. ~~**32-bit CIOS MAC**~~ — 830@384 **u32 priv**；642@512 **u32** 或 **u32_nocopy**
-7. ~~**nocopy B/N（Level 3）**~~ — **830 禁用**（@512 −21%）；642@384 **ulong nocopy +2%**
-8. **按上表 dispatch 接 stage1**
-9. **22-limb manual 展开** — 在 **priv** 路径上再挖；830 勿 nocopy
+7. ~~**nocopy B/N（Level 3）**~~ — 已移除（830 @512 −21%）
+8. **Level 4 branchless final sub（`blsub`）** — 已实现，待 bench
+9. **按上表 dispatch 接 stage1**（bench 后可将 blsub 并入选定 body）
+10. **22-limb manual 展开**
 10. **专用 sqr body**（24-bit `sqr_basecase` + REDC）
 11. **hot 内核**（对齐 addsub `fused_hot`）
 
@@ -233,8 +252,8 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 |------|----------------|----------------|---------|
 | 512 @32 unroll_only_manual | **8.47M** | 323K | 26× |
 | 512 @32 unroll_only auto | 7.73M | **1.43M** | 5.4× |
-| 512 @24 最优 i24 | **2.75M** (830 ulong priv) | **799K** (642 u32_nocopy) | 3.4× |
-| 384 @24 最优 i24 | **6.58M** (830 u32 priv) | **1.19M** (642 nocopy) | 5.5× |
+| 512 @24 最优 i24 | **2.75M** (830 ulong) | **779K** (642 u32) | 3.5× |
+| 384 @24 最优 i24 | **6.58M** (830 u32) | **1.17M** (642 ulong) | 5.6× |
 | 384 @32 priv_opt | **2.61M** | 482K | 5.4× |
 | 384 @32 unroll32 | 1.51M | 485K | 3.1× |
 | 512 @32 priv_opt | 1.60M | 282K | 5.7× |
@@ -254,8 +273,8 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 | GPU | 512-bit mul（生产） | 512-bit sqr | 384-bit 及以下 | 避免 @512 |
 |-----|---------------------|-------------|----------------|-----------|
-| **Adreno 830** | `unroll_only_512_manual` | `unroll_only_512` | **u32 priv**（**6.58M** @384） | **nocopy**、i24@512 |
-| **Adreno 642** | `unroll_only_512` auto | `unroll_only_512` | **nocopy**（**1.19M** @384） | u32@384、manual |
+| **Adreno 830** | `unroll_only_512_manual` | `unroll_only_512` | **u32**（**6.58M** @384） | i24@512 |
+| **Adreno 642** | `unroll_only_512` auto | `unroll_only_512` | **ulong**（**1.17M** @384） | u32@384、manual |
 
 **两台机 @512-bit：Mont 一律 32b `unroll_only_512*`，不用 unroll_i24。**
 
@@ -268,6 +287,6 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 add/sub 在 Adreno 上可从 limb24 + `fused_hot` 获益。Montgomery CIOS **以内层乘为主**：
 
 - **@512**：add/sub 可用 24b；**Mont 必须用 32b unroll_only**（两台机 `mont_mul_unroll_i24` 均远慢于 unroll）
-- **@384**：均优于 priv_opt；**830 u32 priv（6.58M）**；**642 nocopy ulong（1.19M）**
+- **@384**：均优于 priv_opt；**830 u32（6.58M）**；**642 ulong（1.17M）**
 
 stage1 应对 **add/sub 与 mont 分开配置**；勿假设 unroll_i24 对 Mont @512 有效。
