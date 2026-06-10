@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
+#include <iterator>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -135,18 +136,28 @@ uint32_t mont_i24_words_for_bits(int bits) {
 
 std::string build_montsqr_source_i24(std::ostringstream& log) {
     const std::string mul_rel = std::string(kKernelAssetRoot) + "mont_mul_unroll_i24.cl";
+    const std::string manual_rel =
+        std::string(kKernelAssetRoot) + "mont_mul_unroll_i24_384_manual_generated.cl";
     const std::string bench_rel = std::string(kKernelAssetRoot) + "mont_mul_unroll_i24_bench.cl";
     std::string mul = load_kernel_asset(mul_rel.c_str());
+    std::string manual = load_kernel_asset(manual_rel.c_str());
     std::string bench = load_kernel_asset(bench_rel.c_str());
     if (mul.empty() || bench.empty()) {
         log << "missing mont_mul_unroll_i24.cl or mont_mul_unroll_i24_bench.cl\n";
         log << "run Gradle syncMontsqrKernels or rebuild the app\n";
         return {};
     }
+    if (manual.empty()) {
+        log << "missing mont_mul_unroll_i24_384_manual_generated.cl\n";
+        log << "run tools/gen_mont_mul_unroll_i24_384_manual.py then Gradle syncMontsqrKernels\n";
+        return {};
+    }
     strip_pragma_once(mul);
+    strip_pragma_once(manual);
     strip_pragma_once(bench);
     strip_include(bench, "#include \"mont_mul_unroll_i24.cl\"");
-    return mul + "\n" + bench;
+    strip_include(bench, "#include \"mont_mul_unroll_i24_384_manual_generated.cl\"");
+    return mul + "\n" + manual + "\n" + bench;
 }
 
 std::string build_montsqr_source(uint32_t words, bool use_wg, std::ostringstream& log) {
@@ -422,7 +433,11 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
     out << "=== ECM mont mul/sqr microbench (unroll_i24) ===\n";
     out << bits << "-bit, limbs=" << words << ", kernel_iterations=" << kernel_iterations
         << ", instances=" << instances << ", launch_repeats=" << launch_repeats << "\n";
-    out << "path: L1 ulong | L2 u32 MAC | L4 blsub (branchless final subtract)\n";
+    out << "path: L1 ulong | L2 u32 MAC | L4 blsub";
+    if (words == 16u) {
+        out << " | 384 manual u32_blsub";
+    }
+    out << "\n";
 
     OpenCLApi api{};
     bool own_lib = false;
@@ -528,7 +543,7 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
                           launch_repeats,
                       out};
 
-    constexpr MontI24BenchKernel kSpecs[] = {
+    constexpr MontI24BenchKernel kBaseSpecs[] = {
         {"ecm_mont_mul_unroll_i24_bench", "mont_mul_unroll_i24", true},
         {"ecm_mont_mul_unroll_i24_u32_bench", "mont_mul_unroll_i24_u32", true},
         {"ecm_mont_mul_unroll_i24_blsub_bench", "mont_mul_unroll_i24_blsub", true},
@@ -538,14 +553,26 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
         {"ecm_mont_sqr_unroll_i24_blsub_bench", "mont_sqr_unroll_i24_blsub", false},
         {"ecm_mont_sqr_unroll_i24_u32_blsub_bench", "mont_sqr_unroll_i24_u32_blsub", false},
     };
-    constexpr int kSpecCount = static_cast<int>(sizeof(kSpecs) / sizeof(kSpecs[0]));
+    constexpr MontI24BenchKernel kManual384Specs[] = {
+        {"ecm_mont_mul_unroll_i24_384_manual_bench", "mont_mul_unroll_i24_384_manual", true},
+        {"ecm_mont_sqr_unroll_i24_384_manual_bench", "mont_sqr_unroll_i24_384_manual", false},
+    };
+
+    std::vector<MontI24BenchKernel> specs(std::begin(kBaseSpecs), std::end(kBaseSpecs));
+    if (words == 16u) {
+        specs.insert(specs.end(), std::begin(kManual384Specs), std::end(kManual384Specs));
+    }
+    const int kSpecCount = static_cast<int>(specs.size());
 
     out << std::fixed << std::setprecision(3);
     int ran = 0;
     out << "\n--- mont_mul ---\n";
-    for (int i = 0; i < 4; ++i) {
+    for (const MontI24BenchKernel& entry : specs) {
+        if (!entry.is_mul) {
+            continue;
+        }
         EcmMontSqrBenchKernel spec{
-            kSpecs[i].kernel_name, kSpecs[i].path_label, kSpecs[i].is_mul,
+            entry.kernel_name, entry.path_label, entry.is_mul,
             MontDispatch::PrivUnroll, words, 0};
         double ms = 0.0;
         if (run_mont_kernel(mctx, spec, ms)) {
@@ -554,9 +581,12 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
     }
 
     out << "\n--- mont_sqr ---\n";
-    for (int i = 4; i < kSpecCount; ++i) {
+    for (const MontI24BenchKernel& entry : specs) {
+        if (entry.is_mul) {
+            continue;
+        }
         EcmMontSqrBenchKernel spec{
-            kSpecs[i].kernel_name, kSpecs[i].path_label, kSpecs[i].is_mul,
+            entry.kernel_name, entry.path_label, entry.is_mul,
             MontDispatch::PrivUnroll, words, 0};
         double ms = 0.0;
         if (run_mont_kernel(mctx, spec, ms)) {
@@ -567,7 +597,7 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
     out << "\n--- summary ---\n";
     out << "kernels ran: " << ran << " / " << kSpecCount << "\n";
     out << "note: L1=ulong+branchy sub; L2=u32 MAC+branchy; L4=branchless final sub\n";
-    out << "note: 512@32 uses 16 limbs; 512@i24 uses 22 limbs\n";
+    out << "note: 384@i24=16 limbs (manual u32_blsub when bits=384); 512@i24=22 limbs\n";
     out << "\nRESULT: " << (ran == kSpecCount ? "PASS" : "FAIL") << "\n";
 
     api.clReleaseMemObject(buf_a);

@@ -73,7 +73,7 @@
 | bits | **830 最优** | 830 vs L1 | **642 最优** | 642 vs L1 |
 |------|-------------|-----------|-------------|-----------|
 | **192** | **u32_blsub 32.3M** | +33% | blsub 2.62M | +1.5% |
-| **384** | **u32_blsub 6.93M** | +20% | ulong 1.18M | ≈0% |
+| **384** | **manual 7.11M** | +23% vs L1 | blsub 1.19M | ≈0% |
 | **512** | blsub 2.82M | +5% | **u32 777K** | +8% |
 | **768** | **u32 991K** | +3% | **u32 364K** | **+37%** |
 
@@ -84,6 +84,16 @@
 - **830 @768**：blsub **−38%**（596K vs 963K），**必须禁用**；仅用 u32。
 - **642 @768**：u32 相对 ulong **+37%**，与 @512 趋势一致。
 - **生产 @512**：仍用 32b `unroll_only_512*`，i24 仅 bench 参考。
+
+### 2.5 384-bit manual 展开（`u32_blsub`，`1000×10`，10 内核）
+
+| GPU | auto 最优 mul | manual mul | 比值 | 结论 |
+|-----|---------------|------------|------|------|
+| **830** | u32_blsub 6.92M | **7.11M** | **1.027×** | manual 略胜，可作 830@384 首选（VERIFY 后） |
+| **642** | blsub 1.19M | 540K | **0.45×** | manual **暴跌**，与 512 manual@642 同型；**禁用** |
+
+- 编译体积：`src_kib≈86`（含 1785 行生成体）；仅 384@24 bench / 830 生产候选。
+- **642 @384**：继续 **ulong/blsub auto**（~1.18M），勿链 manual。
 
 ### 2.3 优化前基线（历史，mad24 之前）
 
@@ -273,8 +283,8 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 | GPU | 512-bit mul（生产） | 512-bit sqr | 384-bit 及以下 | 避免 @512 |
 |-----|---------------------|-------------|----------------|-----------|
-| **Adreno 830** | `unroll_only_512_manual` | `unroll_only_512` | **u32**（**6.58M** @384） | i24@512 |
-| **Adreno 642** | `unroll_only_512` auto | `unroll_only_512` | **ulong**（**1.17M** @384） | u32@384、manual |
+| **Adreno 830** | `unroll_only_512_manual` | `unroll_only_512` | **i24 manual**（**7.11M** @384） | i24@512 |
+| **Adreno 642** | `unroll_only_512` auto | `unroll_only_512` | **ulong/blsub**（**1.19M** @384） | u32@384、**i24 manual** |
 
 **两台机 @512-bit：Mont 一律 32b `unroll_only_512*`，不用 unroll_i24。**
 
@@ -287,6 +297,6 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 add/sub 在 Adreno 上可从 limb24 + `fused_hot` 获益。Montgomery CIOS **以内层乘为主**：
 
 - **@512**：add/sub 可用 24b；**Mont 必须用 32b unroll_only**（两台机 `mont_mul_unroll_i24` 均远慢于 unroll）
-- **@384**：均优于 priv_opt；**830 u32（6.58M）**；**642 ulong（1.17M）**
+- **@384**：均优于 priv_opt；**830 manual（7.11M）**；**642 ulong/blsub（1.19M）**，禁 manual
 
 stage1 应对 **add/sub 与 mont 分开配置**；勿假设 unroll_i24 对 Mont @512 有效。

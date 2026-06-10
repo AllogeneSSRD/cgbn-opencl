@@ -91,6 +91,7 @@ val montsqrKernelIncludes = arrayOf(
     "mont_wg.cl",
     "mont_wg_bench.cl",
     "mont_mul_unroll_i24.cl",
+    "mont_mul_unroll_i24_384_manual_generated.cl",
     "mont_mul_unroll_i24_bench.cl",
 )
 

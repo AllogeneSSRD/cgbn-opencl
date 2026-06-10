@@ -312,7 +312,7 @@ Bench 标签：`mont_mul_unroll_i24_blsub`、`mont_mul_unroll_i24_u32_blsub`（�
 | bits | limbs | L1 ulong | L2 u32 | L4 blsub | L2+L4 u32_blsub | **选用** |
 |------|-------|----------|--------|----------|-----------------|----------|
 | 192 | 8 | 2.58M | 2.59M | **2.62M** | 2.59M | 任意（≈±1.5%） |
-| 384 | 16 | **1.18M** | 1.16M | **1.18M** | 1.16M | **ulong** |
+| 384 | 16 | **1.18M** | 1.15M | **1.19M** | 1.08M | **ulong/blsub**（**禁 manual**） |
 | 512 | 22 | 722K | **777K** | 729K | 753K | **u32** |
 | 768 | 32 | 266K | **364K** | 264K | 355K | **u32** |
 
@@ -321,7 +321,7 @@ Bench 标签：`mont_mul_unroll_i24_blsub`、`mont_mul_unroll_i24_u32_blsub`（�
 | bits | limbs | L1 ulong | L2 u32 | L4 blsub | L2+L4 u32_blsub | **选用** |
 |------|-------|----------|--------|----------|-----------------|----------|
 | 192 | 8 | 24.3M | 26.9M | 26.8M | **32.3M** | **u32_blsub**（+33% vs L1） |
-| 384 | 16 | 5.77M | 5.83M | 5.92M | **6.93M** | **u32_blsub**（+20% vs L1） |
+| 384 | 16 | 5.77M | 5.81M | 5.95M | 6.92M | **manual 7.11M**（+2.7% vs u32_blsub） |
 | 512 | 22 | 2.68M | 2.74M | **2.82M** | 2.55M | **ulong blsub**（+5%） |
 | 768 | 32 | 963K | **991K** | 596K | 705K | **u32**（**禁用 blsub**） |
 
@@ -334,20 +334,47 @@ Bench 标签：`mont_mul_unroll_i24_blsub`、`mont_mul_unroll_i24_u32_blsub`（�
 | **830 @768 blsub 暴跌 −38%** | 32 limb 全展开后 IR 体积/寄存器压力激增；额外位运算尾段触发 spill 或坏 schedule。**limbs≥32 勿用 blsub** |
 | **642 @768 u32 +37%** | 与 L2 一致：弱 ALU 上 32b MAC 优于 mul24 链；blsub 无叠加收益 |
 | **sqr 与 mul 同趋势** | 各档位相对排序一致，无独立选型必要 |
+| **384 manual @830 +2.7%** | 7.11M vs auto u32_blsub 6.92M；消除 `#pragma unroll` 循环后编译器调度略优 |
+| **384 manual @642 −54%** | 540K vs ulong 1.18M；与 **512 manual @642** 同型退化（ICache / 指令调度），**禁用** |
 
-**当前生产 dispatch（L1–L4 bench 后）**：
+**当前生产 dispatch（L1–L4 + 384 manual bench 后）**：
 
 | GPU | 192 | 384 | 512 | 768 |
 |-----|-----|-----|-----|-----|
-| **830** | `u32_blsub`（待 VERIFY） | **`u32_blsub`** | 32b `unroll_only_512*`；i24 用 **ulong blsub** | **`u32`**（禁 blsub） |
-| **642** | ulong | **ulong** | 32b unroll；i24 **u32** | **u32** |
+| **830** | `u32_blsub`（待 VERIFY） | **`mont_mul_unroll_i24_384_manual`**（VERIFY 后） | 32b `unroll_only_512*`；i24 **ulong blsub** | **`u32`**（禁 blsub） |
+| **642** | ulong | **ulong/blsub**（禁 manual） | 32b unroll；i24 **u32** | **u32** |
 
 ### Level 5 及以后
 
 | 优先级 | 方向 |
 |--------|------|
-| P1 | 830@384 默认切 `u32_blsub`（VERIFY 后）；830@768 显式禁 blsub |
-| P2 | hot 内核、专用 sqr、manual 展开 |
+| P1 | 830@384 默认切 `u32_blsub` 或 **`mont_mul_unroll_i24_384_manual_body`**（VERIFY 后）；830@768 显式禁 blsub |
+
+### 384-bit 手动展开（`u32_blsub`，已实现）
+
+生成器：`tools/gen_mont_mul_unroll_i24_384_manual.py` → `mont_mul_unroll_i24_384_manual_generated.cl`（16 limb，无循环，逻辑同 `mont_mul_unroll_i24_u32_blsub_body`）。
+
+| 符号 | 说明 |
+|------|------|
+| `mont_mul_unroll_i24_384_manual_body` | 384@24 专用；u32 MAC + branchless final sub |
+| `mont_sqr_unroll_i24_384_manual_body` | 调用 mul(a,a) |
+
+Bench（仅 `MAX_LIMBS=16` / 384-bit）：`ecm_mont_mul_unroll_i24_384_manual_bench`、`ecm_mont_sqr_unroll_i24_384_manual_bench`。
+
+**Bench 结果（`1000×10`，128 instances，同会话 10 内核，`src_kib≈86`）**：
+
+| GPU | auto 最优 (mul) | **manual** (mul) | manual vs auto | **选用** |
+|-----|-----------------|------------------|----------------|----------|
+| **830** | u32_blsub **6.92M** | **7.11M** | **+2.7%** | **manual**（VERIFY 后） |
+| **642** | blsub **1.19M** | 540K | **−2.2×** | **ulong/blsub**，禁 manual |
+
+sqr 与 mul 同序（830 manual 7.07M；642 manual 537K）。
+
+```bash
+python tools/gen_mont_mul_unroll_i24_384_manual.py
+```
+
+| P2 | hot 内核、830@384 stage1 切 manual；642 永不链 manual |
 
 ---
 
