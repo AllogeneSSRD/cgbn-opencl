@@ -16,7 +16,15 @@
 namespace {
 
 constexpr uint32_t kMaxBenchBits = 8192;
+constexpr uint32_t kLimb24Mask = (1u << 24) - 1u;
+constexpr uint32_t kLimb24Mont512Limbs = 22u;
 constexpr const char* kKernelAssetRoot = "cgbn/backends/opencl/kernels/";
+
+struct Limb24MontBenchKernel {
+    const char* kernel_name;
+    const char* path_label;
+    bool is_mul;
+};
 constexpr size_t kFips512MtLocalU32 = 16u + 16u + 32u * 2u + 17u;
 constexpr size_t kFips512Cs8LocalU32 = 16u + 16u + 8u * 34u + 34u;
 constexpr size_t kFips512Cs16LocalU32 = 16u + 16u + 16u * 34u + 34u;
@@ -86,6 +94,59 @@ uint32_t inv32_odd(uint32_t x) {
         y &= 0xFFFFFFFFull;
     }
     return static_cast<uint32_t>(y);
+}
+
+uint32_t inv24_odd(uint32_t x) {
+    uint64_t y = 1;
+    for (int i = 0; i < 4; ++i) {
+        y = y * (2ull - static_cast<uint64_t>(x & kLimb24Mask) * y);
+        y &= 0xFFFFFFull;
+    }
+    return static_cast<uint32_t>(y) & kLimb24Mask;
+}
+
+void set_pow2_minus_ui_limb24(uint32_t* out, uint32_t limbs, uint32_t bits, uint64_t k) {
+    std::memset(out, 0, sizeof(uint32_t) * limbs);
+    const uint32_t hi = (bits - 1u) / 24u;
+    const uint32_t bit = (bits - 1u) % 24u;
+    out[hi] = 1u << bit;
+    uint64_t borrow = k;
+    for (uint32_t i = 0; i < limbs && borrow != 0; ++i) {
+        const uint64_t v = static_cast<uint64_t>(out[i] & kLimb24Mask);
+        if (v >= borrow) {
+            out[i] = static_cast<uint32_t>((v - borrow) & kLimb24Mask);
+            borrow = 0;
+        } else {
+            out[i] = static_cast<uint32_t>((v + (1ull << 24) - borrow) & kLimb24Mask);
+            borrow = 1;
+        }
+    }
+}
+
+uint32_t mont_limb24_words_for_bits(int bits) {
+    if (bits == 512) {
+        return kLimb24Mont512Limbs;
+    }
+    if (bits <= 0 || (bits % 24) != 0) {
+        return 0u;
+    }
+    return static_cast<uint32_t>(bits) / 24u;
+}
+
+std::string build_montsqr_source_limb24(std::ostringstream& log) {
+    const std::string mul_rel = std::string(kKernelAssetRoot) + "mont_limb24_mul.cl";
+    const std::string bench_rel = std::string(kKernelAssetRoot) + "mont_limb24_bench.cl";
+    std::string mul = load_kernel_asset(mul_rel.c_str());
+    std::string bench = load_kernel_asset(bench_rel.c_str());
+    if (mul.empty() || bench.empty()) {
+        log << "missing mont_limb24_mul.cl or mont_limb24_bench.cl\n";
+        log << "run Gradle syncMontsqrKernels or rebuild the app\n";
+        return {};
+    }
+    strip_pragma_once(mul);
+    strip_pragma_once(bench);
+    strip_include(bench, "#include \"mont_limb24_mul.cl\"");
+    return mul + "\n" + bench;
 }
 
 std::string build_montsqr_source(uint32_t words, bool use_wg, std::ostringstream& log) {
@@ -345,10 +406,177 @@ void run_mont_section(
     }
 }
 
+std::string montsqr_bench_limb24(int bits, int kernel_iterations, int instances, int launch_repeats) {
+    std::ostringstream out;
+    const uint32_t words = mont_limb24_words_for_bits(bits);
+    if (words == 0u || static_cast<uint32_t>(bits) > kMaxBenchBits) {
+        out << "limb24 mont: bits must be 512 (22 limbs) or a positive multiple of 24 and <= "
+            << kMaxBenchBits << "\n";
+        return out.str();
+    }
+    if (kernel_iterations <= 0 || instances <= 0 || launch_repeats <= 0) {
+        out << "kernel_iterations, instances, launch_repeats must be > 0\n";
+        return out.str();
+    }
+
+    out << "=== ECM mont mul/sqr microbench (24-bit limb, mul24) ===\n";
+    out << bits << "-bit, limbs=" << words << ", kernel_iterations=" << kernel_iterations
+        << ", instances=" << instances << ", launch_repeats=" << launch_repeats << "\n";
+    out << "path: unroll_only_512_limb24 (22 limbs for 512-bit mod; mul24/mad24)\n";
+
+    OpenCLApi api{};
+    bool own_lib = false;
+    if (!load_opencl_api(api, own_lib, out)) {
+        out << "FAIL: OpenCL not loaded\n";
+        return out.str();
+    }
+
+    cl_device_id dev = nullptr;
+    if (!acquire_gpu_device(api, dev, out)) {
+        maybe_unload_opencl_api(api, own_lib);
+        out << "FAIL: no GPU\n";
+        return out.str();
+    }
+    out << "device: " << query_device_string(api, dev, CL_DEVICE_NAME) << "\n";
+
+    const std::string src = build_montsqr_source_limb24(out);
+    if (src.empty()) {
+        maybe_unload_opencl_api(api, own_lib);
+        out << "FAIL: kernel sources\n";
+        return out.str();
+    }
+
+    cl_context ctx = nullptr;
+    cl_command_queue q = nullptr;
+    if (!acquire_opencl_cache_session(api, dev, ctx, q, out)) {
+        maybe_unload_opencl_api(api, own_lib);
+        return out.str();
+    }
+
+    char build_opts[128];
+    std::snprintf(build_opts, sizeof(build_opts),
+                  "-DMAX_LIMBS=%u -DMP_LIMB_BITS=24 -cl-fast-relaxed-math", words);
+    out << "build: MAX_LIMBS=" << words << " MP_LIMB_BITS=24 src_kib=" << (src.size() / 1024u)
+        << "\n";
+
+    double compile_ms = 0.0;
+    bool cache_hit = false;
+    cl_program program = build_opencl_program_cached(
+        api, ctx, dev, src.c_str(), src.size(), build_opts, out, compile_ms, cache_hit);
+    if (!program) {
+        maybe_unload_opencl_api(api, own_lib);
+        out << "FAIL: program build\n";
+        return out.str();
+    }
+
+    std::vector<uint32_t> n_words(words), a_words(words), b_words(words);
+    set_pow2_minus_ui_limb24(n_words.data(), words, static_cast<uint32_t>(bits), 109ull);
+    set_pow2_minus_ui_limb24(a_words.data(), words, static_cast<uint32_t>(bits), 991ull);
+    set_pow2_minus_ui_limb24(b_words.data(), words, static_cast<uint32_t>(bits), 8218291649ull);
+
+    const size_t total_words = static_cast<size_t>(instances) * words;
+    std::vector<uint32_t> host_a(total_words), host_b(total_words), host_n(total_words);
+    for (int i = 0; i < instances; ++i) {
+        std::memcpy(host_a.data() + static_cast<size_t>(i) * words, a_words.data(),
+                    sizeof(uint32_t) * words);
+        std::memcpy(host_b.data() + static_cast<size_t>(i) * words, b_words.data(),
+                    sizeof(uint32_t) * words);
+        std::memcpy(host_n.data() + static_cast<size_t>(i) * words, n_words.data(),
+                    sizeof(uint32_t) * words);
+    }
+
+    const size_t bytes = sizeof(uint32_t) * total_words;
+    cl_int err = CL_SUCCESS;
+    cl_mem buf_a = api.clCreateBuffer(ctx, CL_MEM_READ_ONLY, bytes, nullptr, &err);
+    cl_mem buf_b = api.clCreateBuffer(ctx, CL_MEM_READ_ONLY, bytes, nullptr, &err);
+    cl_mem buf_n = api.clCreateBuffer(ctx, CL_MEM_READ_ONLY, bytes, nullptr, &err);
+    cl_mem buf_out = api.clCreateBuffer(ctx, CL_MEM_READ_WRITE, bytes, nullptr, &err);
+    cl_mem buf_n_const = api.clCreateBuffer(ctx, CL_MEM_READ_ONLY, sizeof(uint32_t) * words, nullptr, &err);
+    const cl_uint np0_host = 0u - inv24_odd(n_words[0] | 1u);
+    cl_mem buf_np0_const = api.clCreateBuffer(ctx, CL_MEM_READ_ONLY, sizeof(cl_uint), nullptr, &err);
+    if (!buf_a || !buf_b || !buf_n || !buf_out || !buf_n_const || !buf_np0_const) {
+        out << "buffer alloc failed\n";
+        api.clReleaseProgram(program);
+        maybe_unload_opencl_api(api, own_lib);
+        return out.str();
+    }
+    api.clEnqueueWriteBuffer(q, buf_a, 1, 0, bytes, host_a.data(), 0, nullptr, nullptr);
+    api.clEnqueueWriteBuffer(q, buf_b, 1, 0, bytes, host_b.data(), 0, nullptr, nullptr);
+    api.clEnqueueWriteBuffer(q, buf_n, 1, 0, bytes, host_n.data(), 0, nullptr, nullptr);
+    api.clEnqueueWriteBuffer(q, buf_n_const, 1, 0, sizeof(uint32_t) * words, n_words.data(), 0,
+                             nullptr, nullptr);
+    api.clEnqueueWriteBuffer(q, buf_np0_const, 1, 0, sizeof(cl_uint), &np0_host, 0, nullptr,
+                             nullptr);
+
+    MontBenchCtx mctx{api,
+                      q,
+                      program,
+                      buf_a,
+                      buf_b,
+                      buf_n,
+                      buf_out,
+                      buf_n_const,
+                      buf_np0_const,
+                      words,
+                      np0_host,
+                      static_cast<cl_uint>(kernel_iterations),
+                      static_cast<size_t>(instances),
+                      launch_repeats,
+                      4,
+                      words,
+                      static_cast<double>(instances) * static_cast<double>(kernel_iterations) *
+                          launch_repeats,
+                      out};
+
+    constexpr Limb24MontBenchKernel kSpecs[] = {
+        {"ecm_mont_mul_priv_unroll_only_512_limb24_bench", "mont_mul_unroll_only_512_limb24", true},
+        {"ecm_mont_sqr_priv_unroll_only_512_limb24_bench", "mont_sqr_unroll_only_512_limb24",
+         false},
+    };
+
+    out << std::fixed << std::setprecision(3);
+    out << "\n--- mont_mul ---\n";
+    EcmMontSqrBenchKernel mul_spec{
+        kSpecs[0].kernel_name, kSpecs[0].path_label, true, MontDispatch::PrivUnroll, words, 0};
+    double ms_mul = 0.0;
+    const bool ran_mul = run_mont_kernel(mctx, mul_spec, ms_mul);
+
+    out << "\n--- mont_sqr ---\n";
+    EcmMontSqrBenchKernel sqr_spec{
+        kSpecs[1].kernel_name, kSpecs[1].path_label, false, MontDispatch::PrivUnroll, words, 0};
+    double ms_sqr = 0.0;
+    const bool ran_sqr = run_mont_kernel(mctx, sqr_spec, ms_sqr);
+
+    out << "\n--- summary ---\n";
+    out << "mont_mul: " << (ran_mul ? 1 : 0) << " ran\n";
+    out << "mont_sqr: " << (ran_sqr ? 1 : 0) << " ran\n";
+    out << "note: 512@32 uses 16 limbs; 512@24 uses 22 limbs (mul24 CIOS)\n";
+    out << "\nRESULT: " << ((ran_mul && ran_sqr) ? "PASS" : "FAIL") << "\n";
+
+    api.clReleaseMemObject(buf_a);
+    api.clReleaseMemObject(buf_b);
+    api.clReleaseMemObject(buf_n);
+    api.clReleaseMemObject(buf_out);
+    api.clReleaseMemObject(buf_n_const);
+    api.clReleaseMemObject(buf_np0_const);
+    api.clReleaseProgram(program);
+    maybe_unload_opencl_api(api, own_lib);
+    return out.str();
+}
+
 } // namespace
 
 std::string run_montsqr_bench(int bits, int kernel_iterations, int instances, int launch_repeats,
-                              bool use_wg, int tpi) {
+                              bool use_wg, int tpi, int limb_bits) {
+    if (limb_bits == 24) {
+        return montsqr_bench_limb24(bits, kernel_iterations, instances, launch_repeats);
+    }
+    if (limb_bits != 32) {
+        std::ostringstream out;
+        out << "limb_bits must be 24 or 32\n";
+        return out.str();
+    }
+
     std::ostringstream out;
     if (bits <= 0 || (bits % 32) != 0 || static_cast<uint32_t>(bits) > kMaxBenchBits) {
         out << "bits must be a positive multiple of 32 and <= " << kMaxBenchBits << "\n";

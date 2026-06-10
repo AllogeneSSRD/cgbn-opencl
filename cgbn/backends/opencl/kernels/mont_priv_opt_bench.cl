@@ -39,6 +39,8 @@ __kernel void ecm_mont_sqr_priv_opt_bench(__global const uint *a, __constant uin
     }
 }
 
+#if MAX_LIMBS == 16
+
 __kernel void ecm_mont_mul_priv_opt2_512_local_bench(__global const uint *a, __global const uint *b,
                                                       __constant uint *n, __global uint *out,
                                                       __constant uint *np0_ptr, uint limbs,
@@ -360,6 +362,10 @@ __kernel void ecm_mont_sqr_priv_local_only_512_bench(__global const uint *a, __c
     }
 }
 
+#endif // MAX_LIMBS == 16
+
+#if MAX_LIMBS == 128
+
 __kernel void ecm_mont_mul_priv_local_only_4096_bench(__global const uint *a, __global const uint *b,
                                                        __constant uint *n, __global uint *out,
                                                        __constant uint *np0_ptr, uint limbs,
@@ -400,6 +406,8 @@ __kernel void ecm_mont_sqr_priv_local_only_4096_bench(__global const uint *a, __
         }
     }
 }
+
+#endif // MAX_LIMBS == 128
 
 // removed: unroll2/4/8 benches (replaced by unroll32/64)
 
@@ -464,6 +472,8 @@ __kernel void ecm_mont_sqr_priv_unroll64_bench(__global const uint *a, __constan
         }
     }
 }
+
+#if MAX_LIMBS == 128
 
 __kernel void ecm_mont_mul_priv_unroll64_4096_bench(__global const uint *a, __global const uint *b,
                                                      __constant uint *n, __global uint *out,
@@ -823,3 +833,5 @@ __kernel void ecm_mont_sqr_priv_fips4096_mt16_cs_bench(__global const uint *a, _
         }
     }
 }
+
+#endif // MAX_LIMBS == 128

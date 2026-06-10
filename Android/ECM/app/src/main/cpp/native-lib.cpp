@@ -96,10 +96,12 @@ Java_com_example_ecm_MainActivity_nativeMontSqrBench(
         jint instances,
         jint launch_repeats,
         jboolean use_wg,
-        jint tpi) {
+        jint tpi,
+        jint limb_bits) {
     return new_jstring_utf8(
         env,
-        run_montsqr_bench(bits, kernel_iters, instances, launch_repeats, use_wg == JNI_TRUE, tpi));
+        run_montsqr_bench(bits, kernel_iters, instances, launch_repeats, use_wg == JNI_TRUE, tpi,
+                          limb_bits));
 }
 
 extern "C" JNIEXPORT jstring JNICALL

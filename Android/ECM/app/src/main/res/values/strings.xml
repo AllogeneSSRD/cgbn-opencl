@@ -22,6 +22,7 @@
     <string name="btn_addsub_bench_24">24-bit limb（fused + unroll）</string>
     <string name="montsqr_section_title">ECM mont mul/sqr 微基准</string>
     <string name="btn_montsqr_bench">mont mul/sqr（WG, tpi=4）</string>
+    <string name="btn_montsqr_bench_24">mont unroll_only_512（24-bit limb, mul24）</string>
     <string name="default_bits_24">504</string>
     <string name="btn_bench_16">16-bit 性能</string>
     <string name="btn_bench_24">24-bit 性能</string>

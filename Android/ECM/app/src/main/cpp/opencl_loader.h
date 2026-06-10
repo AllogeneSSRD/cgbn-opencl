@@ -51,6 +51,7 @@ constexpr cl_uint CL_DEVICE_VENDOR = 0x102C;
 constexpr cl_uint CL_DEVICE_VERSION = 0x102D;
 constexpr cl_uint CL_DRIVER_VERSION = 0x1101;
 constexpr cl_ulong CL_MEM_READ_WRITE = 1 << 0;
+constexpr cl_ulong CL_MEM_WRITE_ONLY = 1 << 1;
 constexpr cl_ulong CL_MEM_READ_ONLY = 1 << 2;
 constexpr cl_uint CL_PROGRAM_NUM_DEVICES = 0x1164;
 constexpr cl_uint CL_PROGRAM_BINARY_SIZES = 0x1167;
