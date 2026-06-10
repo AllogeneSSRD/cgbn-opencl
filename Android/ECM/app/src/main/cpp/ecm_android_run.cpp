@@ -1,5 +1,6 @@
 #include "ecm_android_run.h"
 
+#include "ecm_log_android.h"
 #include "opencl_android_shim.h"
 #include "opencl_loader.h"
 #include "opencl_ecm_log.h"
@@ -7,9 +8,6 @@
 
 #include <sstream>
 #include <string>
-
-void android_ecm_log_begin(std::string* out);
-void android_ecm_log_end();
 
 #ifndef ECM_HAVE_GMP
 
@@ -75,6 +73,9 @@ std::string run_ecm_android(const EcmAndroidRunRequest& req) {
 
     std::string body;
     android_ecm_log_begin(&body);
+    if (android_ecm_log_listener_active()) {
+        ecm_ts_fprintf(stdout, "%s", header.str().c_str());
+    }
 
     OpenCLApi api{};
     bool own_lib = false;
@@ -250,8 +251,12 @@ std::string run_ecm_android(const EcmAndroidRunRequest& req) {
     android_ecm_log_end();
 
     std::ostringstream out;
-    out << header.str() << body;
-    out << "\nRESULT: " << (ret == ECM_ERROR ? "ERROR" : "OK") << "\n";
+    if (android_ecm_log_listener_active()) {
+        out << "\nRESULT: " << (ret == ECM_ERROR ? "ERROR" : "OK") << "\n";
+    } else {
+        out << header.str() << body;
+        out << "\nRESULT: " << (ret == ECM_ERROR ? "ERROR" : "OK") << "\n";
+    }
     return out.str();
 }
 

@@ -218,21 +218,42 @@ class MainActivity : AppCompatActivity() {
             toastInvalid()
             return
         }
-        runNative {
-            nativeRunEcm(
-                nExpr,
-                b1,
-                b2,
-                gpuCurves,
-                deviceIndex,
-                chkVerbose.isChecked,
-                gpuCkpt,
-                inputSigma.text?.toString()?.trim().orEmpty(),
-                inputMulPath.text?.toString()?.trim().orEmpty(),
-                inputSqrPath.text?.toString()?.trim().orEmpty(),
-                inputAddPath.text?.toString()?.trim().orEmpty(),
-                inputSubPath.text?.toString()?.trim().orEmpty(),
-            )
+
+        setBusy(true)
+        outputText.text = ""
+        val logCallback = EcmLogCallback { line ->
+            mainHandler.post {
+                outputText.append(line)
+                scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+            }
+        }
+        benchExecutor.execute {
+            val tail = try {
+                nativeRunEcm(
+                    nExpr,
+                    b1,
+                    b2,
+                    gpuCurves,
+                    deviceIndex,
+                    chkVerbose.isChecked,
+                    gpuCkpt,
+                    inputSigma.text?.toString()?.trim().orEmpty(),
+                    inputMulPath.text?.toString()?.trim().orEmpty(),
+                    inputSqrPath.text?.toString()?.trim().orEmpty(),
+                    inputAddPath.text?.toString()?.trim().orEmpty(),
+                    inputSubPath.text?.toString()?.trim().orEmpty(),
+                    logCallback,
+                )
+            } catch (e: Exception) {
+                "Error: ${e.message}\n"
+            }
+            runOnUiThread {
+                if (tail.isNotEmpty()) {
+                    outputText.append(tail)
+                }
+                setBusy(false)
+                scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+            }
         }
     }
 
@@ -410,6 +431,7 @@ class MainActivity : AppCompatActivity() {
         sqrPath: String,
         addPath: String,
         subPath: String,
+        logCallback: EcmLogCallback?,
     ): String
 
     companion object {

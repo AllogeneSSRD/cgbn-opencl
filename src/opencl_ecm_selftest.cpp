@@ -35,6 +35,8 @@ int opencl_ecm_selftest_mont_mul(cgbn::opencl::context_t &ctx, const mpz_t N, ui
     std::string mont_src =
         cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont.cl");
     if (mont_src.empty()) {
+        ecm_ts_fprintf(stderr,
+                       "GPU: mont.cl not found (add mont.cl to APK assets for self-test)\n");
         return -1;
     }
     char opts[64];
@@ -43,6 +45,7 @@ int opencl_ecm_selftest_mont_mul(cgbn::opencl::context_t &ctx, const mpz_t N, ui
     cl_program prog =
         cgbn::opencl::build_program_from_source(ctx, mont_src.c_str(), opts, buildErr);
     if (prog == nullptr || buildErr != CL_SUCCESS) {
+        ecm_ts_fprintf(stderr, "GPU: mont.cl build failed (err=%d)\n", (int)buildErr);
         return -1;
     }
     cl_int err;
@@ -82,9 +85,41 @@ int opencl_ecm_selftest_mont_mul(cgbn::opencl::context_t &ctx, const mpz_t N, ui
     cl_uint limbs_arg = limbs;
     clSetKernelArg(kMul, 5, sizeof(cl_uint), &limbs_arg);
     size_t g = 1;
-    clEnqueueNDRangeKernel(ctx.queue, kMul, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
-    clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, limbs * sizeof(uint32_t), out, 0,
-                        nullptr, nullptr);
+    err = clEnqueueNDRangeKernel(ctx.queue, kMul, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
+    if (err != CL_SUCCESS) {
+        ecm_ts_fprintf(stderr, "GPU: mont_mul self-test enqueue failed (err=%d)\n", err);
+        clReleaseMemObject(bufA);
+        clReleaseMemObject(bufB);
+        clReleaseMemObject(bufN);
+        clReleaseMemObject(bufOut);
+        clReleaseKernel(kMul);
+        clReleaseProgram(prog);
+        mpz_clear(two);
+        mpz_clear(three);
+        mpz_clear(six);
+        mpz_clear(r);
+        return -1;
+    }
+    err = clFinish(ctx.queue);
+    if (err != CL_SUCCESS) {
+        ecm_ts_fprintf(stderr, "GPU: mont_mul self-test clFinish failed (err=%d)\n", err);
+    }
+    err = clEnqueueReadBuffer(ctx.queue, bufOut, CL_TRUE, 0, limbs * sizeof(uint32_t), out, 0,
+                              nullptr, nullptr);
+    if (err != CL_SUCCESS) {
+        ecm_ts_fprintf(stderr, "GPU: mont_mul self-test readback failed (err=%d)\n", err);
+        clReleaseMemObject(bufA);
+        clReleaseMemObject(bufB);
+        clReleaseMemObject(bufN);
+        clReleaseMemObject(bufOut);
+        clReleaseKernel(kMul);
+        clReleaseProgram(prog);
+        mpz_clear(two);
+        mpz_clear(three);
+        mpz_clear(six);
+        mpz_clear(r);
+        return -1;
+    }
     ecm_to_mpz(r, out, limbs);
     ecm_from_montgomery(r, r, N, np0, limbs);
     int ok = (mpz_cmp(r, six) == 0);

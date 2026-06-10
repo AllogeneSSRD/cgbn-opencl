@@ -192,7 +192,7 @@ echo '(2^421-1)' | .\build\Debug\ecm.exe -v -d 0 -gpu -gpucurves 64 100 0
 | [README_ECM_FACTORIZATION.md](../README_ECM_FACTORIZATION.md) | UI 与桌面 CLI 参数对照、架构概览 |
 | `app/src/main/cpp/CMakeLists.txt` | `ECM_ANDROID_GMP_ROOT` 检测与源文件列表 |
 | `app/src/main/cpp/ecm_android_run.cpp` | JNI 入口；无 GMP 时 stub |
-| `syncEcmStage1Kernels`（`app/build.gradle.kts`） | 构建前同步 `ecm_stage1.cl` 等到 assets |
+| `syncEcmStage1Kernels`（`app/build.gradle.kts`） | 构建前同步 `ecm_stage1.cl`、`mont.cl`（self-test）等到 assets |
 
 ---
 

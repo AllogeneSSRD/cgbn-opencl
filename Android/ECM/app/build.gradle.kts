@@ -131,6 +131,7 @@ tasks.register<Copy>("syncMontsqrKernels") {
 val ecmStage1KernelIncludes = arrayOf(
     "ecm_stage1.cl",
     "ecm_stage1_mont4096_paths.cl",
+    "mont.cl",
     "mp_addsub/stage1/asm_block32_stage1.cl",
     "mp_addsub/stage1/asm_block16_stage1.cl",
 )

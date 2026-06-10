@@ -5,6 +5,7 @@
 #include <string>
 
 #include "ecm_android_run.h"
+#include "ecm_log_android.h"
 #include "kernel_assets.h"
 #include "jni_utf8.h"
 #include "opencl_program_cache.h"
@@ -135,7 +136,8 @@ Java_com_example_ecm_MainActivity_nativeRunEcm(
         jstring j_mul_path,
         jstring j_sqr_path,
         jstring j_add_path,
-        jstring j_sub_path) {
+        jstring j_sub_path,
+        jobject j_log_callback) {
     EcmAndroidRunRequest req;
     req.n_expr = jstring_to_utf8(env, j_n_expr);
     req.b1 = b1;
@@ -159,7 +161,10 @@ Java_com_example_ecm_MainActivity_nativeRunEcm(
     req.sqr_path = jstring_to_utf8(env, j_sqr_path);
     req.add_path = jstring_to_utf8(env, j_add_path);
     req.sub_path = jstring_to_utf8(env, j_sub_path);
-    return new_jstring_utf8(env, run_ecm_android(req));
+    android_ecm_log_set_listener(env, j_log_callback);
+    const std::string result = run_ecm_android(req);
+    android_ecm_log_clear_listener(env);
+    return new_jstring_utf8(env, result);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
