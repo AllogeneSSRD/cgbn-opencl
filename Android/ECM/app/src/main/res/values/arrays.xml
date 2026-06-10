@@ -1,9 +1,88 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string-array name="ecm_n_presets">
+        <item>(2^301-1)</item>
         <item>(2^421-1)</item>
         <item>(2^991-1)</item>
         <item>(2^4003-1)</item>
         <item>自定义</item>
+    </string-array>
+
+    <string-array name="ecm_mul_path_labels">
+        <item>自动 (&lt;384b → i24 u32)</item>
+        <item>i24_384_manual</item>
+        <item>unroll_only_512</item>
+        <item>unroll64_4096 (4096-bit)</item>
+        <item>unroll64_4096_mt2</item>
+        <item>fips4096</item>
+        <item>fips4096_mt8</item>
+        <item>fips4096_mt16</item>
+    </string-array>
+    <string-array name="ecm_mul_path_values">
+        <item>auto</item>
+        <item>i24_384_manual</item>
+        <item>unroll_only_512</item>
+        <item>unroll64_4096</item>
+        <item>unroll64_4096_mt2</item>
+        <item>fips4096</item>
+        <item>fips4096_mt8</item>
+        <item>fips4096_mt16</item>
+    </string-array>
+
+    <string-array name="ecm_sqr_path_labels">
+        <item>自动 (&lt;384b → i24 u32)</item>
+        <item>i24_384_manual</item>
+        <item>unroll_only_512</item>
+        <item>unroll64_4096 (4096-bit)</item>
+        <item>unroll64_4096_mt2</item>
+        <item>fips4096</item>
+        <item>fips4096_mt8</item>
+        <item>fips4096_mt16</item>
+    </string-array>
+    <string-array name="ecm_sqr_path_values">
+        <item>auto</item>
+        <item>i24_384_manual</item>
+        <item>unroll_only_512</item>
+        <item>unroll64_4096</item>
+        <item>unroll64_4096_mt2</item>
+        <item>fips4096</item>
+        <item>fips4096_mt8</item>
+        <item>fips4096_mt16</item>
+    </string-array>
+
+    <string-array name="ecm_add_path_labels">
+        <item>自动</item>
+        <item>fused</item>
+        <item>fused_unroll</item>
+        <item>fused_unroll_b16</item>
+        <item>fused_unroll_b32</item>
+        <item>asm_b16</item>
+        <item>asm_b32</item>
+    </string-array>
+    <string-array name="ecm_add_path_values">
+        <item>auto</item>
+        <item>fused</item>
+        <item>fused_unroll</item>
+        <item>fused_unroll_b16</item>
+        <item>fused_unroll_b32</item>
+        <item>asm_b16</item>
+        <item>asm_b32</item>
+    </string-array>
+
+    <string-array name="ecm_sub_path_labels">
+        <item>自动</item>
+        <item>fused</item>
+        <item>fused_unroll</item>
+        <item>fused_unroll_b16</item>
+        <item>fused_unroll_b32</item>
+        <item>asm_b32</item>
+    </string-array>
+    <string-array name="ecm_sub_path_values">
+        <item>auto</item>
+        <item>fused</item>
+        <item>fused_unroll</item>
+        <item>fused_unroll_b16</item>
+        <item>fused_unroll_b32</item>
+        <item>asm_b32</item>
     </string-array>
 </resources>

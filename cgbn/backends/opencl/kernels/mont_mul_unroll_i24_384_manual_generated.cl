@@ -1782,4 +1782,23 @@ static inline void mont_sqr_unroll_i24_384_manual_body(
     mont_mul_unroll_i24_384_manual_body(out, a, a, n, base, np0);
 }
 
+static inline void mont_mul_priv_i24_u32_384_manual_body(
+    uint *out,
+    const uint *a,
+    const uint *b,
+    const uint *n,
+    uint np0)
+{
+    mont_mul_unroll_i24_384_manual_body(out, a, b, n, 0u, np0);
+}
+
+static inline void mont_sqr_priv_i24_u32_384_manual_body(
+    uint *out,
+    const uint *a,
+    const uint *n,
+    uint np0)
+{
+    mont_mul_priv_i24_u32_384_manual_body(out, a, a, n, np0);
+}
+
 #endif

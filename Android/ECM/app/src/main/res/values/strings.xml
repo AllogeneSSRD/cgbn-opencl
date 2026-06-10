@@ -5,22 +5,22 @@
     <string name="ecm_section_hint">对应桌面: echo \'N\' | ecm.exe -gpu -gpucurves … B1 B2</string>
     <string name="hint_n_expr">N 表达式 (stdin)</string>
     <string name="hint_n_preset">预设</string>
-    <string name="default_n_expr">(2^421-1)</string>
+    <string name="default_n_expr">(2^301-1)</string>
     <string name="hint_b1">B1</string>
     <string name="hint_b2">B2</string>
-    <string name="default_b1">2000</string>
+    <string name="default_b1">1000</string>
     <string name="default_b2">0</string>
     <string name="hint_gpu_curves">-gpucurves</string>
     <string name="default_gpu_curves">64</string>
     <string name="hint_device_index">-d 设备序号</string>
     <string name="default_device_index">0</string>
     <string name="hint_gpu_ckpt">-gpuckpt (秒, 0=禁用)</string>
-    <string name="default_gpu_ckpt">600</string>
+    <string name="default_gpu_ckpt">60</string>
     <string name="hint_sigma">-sigma (空=随机)</string>
-    <string name="hint_mul_path">--mul (可选)</string>
-    <string name="hint_sqr_path">--sqr (可选)</string>
-    <string name="hint_add_path">--add (可选)</string>
-    <string name="hint_sub_path">--sub (可选)</string>
+    <string name="hint_mul_path">--mul</string>
+    <string name="hint_sqr_path">--sqr</string>
+    <string name="hint_add_path">--add</string>
+    <string name="hint_sub_path">--sub</string>
     <string name="btn_run_ecm">运行 ECM (-gpu)</string>
     <string name="chk_verbose">-v 详细输出</string>
     <string name="ecm_advanced_title">高级选项</string>

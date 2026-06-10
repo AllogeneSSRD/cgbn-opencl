@@ -50,6 +50,7 @@ if(ECM_ANDROID_GMP_ROOT AND EXISTS "${_ECM_GMP_HEADER}" AND EXISTS "${_ECM_GMP_L
             "${MPA_ROOT}/src/opencl_ecm_checkpoint.cpp"
             "${MPA_ROOT}/src/opencl_ecm_debug_utils.cpp"
             "${MPA_ROOT}/src/opencl_ecm_mont.cpp"
+            "${MPA_ROOT}/src/opencl_ecm_limb24.cpp"
             "${MPA_ROOT}/src/opencl_ecm_mont_path.cpp"
             "${MPA_ROOT}/src/opencl_ecm_addsub_path.cpp"
             "${MPA_ROOT}/src/opencl_ecm_selftest.cpp"

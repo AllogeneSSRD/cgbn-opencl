@@ -28,6 +28,10 @@
 #define ECM_STAGE1_COOP_SCRATCH_U32 0
 #endif
 
+#ifndef ECM_STAGE1_USE_I24_384
+#define ECM_STAGE1_USE_I24_384 0
+#endif
+
 // Path ids: 0=unroll64_4096, 1=unroll64_4096_mt2, 2=fips4096, 3=fips4096_mt8, 4=fips4096_mt16
 #if ECM_STAGE1_COOP_WG > 1
 #define ECM_STAGE1_USE_COOP_WG 1
@@ -311,6 +315,17 @@ static inline void mont_mul_stage1_unroll32(uint *out, const uint *a, const uint
     for (uint i = 0u; i < limbs; ++i) out[i] = (D[i] & mask) | (t[i] & ~mask);
 }
 
+#if ECM_STAGE1_USE_I24_384
+static inline void mont_mul_stage1_i24_384(uint *out, const uint *a, const uint *b, const uint *N,
+                                           uint np0) {
+    mont_mul_priv_i24_u32_blsub_body(out, a, b, N, np0);
+}
+
+static inline void mont_sqr_stage1_i24_384(uint *out, const uint *a, const uint *N, uint np0) {
+    mont_sqr_priv_i24_u32_blsub_body(out, a, N, np0);
+}
+#endif
+
 // Default stage1 montgomery selector:
 // - 512-bit: use fixed unroll-only path
 // - 4096-bit: use fixed unroll64 path
@@ -318,7 +333,11 @@ static inline void mont_mul_stage1_unroll32(uint *out, const uint *a, const uint
 static inline void mont_mul_stage1(uint *out, const uint *a, const uint *b,
                                    const uint *N, uint np0, uint limbs) {
     if (limbs == 16u) {
+#if ECM_STAGE1_USE_I24_384
+        mont_mul_stage1_i24_384(out, a, b, N, np0);
+#else
         mont_mul_stage1_unroll_only_512(out, a, b, N, np0);
+#endif
     } else if (limbs == 128u) {
 #if ECM_STAGE1_MUL_PATH == 2
         mont_mul_stage1_fips4096(out, a, b, N, np0);
@@ -332,6 +351,12 @@ static inline void mont_mul_stage1(uint *out, const uint *a, const uint *b,
 
 static inline void mont_sqr_stage1(uint *out, const uint *a,
                                    const uint *N, uint np0, uint limbs) {
+#if ECM_STAGE1_USE_I24_384
+    if (limbs == 16u) {
+        mont_sqr_stage1_i24_384(out, a, N, np0);
+        return;
+    }
+#endif
     mont_mul_stage1(out, a, a, N, np0, limbs);
 }
 
@@ -429,6 +454,89 @@ static inline uint mp_add_n(uint *r, const uint *a, const uint *b, uint limbs) {
 #define ECM_ADDSUB_UNROLL_HINT 64
 #else
 #define ECM_ADDSUB_UNROLL_HINT 32
+#endif
+
+#if ECM_STAGE1_USE_I24_384
+#ifndef MONT_I24_LIMB_MASK
+#define MONT_I24_LIMB_MASK 0xFFFFFFu
+#endif
+
+static inline void mp_add_mod_fused_unroll_i24(uint *r, const uint *a, const uint *b,
+                                               const uint *N) {
+    const uint mask = MONT_I24_LIMB_MASK;
+    ulong carry_add = 0ul;
+    ulong carry_sub = 1ul;
+    #pragma unroll
+    for (uint i = 0u; i < MAX_LIMBS; ++i) {
+        ulong sum = (ulong)(a[i] & mask) + (ulong)(b[i] & mask) + carry_add;
+        carry_add = sum >> 24;
+        ulong temp = (ulong)(uint)(sum & mask) + (ulong)(~(N[i] & mask) & mask) + carry_sub;
+        carry_sub = temp >> 24;
+        r[i] = (uint)(temp & mask);
+    }
+    if ((carry_add | carry_sub) != 0ul) {
+        return;
+    }
+    ulong c = 0ul;
+    #pragma unroll
+    for (uint i = 0u; i < MAX_LIMBS; ++i) {
+        ulong s = (ulong)(r[i] & mask) + (ulong)(N[i] & mask) + c;
+        r[i] = (uint)(s & mask);
+        c = s >> 24;
+    }
+}
+
+static inline int mp_sub_mod_fused_unroll_i24(uint *r, const uint *a, const uint *b,
+                                              const uint *N) {
+    const uint mask = MONT_I24_LIMB_MASK;
+    ulong br = 0ul;
+    #pragma unroll
+    for (uint i = 0u; i < MAX_LIMBS; ++i) {
+        ulong av = (ulong)(a[i] & mask);
+        ulong bv = (ulong)(b[i] & mask);
+        ulong w = av - bv - br;
+        r[i] = (uint)(w & mask);
+        br = (av < bv + br) ? 1ul : 0ul;
+    }
+    if (br != 0ul) {
+        ulong c = 0ul;
+        #pragma unroll
+        for (uint i = 0u; i < MAX_LIMBS; ++i) {
+            ulong s = (ulong)(r[i] & mask) + (ulong)(N[i] & mask) + c;
+            r[i] = (uint)(s & mask);
+            c = s >> 24;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static inline int mp_ge_i24(const uint *a, const uint *N, uint limbs) {
+    const uint mask = MONT_I24_LIMB_MASK;
+    for (int i = (int)limbs - 1; i >= 0; --i) {
+        const uint av = a[(uint)i] & mask;
+        const uint nv = N[(uint)i] & mask;
+        if (av > nv) {
+            return 1;
+        }
+        if (av < nv) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static inline void mp_sub_n_i24(uint *r, const uint *a, const uint *N, uint limbs) {
+    const uint mask = MONT_I24_LIMB_MASK;
+    ulong borrow = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        const ulong av = (ulong)(a[i] & mask);
+        const ulong nv = (ulong)(N[i] & mask);
+        const ulong w = av - nv - borrow;
+        r[i] = (uint)(w & mask);
+        borrow = (av < nv + borrow) ? 1ul : 0ul;
+    }
+}
 #endif
 
 // Generic fused add-mod: full compile-time unroll for MAX_LIMBS (421b, 512b, etc.).
@@ -597,6 +705,12 @@ static inline void mp_add_mod_asm_b16_512(uint *r, const uint *a, const uint *b,
 #endif
 
 static inline void mp_add_mod(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
+#if ECM_STAGE1_USE_I24_384
+    if (limbs == 16u) {
+        mp_add_mod_fused_unroll_i24(r, a, b, N);
+        return;
+    }
+#endif
     if (limbs == 128u) {
 #if ECM_STAGE1_ADDMOD_PATH == ECM_ADDSUB_PATH_ASM_B32
 #if ECM_STAGE1_ASM_B32 && defined(__AMDGCN__)
@@ -681,6 +795,11 @@ static inline void mp_add_mod(uint *r, const uint *a, const uint *b, const uint 
 
 // Returns 1 if borrow (a < b)
 static inline int mp_sub_mod(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
+#if ECM_STAGE1_USE_I24_384
+    if (limbs == 16u) {
+        return mp_sub_mod_fused_unroll_i24(r, a, b, N);
+    }
+#endif
     if (limbs == 128u) {
 #if ECM_STAGE1_SUBMOD_PATH == ECM_ADDSUB_PATH_ASM_B32
 #if ECM_STAGE1_ASM_B32 && defined(__AMDGCN__)
@@ -731,6 +850,14 @@ static inline void mp_shift_left_1_mod(uint *r, const uint *a, const uint *N, ui
 }
 
 static inline void mont_normalize(uint *r, const uint *N, uint limbs) {
+#if ECM_STAGE1_USE_I24_384
+    if (limbs == 16u) {
+        if (mp_ge_i24(r, N, limbs)) {
+            mp_sub_n_i24(r, r, N, limbs);
+        }
+        return;
+    }
+#endif
     if (mp_ge(r, N, limbs)) {
         mp_sub_n(r, r, N, limbs);
     }

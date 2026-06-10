@@ -2,11 +2,35 @@
 
 #include <cstring>
 
+namespace {
+
+bool path_is_auto(const char *path) {
+    return path == nullptr || path[0] == '\0' || strcmp(path, "auto") == 0 ||
+           strcmp(path, "default") == 0;
+}
+
+bool path_requests_i24_384(const char *path) {
+    return path != nullptr &&
+           (strcmp(path, "i24_384_manual") == 0 ||
+            strcmp(path, "mont_mul_unroll_i24_384_manual") == 0);
+}
+
+bool path_requests_unroll512(const char *path) {
+    return path != nullptr && (strcmp(path, "unroll_only_512") == 0 ||
+                               strcmp(path, "mont_mul_priv_unroll_only_512") == 0);
+}
+
+} // namespace
+
 int opencl_ecm_parse_mont4096_path(const char *path) {
-    if (path == nullptr || path[0] == '\0') {
+    if (path == nullptr || path[0] == '\0' || strcmp(path, "auto") == 0 ||
+        strcmp(path, "default") == 0) {
         return 0;
     }
-    if (strcmp(path, "default") == 0 || strcmp(path, "unroll64_4096") == 0) {
+    if (path_requests_i24_384(path) || path_requests_unroll512(path)) {
+        return 0;
+    }
+    if (strcmp(path, "unroll64_4096") == 0) {
         return ECM_MONT4096_PATH_UNROLL64;
     }
     if (strcmp(path, "unroll64_4096_mt2") == 0) {
@@ -78,5 +102,29 @@ void opencl_ecm_mont4096_path_labels(int mul_path, int sqr_path, const char **mu
     }
     if (sqr_name) {
         *sqr_name = opencl_ecm_mont4096_path_name(sqr_path);
+    }
+}
+
+ecm_stage1_mont_mode opencl_ecm_resolve_stage1_mont_mode(const char *gpu_mul_path,
+                                                         const char *gpu_sqr_path,
+                                                         size_t n_bit_size) {
+    if (path_requests_unroll512(gpu_mul_path) || path_requests_unroll512(gpu_sqr_path)) {
+        return ECM_STAGE1_MONT_UNROLL512;
+    }
+    if (path_requests_i24_384(gpu_mul_path) || path_requests_i24_384(gpu_sqr_path)) {
+        return ECM_STAGE1_MONT_I24_384;
+    }
+    if (path_is_auto(gpu_mul_path) && path_is_auto(gpu_sqr_path) && n_bit_size < 384u) {
+        return ECM_STAGE1_MONT_I24_384;
+    }
+    return ECM_STAGE1_MONT_UNROLL512;
+}
+
+const char *opencl_ecm_stage1_mont_mode_name(ecm_stage1_mont_mode mode) {
+    switch (mode) {
+    case ECM_STAGE1_MONT_I24_384:
+        return "mont_mul_priv_i24_u32_blsub";
+    default:
+        return "mont_mul_priv_unroll_only_512";
     }
 }

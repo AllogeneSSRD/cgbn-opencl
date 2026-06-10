@@ -40,10 +40,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inputDeviceIndex: TextInputEditText
     private lateinit var inputGpuCkpt: TextInputEditText
     private lateinit var inputSigma: TextInputEditText
-    private lateinit var inputMulPath: TextInputEditText
-    private lateinit var inputSqrPath: TextInputEditText
-    private lateinit var inputAddPath: TextInputEditText
-    private lateinit var inputSubPath: TextInputEditText
+    private lateinit var inputMulPath: AutoCompleteTextView
+    private lateinit var inputSqrPath: AutoCompleteTextView
+    private lateinit var inputAddPath: AutoCompleteTextView
+    private lateinit var inputSubPath: AutoCompleteTextView
     private lateinit var chkVerbose: MaterialCheckBox
     private lateinit var ecmAdvancedPanel: LinearLayout
     private val benchExecutor = Executors.newSingleThreadExecutor()
@@ -95,6 +95,7 @@ class MainActivity : AppCompatActivity() {
         nativeInitAssets(assets, codeCacheDir.absolutePath)
 
         setupEcmPresets()
+        setupEcmPathDropdowns()
         findViewById<MaterialButton>(R.id.btn_toggle_advanced).setOnClickListener {
             val show = ecmAdvancedPanel.visibility != View.VISIBLE
             ecmAdvancedPanel.visibility = if (show) View.VISIBLE else View.GONE
@@ -163,6 +164,56 @@ class MainActivity : AppCompatActivity() {
             } finally {
                 perfSampleRunning = false
             }
+        }
+    }
+
+    private fun setupEcmPathDropdowns() {
+        bindPathDropdown(inputMulPath, R.array.ecm_mul_path_labels, R.array.ecm_mul_path_values)
+        bindPathDropdown(inputSqrPath, R.array.ecm_sqr_path_labels, R.array.ecm_sqr_path_values)
+        bindPathDropdown(inputAddPath, R.array.ecm_add_path_labels, R.array.ecm_add_path_values)
+        bindPathDropdown(inputSubPath, R.array.ecm_sub_path_labels, R.array.ecm_sub_path_values)
+    }
+
+    private fun bindPathDropdown(
+        dropdown: AutoCompleteTextView,
+        labelsRes: Int,
+        valuesRes: Int,
+        defaultIndex: Int = 0,
+    ) {
+        val labels = resources.getStringArray(labelsRes)
+        val values = resources.getStringArray(valuesRes)
+        require(labels.size == values.size)
+        dropdown.setAdapter(
+            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels),
+        )
+        dropdown.setText(labels[defaultIndex], false)
+        dropdown.tag = values
+    }
+
+    private fun selectedPathValue(dropdown: AutoCompleteTextView): String {
+        val labels = dropdown.text?.toString()?.trim().orEmpty()
+        val values = dropdown.tag as? Array<*> ?: return ""
+        val labelArray = resources.getStringArray(
+            when (dropdown.id) {
+                R.id.input_mul_path -> R.array.ecm_mul_path_labels
+                R.id.input_sqr_path -> R.array.ecm_sqr_path_labels
+                R.id.input_add_path -> R.array.ecm_add_path_labels
+                R.id.input_sub_path -> R.array.ecm_sub_path_labels
+                else -> R.array.ecm_mul_path_labels
+            },
+        )
+        for (i in labelArray.indices) {
+            if (labelArray[i] == labels) {
+                return values[i]?.toString().orEmpty()
+            }
+        }
+        return if (labels == "auto" || labels.isEmpty()) "" else labels
+    }
+
+    private fun pathArgForNative(value: String): String {
+        return when (value) {
+            "", "auto" -> ""
+            else -> value
         }
     }
 
@@ -238,10 +289,10 @@ class MainActivity : AppCompatActivity() {
                     chkVerbose.isChecked,
                     gpuCkpt,
                     inputSigma.text?.toString()?.trim().orEmpty(),
-                    inputMulPath.text?.toString()?.trim().orEmpty(),
-                    inputSqrPath.text?.toString()?.trim().orEmpty(),
-                    inputAddPath.text?.toString()?.trim().orEmpty(),
-                    inputSubPath.text?.toString()?.trim().orEmpty(),
+                    pathArgForNative(selectedPathValue(inputMulPath)),
+                    pathArgForNative(selectedPathValue(inputSqrPath)),
+                    pathArgForNative(selectedPathValue(inputAddPath)),
+                    pathArgForNative(selectedPathValue(inputSubPath)),
                     logCallback,
                 )
             } catch (e: Exception) {

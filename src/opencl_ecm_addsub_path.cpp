@@ -5,7 +5,8 @@
 #include <cstring>
 
 int opencl_ecm_parse_addsub_path(const char *path) {
-    if (path == nullptr || path[0] == '\0' || strcmp(path, "default") == 0) {
+    if (path == nullptr || path[0] == '\0' || strcmp(path, "auto") == 0 ||
+        strcmp(path, "default") == 0) {
         return -1;
     }
     if (strcmp(path, "fused") == 0) {
