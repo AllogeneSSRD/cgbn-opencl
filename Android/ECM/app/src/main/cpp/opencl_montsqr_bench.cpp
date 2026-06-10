@@ -422,7 +422,7 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
     out << "=== ECM mont mul/sqr microbench (unroll_i24) ===\n";
     out << bits << "-bit, limbs=" << words << ", kernel_iterations=" << kernel_iterations
         << ", instances=" << instances << ", launch_repeats=" << launch_repeats << "\n";
-    out << "path: mont_mul_unroll_i24 / mont_sqr_unroll_i24 (mul24)\n";
+    out << "path: mont_mul_unroll_i24 (ulong CIOS) vs mont_mul_unroll_i24_u32 (32-bit CIOS MAC)\n";
 
     OpenCLApi api{};
     bool own_lib = false;
@@ -530,27 +530,40 @@ std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, in
 
     constexpr MontI24BenchKernel kSpecs[] = {
         {"ecm_mont_mul_unroll_i24_bench", "mont_mul_unroll_i24", true},
+        {"ecm_mont_mul_unroll_i24_u32_bench", "mont_mul_unroll_i24_u32", true},
         {"ecm_mont_sqr_unroll_i24_bench", "mont_sqr_unroll_i24", false},
+        {"ecm_mont_sqr_unroll_i24_u32_bench", "mont_sqr_unroll_i24_u32", false},
     };
 
     out << std::fixed << std::setprecision(3);
+    int ran = 0;
     out << "\n--- mont_mul ---\n";
-    EcmMontSqrBenchKernel mul_spec{
-        kSpecs[0].kernel_name, kSpecs[0].path_label, true, MontDispatch::PrivUnroll, words, 0};
-    double ms_mul = 0.0;
-    const bool ran_mul = run_mont_kernel(mctx, mul_spec, ms_mul);
+    for (int i = 0; i < 2; ++i) {
+        EcmMontSqrBenchKernel spec{
+            kSpecs[i].kernel_name, kSpecs[i].path_label, kSpecs[i].is_mul,
+            MontDispatch::PrivUnroll, words, 0};
+        double ms = 0.0;
+        if (run_mont_kernel(mctx, spec, ms)) {
+            ++ran;
+        }
+    }
 
     out << "\n--- mont_sqr ---\n";
-    EcmMontSqrBenchKernel sqr_spec{
-        kSpecs[1].kernel_name, kSpecs[1].path_label, false, MontDispatch::PrivUnroll, words, 0};
-    double ms_sqr = 0.0;
-    const bool ran_sqr = run_mont_kernel(mctx, sqr_spec, ms_sqr);
+    for (int i = 2; i < 4; ++i) {
+        EcmMontSqrBenchKernel spec{
+            kSpecs[i].kernel_name, kSpecs[i].path_label, kSpecs[i].is_mul,
+            MontDispatch::PrivUnroll, words, 0};
+        double ms = 0.0;
+        if (run_mont_kernel(mctx, spec, ms)) {
+            ++ran;
+        }
+    }
 
     out << "\n--- summary ---\n";
-    out << "mont_mul: " << (ran_mul ? 1 : 0) << " ran\n";
-    out << "mont_sqr: " << (ran_sqr ? 1 : 0) << " ran\n";
+    out << "kernels ran: " << ran << " / 4\n";
+    out << "note: ulong=Level1 mad24 mul; u32=Level2 32-bit CIOS MAC (no mad24 on carry)\n";
     out << "note: 512@32 uses 16 limbs; 512@i24 uses 22 limbs\n";
-    out << "\nRESULT: " << ((ran_mul && ran_sqr) ? "PASS" : "FAIL") << "\n";
+    out << "\nRESULT: " << (ran == 4 ? "PASS" : "FAIL") << "\n";
 
     api.clReleaseMemObject(buf_a);
     api.clReleaseMemObject(buf_b);
