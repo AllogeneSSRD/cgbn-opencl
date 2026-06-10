@@ -140,12 +140,13 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     const uint32_t BITS = (uint32_t)bits;
     const uint32_t WORDS = BITS / 32;
     constexpr uint32_t FIXED_4096_WORDS = 128u;
+    const bool bench_wg = use_wg && WORDS != 16u;
 
     std::cout << "ECM montgomery square microbench: " << BITS
               << "-bit, kernel_iterations=" << kernel_iterations
               << ", instances=" << instances
               << ", launch_repeats=" << launch_repeats
-              << ", mode=" << (use_wg ? "wg" : "priv")
+              << ", mode=" << (bench_wg ? "wg" : "priv")
               << ", tpi=" << tpi << std::endl;
 
     mpz_t n_gmp, a_gmp, b_gmp;
@@ -227,7 +228,7 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     } else if (WORDS == 16u && !amd_gpu) {
         std::cout << "Note: mont_mul_asm bench skipped (AMD GPU only)\n";
     }
-    if (use_wg && (mont_wg_src.empty() || mont_wg_bench_src.empty())) {
+    if (bench_wg && (mont_wg_src.empty() || mont_wg_bench_src.empty())) {
         std::cerr << "Failed to load mont_wg sources" << std::endl;
         return false;
     }
@@ -246,8 +247,8 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
                                               mont_mul_asm_block8_src + "\n" + mont_mul_asm_src)
                                            : std::string()) +
                                       "\n" + mont_priv_bench_src + "\n" + mont_priv_opt_bench_src;
-    std::string src;
-    if (use_wg) {
+      std::string src;
+    if (bench_wg) {
         src = mont_wg_src + "\n" + mont_priv_all + "\n" + mont_wg_bench_src;
     } else {
         src = mont_priv_all;
@@ -762,57 +763,13 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     }
 
     double t_mul_priv_fips512 = 0.0, t_sqr_priv_fips512 = 0.0;
-    double t_mul_priv_fips512_mt4 = 0.0, t_sqr_priv_fips512_mt4 = 0.0;
-    double t_mul_priv_fips512_mt8 = 0.0, t_sqr_priv_fips512_mt8 = 0.0;
-    double t_mul_priv_fips512_mt16 = 0.0, t_sqr_priv_fips512_mt16 = 0.0;
-    double t_mul_priv_fips512_mt8_cs = 0.0, t_sqr_priv_fips512_mt8_cs = 0.0;
-    double t_mul_priv_fips512_mt16_cs = 0.0, t_sqr_priv_fips512_mt16_cs = 0.0;
     if (!run_priv_unroll_kernel("ecm_mont_mul_priv_fips512_bench", true, 16u, t_mul_priv_fips512)) {
         return false;
     }
     if (!run_priv_unroll_kernel("ecm_mont_sqr_priv_fips512_bench", false, 16u, t_sqr_priv_fips512)) {
         return false;
     }
-    if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips512_mt4_bench", true, 16u, 4u,
-                                 FIPS512_MT_LOCAL_U32, t_mul_priv_fips512_mt4)) {
-        return false;
-    }
-    if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips512_mt4_bench", false, 16u, 4u,
-                                 FIPS512_MT_LOCAL_U32, t_sqr_priv_fips512_mt4)) {
-        return false;
-    }
-    if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips512_mt8_bench", true, 16u, 8u,
-                                 FIPS512_MT_LOCAL_U32, t_mul_priv_fips512_mt8)) {
-        return false;
-    }
-    if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips512_mt8_bench", false, 16u, 8u,
-                                 FIPS512_MT_LOCAL_U32, t_sqr_priv_fips512_mt8)) {
-        return false;
-    }
-    if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips512_mt16_bench", true, 16u, 16u,
-                                 FIPS512_MT_LOCAL_U32, t_mul_priv_fips512_mt16)) {
-        return false;
-    }
-    if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips512_mt16_bench", false, 16u, 16u,
-                                 FIPS512_MT_LOCAL_U32, t_sqr_priv_fips512_mt16)) {
-        return false;
-    }
-    if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips512_mt8_cs_bench", true, 16u, 8u,
-                                 FIPS512_CS_LOCAL_U32, t_mul_priv_fips512_mt8_cs)) {
-        return false;
-    }
-    if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips512_mt8_cs_bench", false, 16u, 8u,
-                                 FIPS512_CS_LOCAL_U32, t_sqr_priv_fips512_mt8_cs)) {
-        return false;
-    }
-    if (!run_priv_fips_mt_kernel("ecm_mont_mul_priv_fips512_mt16_cs_bench", true, 16u, 16u,
-                                 FIPS512_CS16_LOCAL_U32, t_mul_priv_fips512_mt16_cs)) {
-        return false;
-    }
-    if (!run_priv_fips_mt_kernel("ecm_mont_sqr_priv_fips512_mt16_cs_bench", false, 16u, 16u,
-                                 FIPS512_CS16_LOCAL_U32, t_sqr_priv_fips512_mt16_cs)) {
-        return false;
-    }
+    // Disabled @512: fips512_mt* paths omitted from bench (see opencl_ecm_montsqr_manifest.cpp).
 
     double t_mul_priv_local_only_512 = 0.0, t_sqr_priv_local_only_512 = 0.0;
     if (!run_priv_local_kernel("ecm_mont_mul_priv_local_only_512_bench", true, 16u,
@@ -1154,51 +1111,7 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
                 return false;
             }
 
-            std::vector<uint32_t> out_fips_mt4(WORDS), out_fips_mt8(WORDS), out_fips_mt16(WORDS),
-                out_fips_cs(WORDS), out_fips_cs16(WORDS);
-            if (!run_fips512_verify("ecm_mont_sqr_priv_fips512_mt4_bench", false, 4u, FIPS512_MT_LOCAL_U32,
-                                    out_fips_mt4)) {
-                return false;
-            }
-            if (!run_fips512_verify("ecm_mont_sqr_priv_fips512_mt8_bench", false, 8u, FIPS512_MT_LOCAL_U32,
-                                    out_fips_mt8)) {
-                return false;
-            }
-            if (!run_fips512_verify("ecm_mont_sqr_priv_fips512_mt16_bench", false, 16u, FIPS512_MT_LOCAL_U32,
-                                    out_fips_mt16)) {
-                return false;
-            }
-            if (!run_fips512_verify("ecm_mont_sqr_priv_fips512_mt8_cs_bench", false, 8u, FIPS512_CS_LOCAL_U32,
-                                    out_fips_cs)) {
-                return false;
-            }
-            if (!run_fips512_verify("ecm_mont_sqr_priv_fips512_mt16_cs_bench", false, 16u,
-                                    FIPS512_CS16_LOCAL_U32, out_fips_cs16)) {
-                return false;
-            }
-            bool match_fips_mt4 = true, match_fips_mt8 = true, match_fips_mt16 = true;
-            bool match_fips_cs = true, match_fips_cs16 = true;
-            for (size_t i = 0; i < WORDS; ++i) {
-                if (out_fips_mt4[i] != out_fips512_sqr[i]) match_fips_mt4 = false;
-                if (out_fips_mt8[i] != out_fips512_sqr[i]) match_fips_mt8 = false;
-                if (out_fips_mt16[i] != out_fips512_sqr[i]) match_fips_mt16 = false;
-                if (out_fips_cs[i] != out_fips512_sqr[i]) match_fips_cs = false;
-                if (out_fips_cs16[i] != out_fips512_sqr[i]) match_fips_cs16 = false;
-            }
-            std::cout << "  [fips512_mt4 vs fips512] " << (match_fips_mt4 ? "MATCH" : "MISMATCH")
-                      << std::endl;
-            std::cout << "  [fips512_mt8 vs fips512] " << (match_fips_mt8 ? "MATCH" : "MISMATCH")
-                      << std::endl;
-            std::cout << "  [fips512_mt16 vs fips512] " << (match_fips_mt16 ? "MATCH" : "MISMATCH")
-                      << std::endl;
-            std::cout << "  [fips512_mt8_cs vs fips512] " << (match_fips_cs ? "MATCH" : "MISMATCH")
-                      << std::endl;
-            std::cout << "  [fips512_mt16_cs vs fips512] " << (match_fips_cs16 ? "MATCH" : "MISMATCH")
-                      << std::endl;
-            if (!match_fips_mt4 || !match_fips_mt8 || !match_fips_mt16 || !match_fips_cs ||
-                !match_fips_cs16) {
-                return false;
-            }
+            // fips512_mt* verify disabled (kernels omitted from bench @512).
         }
         if (WORDS == 128u) {
             std::vector<uint32_t> out_sqr4096(WORDS), out_sqr_mul4096(WORDS);
@@ -1552,36 +1465,6 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
                   << (op_count / (t_sqr_priv_fips512 / 1000.0)) << " ops/s"
                   << " (vs fips512_mul: "
                   << (t_mul_priv_fips512 / t_sqr_priv_fips512) << "x)" << std::endl;
-        std::cout << "mont_mul_priv_fips512_mt4: " << t_mul_priv_fips512_mt4 << " ms, "
-                  << (op_count / (t_mul_priv_fips512_mt4 / 1000.0)) << " ops/s"
-                  << " (vs fips512: " << (t_mul_priv_fips512 / t_mul_priv_fips512_mt4) << "x)" << std::endl;
-        std::cout << "mont_sqr_priv_fips512_mt4: " << t_sqr_priv_fips512_mt4 << " ms, "
-                  << (op_count / (t_sqr_priv_fips512_mt4 / 1000.0)) << " ops/s"
-                  << " (vs fips512: " << (t_sqr_priv_fips512 / t_sqr_priv_fips512_mt4) << "x)" << std::endl;
-        std::cout << "mont_mul_priv_fips512_mt8: " << t_mul_priv_fips512_mt8 << " ms, "
-                  << (op_count / (t_mul_priv_fips512_mt8 / 1000.0)) << " ops/s"
-                  << " (vs fips512: " << (t_mul_priv_fips512 / t_mul_priv_fips512_mt8) << "x)" << std::endl;
-        std::cout << "mont_sqr_priv_fips512_mt8: " << t_sqr_priv_fips512_mt8 << " ms, "
-                  << (op_count / (t_sqr_priv_fips512_mt8 / 1000.0)) << " ops/s"
-                  << " (vs fips512: " << (t_sqr_priv_fips512 / t_sqr_priv_fips512_mt8) << "x)" << std::endl;
-        std::cout << "mont_mul_priv_fips512_mt16: " << t_mul_priv_fips512_mt16 << " ms, "
-                  << (op_count / (t_mul_priv_fips512_mt16 / 1000.0)) << " ops/s"
-                  << " (vs fips512: " << (t_mul_priv_fips512 / t_mul_priv_fips512_mt16) << "x)" << std::endl;
-        std::cout << "mont_sqr_priv_fips512_mt16: " << t_sqr_priv_fips512_mt16 << " ms, "
-                  << (op_count / (t_sqr_priv_fips512_mt16 / 1000.0)) << " ops/s"
-                  << " (vs fips512: " << (t_sqr_priv_fips512 / t_sqr_priv_fips512_mt16) << "x)" << std::endl;
-        std::cout << "mont_mul_priv_fips512_mt8_cs: " << t_mul_priv_fips512_mt8_cs << " ms, "
-                  << (op_count / (t_mul_priv_fips512_mt8_cs / 1000.0)) << " ops/s"
-                  << " (vs fips512: " << (t_mul_priv_fips512 / t_mul_priv_fips512_mt8_cs) << "x)" << std::endl;
-        std::cout << "mont_sqr_priv_fips512_mt8_cs: " << t_sqr_priv_fips512_mt8_cs << " ms, "
-                  << (op_count / (t_sqr_priv_fips512_mt8_cs / 1000.0)) << " ops/s"
-                  << " (vs fips512: " << (t_sqr_priv_fips512 / t_sqr_priv_fips512_mt8_cs) << "x)" << std::endl;
-        std::cout << "mont_mul_priv_fips512_mt16_cs: " << t_mul_priv_fips512_mt16_cs << " ms, "
-                  << (op_count / (t_mul_priv_fips512_mt16_cs / 1000.0)) << " ops/s"
-                  << " (vs fips512: " << (t_mul_priv_fips512 / t_mul_priv_fips512_mt16_cs) << "x)" << std::endl;
-        std::cout << "mont_sqr_priv_fips512_mt16_cs: " << t_sqr_priv_fips512_mt16_cs << " ms, "
-                  << (op_count / (t_sqr_priv_fips512_mt16_cs / 1000.0)) << " ops/s"
-                  << " (vs fips512: " << (t_sqr_priv_fips512 / t_sqr_priv_fips512_mt16_cs) << "x)" << std::endl;
         std::cout << "mont_mul_priv_local_only_512:  " << t_mul_priv_local_only_512 << " ms, "
                   << (op_count / (t_mul_priv_local_only_512 / 1000.0)) << " ops/s"
                   << " (vs opt: " << (t_mul_priv_opt / t_mul_priv_local_only_512) << "x)" << std::endl;
@@ -1684,7 +1567,7 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
                   << " (vs fips4096: " << (t_sqr_priv_fips4096 / t_sqr_priv_fips4096_mt16_cs) << "x)" << std::endl;
     }
 
-    if (use_wg) {
+    if (bench_wg) {
         double t_mul_wg = 0.0, t_sqr_wg = 0.0;
         if (!run_named_wg("cgbn_mont_mul_wg_bench", true, t_mul_wg)) return false;
         if (!run_named_wg("cgbn_mont_sqr_wg_bench", false, t_sqr_wg)) return false;

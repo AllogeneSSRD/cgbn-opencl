@@ -90,8 +90,8 @@ val montsqrKernelIncludes = arrayOf(
     "mont_priv_opt_bench.cl",
     "mont_wg.cl",
     "mont_wg_bench.cl",
-    "mont_limb24_mul.cl",
-    "mont_limb24_bench.cl",
+    "mont_mul_unroll_i24.cl",
+    "mont_mul_unroll_i24_bench.cl",
 )
 
 tasks.register<Copy>("syncMontsqrKernels") {

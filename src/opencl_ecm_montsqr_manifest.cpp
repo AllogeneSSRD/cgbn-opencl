@@ -34,16 +34,12 @@ void push_512_kernels(std::vector<EcmMontSqrBenchKernel>& out, bool is_mul) {
         add("unroll_only_512", "mont_sqr_priv_unroll_only_512", MontDispatch::PrivUnroll);
     }
     add("fips512", is_mul ? "mont_mul_priv_fips512" : "mont_sqr_priv_fips512", MontDispatch::PrivUnroll);
-    add("fips512_mt4", is_mul ? "mont_mul_priv_fips512_mt4" : "mont_sqr_priv_fips512_mt4",
-        MontDispatch::PrivFipsMt, 16u, 4u);
-    add("fips512_mt8", is_mul ? "mont_mul_priv_fips512_mt8" : "mont_sqr_priv_fips512_mt8",
-        MontDispatch::PrivFipsMt, 16u, 8u);
-    add("fips512_mt16", is_mul ? "mont_mul_priv_fips512_mt16" : "mont_sqr_priv_fips512_mt16",
-        MontDispatch::PrivFipsMt, 16u, 16u);
-    add("fips512_mt8_cs", is_mul ? "mont_mul_priv_fips512_mt8_cs" : "mont_sqr_priv_fips512_mt8_cs",
-        MontDispatch::PrivFipsMtCs, 16u, 8u);
-    add("fips512_mt16_cs", is_mul ? "mont_mul_priv_fips512_mt16_cs" : "mont_sqr_priv_fips512_mt16_cs",
-        MontDispatch::PrivFipsMtCs, 16u, 16u);
+    // Disabled @512: fips512_mt* paths underperform on mobile; omit from bench/build.
+    // add("fips512_mt4", ...);
+    // add("fips512_mt8", ...);
+    // add("fips512_mt16", ...);
+    // add("fips512_mt8_cs", ...);
+    // add("fips512_mt16_cs", ...);
     add("local_only_512", is_mul ? "mont_mul_priv_local_only_512" : "mont_sqr_priv_local_only_512",
         MontDispatch::PrivLocal512);
     if (is_mul) {
@@ -57,7 +53,8 @@ void push_512_kernels(std::vector<EcmMontSqrBenchKernel>& out, bool is_mul) {
 
 EcmMontSqrBuildManifest opencl_ecm_montsqr_build_manifest(uint32_t words, bool use_wg) {
     EcmMontSqrBuildManifest m;
-    if (use_wg) {
+    const bool include_wg = use_wg && words != 16u;
+    if (include_wg) {
         push(m.source_paths, "mont_wg.cl");
     }
     push(m.source_paths, "mont_priv.cl");
@@ -67,7 +64,7 @@ EcmMontSqrBuildManifest opencl_ecm_montsqr_build_manifest(uint32_t words, bool u
     }
     push(m.source_paths, "mont_priv_bench.cl");
     push(m.source_paths, "mont_priv_opt_bench.cl");
-    if (use_wg) {
+    if (include_wg) {
         push(m.source_paths, "mont_wg_bench.cl");
     }
     return m;
@@ -84,7 +81,7 @@ std::vector<EcmMontSqrBenchKernel> opencl_ecm_montsqr_mul_kernels(uint32_t words
                       MontDispatch::PrivUnroll, words));
     k.push_back(kspec("ecm_mont_mul_priv_unroll64_bench", "mont_mul_priv_unroll64", true,
                       MontDispatch::PrivUnroll, words));
-    if (use_wg) {
+    if (use_wg && words != 16u) {
         k.push_back(kspec("cgbn_mont_mul_wg_bench", "mont_mul_wg", true, MontDispatch::Wg));
     }
     return k;
@@ -101,7 +98,7 @@ std::vector<EcmMontSqrBenchKernel> opencl_ecm_montsqr_sqr_kernels(uint32_t words
                       MontDispatch::PrivUnroll, words));
     k.push_back(kspec("ecm_mont_sqr_priv_unroll64_bench", "mont_sqr_priv_unroll64", false,
                       MontDispatch::PrivUnroll, words));
-    if (use_wg) {
+    if (use_wg && words != 16u) {
         k.push_back(kspec("cgbn_mont_sqr_wg_bench", "mont_sqr_wg", false, MontDispatch::Wg));
     }
     return k;

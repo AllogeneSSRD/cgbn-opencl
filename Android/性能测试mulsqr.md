@@ -1,6 +1,8 @@
 # Android Montgomery mul/sqr 性能分析（Adreno 642 / 830）
 
-完整 512-bit 路径跑通后，结论与早期（仅 `priv_opt` / `wg` 有效时）完全不同。本文汇总 **32-bit limb 全路径 bench** 与 **24-bit limb `unroll_only_512_limb24`（mul24）** 实测，并给出选型与优化建议。
+完整 512-bit 路径跑通后，结论与早期（仅 `priv_opt` / `wg` 有效时）完全不同。本文汇总 **32-bit limb 全路径 bench** 与 **24-bit limb `mont_mul_unroll_i24`（mul24）** 实测，并给出选型与优化建议。
+
+> **构建说明**：`fips512_mt*` 与 `wg` @512 已从 manifest / bench 中剔除，不再编译或跑分。
 
 配置：`instances=128`，`kernel_iterations=1000`，`launch_repeats=1`，WG 模式 `tpi=4`。
 
@@ -36,9 +38,9 @@
 
 ---
 
-## 2. 新增：24-bit limb（`unroll_only_512_limb24`）实测
+## 2. 新增：24-bit limb（`mont_mul_unroll_i24`）实测
 
-内核：`mont_limb24_mul.cl`，CIOS + `#pragma unroll`，内乘用 `mul24`（12-bit 分解实现 24×24→48）。
+内核：`mont_mul_unroll_i24.cl`，CIOS + `#pragma unroll`，内乘用 `mul24`（12-bit 分解实现 24×24→48）；支持任意 `bits % 24 == 0`（512 固定 22 limbs）。
 
 | 配置 | limbs | Adreno **830** mul | Adreno **830** sqr | Adreno **642** mul | Adreno **642** sqr |
 |------|-------|--------------------|--------------------|--------------------|--------------------|
@@ -65,9 +67,9 @@
 | 对比 | 说明 |
 |------|------|
 | 512@32 **unroll_only** | 16 limbs，全展开专用体 → **两台机各自最快档** |
-| 512@24 **limb24** | 22 limbs（⌈512/24⌉），CIOS + mul24；limb 多 **37.5%**，`u24_mul_full` 开销大 |
+| 512@24 **unroll_i24** | 22 limbs（⌈512/24⌉），CIOS + mul24；limb 多 **37.5%**，`mont_i24_mul_full` 开销大 |
 | 384@32 **priv_opt** | 12 limbs，运行时 `limbs` 循环 |
-| 384@24 **limb24** | 16 limbs → 比 384@32 多 **33%** limb，但无 runtime 循环 |
+| 384@24 **unroll_i24** | 16 limbs → 比 384@32 多 **33%** limb，但无 runtime 循环 |
 
 Montgomery CIOS 工作量近似 **∝ limbs²**：
 
@@ -76,7 +78,7 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 ### 3.2 与各自「同位宽、同 GPU 最优」对比（mul）
 
-| GPU | 位宽 | 24b limb24 | 32b 最优（本仓库） | limb24 / 32b 最优 |
+| GPU | 位宽 | 24b unroll_i24 | 32b 最优（本仓库） | unroll_i24 / 32b 最优 |
 |-----|------|------------|-------------------|-------------------|
 | **830** | 512 | **1.57M** | unroll_only **7.73–8.47M** | **~20%**（慢约 **5×**） |
 | **830** | 384 | **3.56M** | priv_opt **2.61M** | **~136%**（快 **1.36×**） |
@@ -87,39 +89,39 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 **共性（生产 @512-bit）**
 
-- **两台机 @512-bit 均应使用 32b `unroll_only_512*`**，**不要**用 limb24 作 Mont 生产路径。
-- limb24 @512 仅为 unroll_only 最优的 **20%（830）～38%（642）**；此前误写「642 上 limb24 略快于 unroll_only」系 GPU 标反所致。
+- **两台机 @512-bit 均应使用 32b `unroll_only_512*`**，**不要**用 unroll_i24 作 Mont 生产路径。
+- unroll_i24 @512 仅为 unroll_only 最优的 **20%（830）～38%（642）**；此前误写「642 上 unroll_i24 略快于 unroll_only」系 GPU 标反所致。
 
 **830（绝对性能高）**
 
-- @512：unroll_only manual **8.47M** 仍为终极档；limb24 **1.57M** 有 mul24 但仍远落后。
-- @384：limb24 **3.56M** > priv_opt **2.61M**，绝对值也远高于 642 的 881K。
-- 若模数 <512 且无专用 unroll，**830 上 limb24 值得评估**；@512 仍坚持 32b unroll。
+- @512：unroll_only manual **8.47M** 仍为终极档；unroll_i24 **1.57M** 有 mul24 但仍远落后。
+- @384：unroll_i24 **3.56M** > priv_opt **2.61M**，绝对值也远高于 642 的 881K。
+- 若模数 <512 且无专用 unroll，**830 上 unroll_i24 值得评估**；@512 仍坚持 32b unroll。
 
 **642（绝对性能低）**
 
-- @512：unroll_only auto **1.43M** >> limb24 **541K**（约 **2.6×**）。
-- @384：limb24 **881K** 仍优于 priv_opt **482K**，但绝对值仅为 830 同配置的四分之一左右。
-- **manual unroll** 在 642 上仍劣于 auto（§1），与 limb24 选型无关。
+- @512：unroll_only auto **1.43M** >> unroll_i24 **541K**（约 **2.6×**）。
+- @384：unroll_i24 **881K** 仍优于 priv_opt **482K**，但绝对值仅为 830 同配置的四分之一左右。
+- **manual unroll** 在 642 上仍劣于 auto（§1），与 unroll_i24 选型无关。
 
-### 3.4 为何 limb24 @512 无法替代 32b unroll_only（两台机）
+### 3.4 为何 unroll_i24 @512 无法替代 32b unroll_only（两台机）
 
 | 因素 | 说明 |
 |------|------|
 | Limb 数 | 22 vs 16 → CIOS 约 **1.9×** 工作量 |
 | 乘法语义 | `u24_mul_full` 每步 **4× mul24** + 组合；32b unroll 为单条 32×32→64 |
-| 专用展开 | `unroll_only_512_body` 为 16-limb 深度优化；limb24 为通用 22-limb CIOS |
-| 绝对算力 | 830 把 32b unroll 推到 **8M+** ops/s；limb24 在 830 上虽达 **1.57M**（仍强于 642），但相对自身最优仍差 **5×** |
+| 专用展开 | `unroll_only_512_body` 为 16-limb 深度优化；unroll_i24 为通用 22-limb CIOS |
+| 绝对算力 | 830 把 32b unroll 推到 **8M+** ops/s；unroll_i24 在 830 上虽达 **1.57M**（仍强于 642），但相对自身最优仍差 **5×** |
 
-### 3.5 为何 limb24 @384 能赢 generic 32b（两台机，830 赢得更多）
+### 3.5 为何 unroll_i24 @384 能赢 generic 32b（两台机，830 赢得更多）
 
 - `priv_opt` / `unroll32` 无固定位宽展开，带 `limbs` 循环。
-- limb24 全展开 + mul24，在 **384@24（16 limb）** 上弥补 limb 数增加的开销。
+- unroll_i24 全展开 + mul24，在 **384@24（16 limb）** 上弥补 limb 数增加的开销。
 - **830** 上绝对 **3.56M vs 2.61M**；**642** 上 **881K vs 482K** — 相对提升类似，绝对差距由 GPU 算力决定。
 
 ### 3.6 sqr
 
-两台机 **sqr ≈ mul**（limb24 用 `mul(a,a)`）。32b 侧仍有 `mont_sqr_priv_unroll_only_512_body` 可挖。
+两台机 **sqr ≈ mul**（unroll_i24 用 `mul(a,a)`）。32b 侧仍有 `mont_sqr_priv_unroll_only_512_body` 可挖。
 
 ---
 
@@ -140,11 +142,11 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 | 类别 | 路径 | 建议 |
 |------|------|------|
-| **两台机生产默认 @512** | `unroll_only_512` 32b | 830 mul→**manual**；642→**auto**；**均不用 limb24** |
-| **830 @384 及以下** | limb24 或补 12-limb unroll | limb24 已优于 priv_opt（3.56M vs 2.61M） |
-| **642 @384 及以下** | limb24 优于 priv_opt | 绝对性能低，端到端仍受 GPU 限制 |
-| **禁止 @512 生产** | `unroll_only_512_limb24` | 两台机均显著慢于 32b unroll |
-| bench 可剔除 | `fips512_mt*`、`wg` @512 | 手机上全面落后 |
+| **两台机生产默认 @512** | `unroll_only_512` 32b | 830 mul→**manual**；642→**auto**；**均不用 unroll_i24** |
+| **830 @384 及以下** | unroll_i24 或补 12-limb unroll | unroll_i24 已优于 priv_opt（3.56M vs 2.61M） |
+| **642 @384 及以下** | unroll_i24 优于 priv_opt | 绝对性能低，端到端仍受 GPU 限制 |
+| **禁止 @512 生产** | `mont_mul_unroll_i24` | 两台机均显著慢于 32b unroll |
+| bench 已剔除 | `fips512_mt*`、`wg` @512 | 手机上全面落后 |
 | 642 慎用 | `unroll_only_512_manual` | 实测比 auto 慢 4.4× |
 
 ---
@@ -155,21 +157,21 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 |------|------|
 | **288-bit @24**（12 limbs）vs **384-bit @32**（12 limbs） | 与 add/sub 相同「公平 limb 数」口径 |
 | **504-bit @24**（21 limbs）vs **512-bit @32** unroll_only | ECM 常用 504@24 |
-| limb24 **hot 内核**（单次 enqueue，`inner=kernel_iterations`） | 剥离 global 重载 |
-| limb24 vs unroll_only @512 + **VERIFY** | 确认两台机均不切换生产 |
+| unroll_i24 **hot 内核**（单次 enqueue，`inner=kernel_iterations`） | 剥离 global 重载 |
+| unroll_i24 vs unroll_only @512 + **VERIFY** | 确认两台机均不切换生产 |
 
 ---
 
-## 7. 优化方向（按优先级，含 limb24）
+## 7. 优化方向（按优先级，含 unroll_i24）
 
 ### P0 — 算子选型
 
 1. **@512-bit（830 / 642）**：`mont_mul_priv_unroll_only_512` + `mont_sqr_priv_unroll_only_512`（830 mul 可试 manual）
-2. **勿将 limb24 作 @512 生产路径**（两台机均已证实落后 32b unroll）
-3. **@384 及以下**：可评估 limb24；830 收益更大（绝对 3.56M 档）
-4. micro-probe 仅保留：`unroll_only_512` vs `_manual`（按 GPU），**不必** probe limb24@512
+2. **勿将 unroll_i24 作 @512 生产路径**（两台机均已证实落后 32b unroll）
+3. **@384 及以下**：可评估 unroll_i24；830 收益更大（绝对 3.56M 档）
+4. micro-probe 仅保留：`unroll_only_512` vs `_manual`（按 GPU），**不必** probe unroll_i24@512
 
-### P1 — limb24 内核（research / 非 512 生产）
+### P1 — unroll_i24 内核（research / 非 512 生产）
 
 5. **`u24_mul_full` 减负**：`mad24`、更短 24×24→48 分解
 6. **22-limb 全手动展开**（仿 512_manual 生成器）— 目标拉高 830 上 1.57M，仍难追 8M unroll
@@ -178,7 +180,7 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 ### P2 — 编译与产物
 
-9. 生产 APK：512@32 只链 `unroll_only_512*`；limb24 仅 bench / 非 512 实验
+9. 生产 APK：512@32 只链 `unroll_only_512*`；unroll_i24 仅 bench / 非 512 实验
 10. 642 manual 退化：RGA/ISA 分析
 11. 修正 bench 文案：384@24 勿显示「22 limbs for 512-bit」
 
@@ -201,8 +203,8 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 |------|----------------|----------------|---------|
 | 512 @32 unroll_only_manual | **8.47M** | 323K | 26× |
 | 512 @32 unroll_only auto | 7.73M | **1.43M** | 5.4× |
-| 512 @24 limb24 | **1.57M** | 541K | 2.9× |
-| 384 @24 limb24 | **3.56M** | 881K | 4.0× |
+| 512 @24 unroll_i24 | **1.57M** | 541K | 2.9× |
+| 384 @24 unroll_i24 | **3.56M** | 881K | 4.0× |
 | 384 @32 priv_opt | **2.61M** | 482K | 5.4× |
 | 384 @32 unroll32 | 1.51M | 485K | 3.1× |
 | 512 @32 priv_opt | 1.60M | 282K | 5.7× |
@@ -212,9 +214,9 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 | 配置 | 830 | 642 |
 |------|-----|-----|
-| 512 @24 limb24 | **0.19×** | **0.38×** |
-| 384 @24 limb24 vs 512 最优 | 0.42× | 0.62× |
-| 384 @24 limb24 vs 384 priv_opt | **1.36×** | **1.83×** |
+| 512 @24 unroll_i24 | **0.19×** | **0.38×** |
+| 384 @24 unroll_i24 vs 512 最优 | 0.42× | 0.62× |
+| 384 @24 unroll_i24 vs 384 priv_opt | **1.36×** | **1.83×** |
 
 ---
 
@@ -222,12 +224,12 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 | GPU | 512-bit mul（生产） | 512-bit sqr | 384-bit 及以下 | 避免 @512 |
 |-----|---------------------|-------------|----------------|-----------|
-| **Adreno 830** | `unroll_only_512_manual` | `unroll_only_512` | limb24 或补 unroll（**3.56M** 档） | **limb24**、wg、priv_opt |
-| **Adreno 642** | `unroll_only_512` auto | `unroll_only_512` | limb24 > priv_opt（**881K** 档） | **limb24**、manual、wg |
+| **Adreno 830** | `unroll_only_512_manual` | `unroll_only_512` | unroll_i24 或补 unroll（**3.56M** 档） | **unroll_i24**、wg、priv_opt |
+| **Adreno 642** | `unroll_only_512` auto | `unroll_only_512` | unroll_i24 > priv_opt（**881K** 档） | **unroll_i24**、manual、wg |
 
-**两台机 @512-bit：Mont 一律 32b `unroll_only_512*`，不用 limb24。**
+**两台机 @512-bit：Mont 一律 32b `unroll_only_512*`，不用 unroll_i24。**
 
-桌面 stage1 已默认 `unroll_only_512`（32b）。Android port 与 §1 历史结论一致；limb24 仅作 **<512 bit 或无专用 unroll 时** 的研究/备选，且 **830 上绝对收益远高于 642**。
+桌面 stage1 已默认 `unroll_only_512`（32b）。Android port 与 §1 历史结论一致；unroll_i24 仅作 **<512 bit 或无专用 unroll 时** 的研究/备选，且 **830 上绝对收益远高于 642**。
 
 ---
 
@@ -235,7 +237,7 @@ Montgomery CIOS 工作量近似 **∝ limbs²**：
 
 add/sub 在 Adreno 上可从 limb24 + `fused_hot` 获益。Montgomery CIOS **以内层乘为主**：
 
-- **@512**：add/sub 可用 24b；**Mont 必须用 32b unroll_only**（两台机 limb24 均远慢于 unroll）
-- **@384**：两台机 Mont limb24 均可优于 priv_opt；**830 绝对 3.56M vs 642 881K**，端到端瓶颈仍在 642 算力
+- **@512**：add/sub 可用 24b；**Mont 必须用 32b unroll_only**（两台机 `mont_mul_unroll_i24` 均远慢于 unroll）
+- **@384**：两台机 Mont unroll_i24 均可优于 priv_opt；**830 绝对 3.56M vs 642 881K**，端到端瓶颈仍在 642 算力
 
-stage1 应对 **add/sub 与 mont 分开配置**；勿假设 limb24 对 Mont @512 有效。
+stage1 应对 **add/sub 与 mont 分开配置**；勿假设 unroll_i24 对 Mont @512 有效。

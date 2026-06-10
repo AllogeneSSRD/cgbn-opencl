@@ -16,6 +16,6 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
                              int limb_bits);
 
 // ECM Montgomery mul/sqr microbench (use_wg default true, tpi=4 like desktop).
-// limb_bits: 32 = full desktop path set; 24 = unroll_only_512_limb24 (mul24, 22 limbs @ 512-bit).
+// limb_bits: 32 = full path set (no wg/fips512_mt* @512); 24 = mont_mul_unroll_i24 (mul24).
 std::string run_montsqr_bench(int bits, int kernel_iterations, int instances, int launch_repeats,
                               bool use_wg, int tpi, int limb_bits = 32);

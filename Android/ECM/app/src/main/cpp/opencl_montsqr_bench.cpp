@@ -17,10 +17,10 @@ namespace {
 
 constexpr uint32_t kMaxBenchBits = 8192;
 constexpr uint32_t kLimb24Mask = (1u << 24) - 1u;
-constexpr uint32_t kLimb24Mont512Limbs = 22u;
+constexpr uint32_t kMontI24Limbs512 = 22u;
 constexpr const char* kKernelAssetRoot = "cgbn/backends/opencl/kernels/";
 
-struct Limb24MontBenchKernel {
+struct MontI24BenchKernel {
     const char* kernel_name;
     const char* path_label;
     bool is_mul;
@@ -123,9 +123,9 @@ void set_pow2_minus_ui_limb24(uint32_t* out, uint32_t limbs, uint32_t bits, uint
     }
 }
 
-uint32_t mont_limb24_words_for_bits(int bits) {
+uint32_t mont_i24_words_for_bits(int bits) {
     if (bits == 512) {
-        return kLimb24Mont512Limbs;
+        return kMontI24Limbs512;
     }
     if (bits <= 0 || (bits % 24) != 0) {
         return 0u;
@@ -133,19 +133,19 @@ uint32_t mont_limb24_words_for_bits(int bits) {
     return static_cast<uint32_t>(bits) / 24u;
 }
 
-std::string build_montsqr_source_limb24(std::ostringstream& log) {
-    const std::string mul_rel = std::string(kKernelAssetRoot) + "mont_limb24_mul.cl";
-    const std::string bench_rel = std::string(kKernelAssetRoot) + "mont_limb24_bench.cl";
+std::string build_montsqr_source_i24(std::ostringstream& log) {
+    const std::string mul_rel = std::string(kKernelAssetRoot) + "mont_mul_unroll_i24.cl";
+    const std::string bench_rel = std::string(kKernelAssetRoot) + "mont_mul_unroll_i24_bench.cl";
     std::string mul = load_kernel_asset(mul_rel.c_str());
     std::string bench = load_kernel_asset(bench_rel.c_str());
     if (mul.empty() || bench.empty()) {
-        log << "missing mont_limb24_mul.cl or mont_limb24_bench.cl\n";
+        log << "missing mont_mul_unroll_i24.cl or mont_mul_unroll_i24_bench.cl\n";
         log << "run Gradle syncMontsqrKernels or rebuild the app\n";
         return {};
     }
     strip_pragma_once(mul);
     strip_pragma_once(bench);
-    strip_include(bench, "#include \"mont_limb24_mul.cl\"");
+    strip_include(bench, "#include \"mont_mul_unroll_i24.cl\"");
     return mul + "\n" + bench;
 }
 
@@ -406,11 +406,11 @@ void run_mont_section(
     }
 }
 
-std::string montsqr_bench_limb24(int bits, int kernel_iterations, int instances, int launch_repeats) {
+std::string montsqr_bench_i24(int bits, int kernel_iterations, int instances, int launch_repeats) {
     std::ostringstream out;
-    const uint32_t words = mont_limb24_words_for_bits(bits);
+    const uint32_t words = mont_i24_words_for_bits(bits);
     if (words == 0u || static_cast<uint32_t>(bits) > kMaxBenchBits) {
-        out << "limb24 mont: bits must be 512 (22 limbs) or a positive multiple of 24 and <= "
+        out << "mont unroll_i24: bits must be 512 (22 limbs) or a positive multiple of 24 and <= "
             << kMaxBenchBits << "\n";
         return out.str();
     }
@@ -419,10 +419,10 @@ std::string montsqr_bench_limb24(int bits, int kernel_iterations, int instances,
         return out.str();
     }
 
-    out << "=== ECM mont mul/sqr microbench (24-bit limb, mul24) ===\n";
+    out << "=== ECM mont mul/sqr microbench (unroll_i24) ===\n";
     out << bits << "-bit, limbs=" << words << ", kernel_iterations=" << kernel_iterations
         << ", instances=" << instances << ", launch_repeats=" << launch_repeats << "\n";
-    out << "path: unroll_only_512_limb24 (22 limbs for 512-bit mod; mul24/mad24)\n";
+    out << "path: mont_mul_unroll_i24 / mont_sqr_unroll_i24 (mul24)\n";
 
     OpenCLApi api{};
     bool own_lib = false;
@@ -439,7 +439,7 @@ std::string montsqr_bench_limb24(int bits, int kernel_iterations, int instances,
     }
     out << "device: " << query_device_string(api, dev, CL_DEVICE_NAME) << "\n";
 
-    const std::string src = build_montsqr_source_limb24(out);
+    const std::string src = build_montsqr_source_i24(out);
     if (src.empty()) {
         maybe_unload_opencl_api(api, own_lib);
         out << "FAIL: kernel sources\n";
@@ -528,10 +528,9 @@ std::string montsqr_bench_limb24(int bits, int kernel_iterations, int instances,
                           launch_repeats,
                       out};
 
-    constexpr Limb24MontBenchKernel kSpecs[] = {
-        {"ecm_mont_mul_priv_unroll_only_512_limb24_bench", "mont_mul_unroll_only_512_limb24", true},
-        {"ecm_mont_sqr_priv_unroll_only_512_limb24_bench", "mont_sqr_unroll_only_512_limb24",
-         false},
+    constexpr MontI24BenchKernel kSpecs[] = {
+        {"ecm_mont_mul_unroll_i24_bench", "mont_mul_unroll_i24", true},
+        {"ecm_mont_sqr_unroll_i24_bench", "mont_sqr_unroll_i24", false},
     };
 
     out << std::fixed << std::setprecision(3);
@@ -550,7 +549,7 @@ std::string montsqr_bench_limb24(int bits, int kernel_iterations, int instances,
     out << "\n--- summary ---\n";
     out << "mont_mul: " << (ran_mul ? 1 : 0) << " ran\n";
     out << "mont_sqr: " << (ran_sqr ? 1 : 0) << " ran\n";
-    out << "note: 512@32 uses 16 limbs; 512@24 uses 22 limbs (mul24 CIOS)\n";
+    out << "note: 512@32 uses 16 limbs; 512@i24 uses 22 limbs\n";
     out << "\nRESULT: " << ((ran_mul && ran_sqr) ? "PASS" : "FAIL") << "\n";
 
     api.clReleaseMemObject(buf_a);
@@ -569,7 +568,7 @@ std::string montsqr_bench_limb24(int bits, int kernel_iterations, int instances,
 std::string run_montsqr_bench(int bits, int kernel_iterations, int instances, int launch_repeats,
                               bool use_wg, int tpi, int limb_bits) {
     if (limb_bits == 24) {
-        return montsqr_bench_limb24(bits, kernel_iterations, instances, launch_repeats);
+        return montsqr_bench_i24(bits, kernel_iterations, instances, launch_repeats);
     }
     if (limb_bits != 32) {
         std::ostringstream out;

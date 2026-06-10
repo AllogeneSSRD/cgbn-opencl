@@ -68,16 +68,16 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btn_short).setOnClickListener {
             runNative { nativeShortTest() }
         }
-        findViewById<MaterialButton>(R.id.btn_addsub_bench).setOnClickListener {
+        findViewById<MaterialButton>(R.id.btn_addsub_32).setOnClickListener {
             runAddSubBench(limbBits = 32)
         }
-        findViewById<MaterialButton>(R.id.btn_addsub_bench_24).setOnClickListener {
+        findViewById<MaterialButton>(R.id.btn_addsub_24).setOnClickListener {
             runAddSubBench(limbBits = 24)
         }
-        findViewById<MaterialButton>(R.id.btn_montsqr_bench).setOnClickListener {
+        findViewById<MaterialButton>(R.id.btn_mont_32).setOnClickListener {
             runMontSqrBench(limbBits = 32)
         }
-        findViewById<MaterialButton>(R.id.btn_montsqr_bench_24).setOnClickListener {
+        findViewById<MaterialButton>(R.id.btn_mont_24).setOnClickListener {
             runMontSqrBench(limbBits = 24)
         }
         findViewById<MaterialButton>(R.id.btn_bench_16).setOnClickListener {
@@ -133,7 +133,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runMontSqrBench(limbBits: Int) {
-        val defaultBits = if (limbBits == 24) 512 else 512
+        val defaultBits = 512
         val bits = parsePositiveInt(inputBits, defaultBits) ?: run {
             toastInvalid()
             return
@@ -152,15 +152,16 @@ class MainActivity : AppCompatActivity() {
         }
         if (limbBits == 24) {
             if (bits != 512 && bits % 24 != 0) {
-                Toast.makeText(this, "24-bit mont: bits 须为 512 或 24 的倍数", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.toast_mont_i24_bits, Toast.LENGTH_SHORT).show()
                 return
             }
         } else if (bits % 32 != 0) {
-            Toast.makeText(this, "bits 必须是 32 的倍数", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.toast_bits_multiple, 32), Toast.LENGTH_SHORT).show()
             return
         }
+        val useWg = limbBits == 32 && bits != 512
         runNative {
-            nativeMontSqrBench(bits, kernelIters, instances, launchRepeats, useWg = true, tpi = 4, limbBits)
+            nativeMontSqrBench(bits, kernelIters, instances, launchRepeats, useWg, tpi = 4, limbBits)
         }
     }
 
@@ -170,11 +171,11 @@ class MainActivity : AppCompatActivity() {
             toastInvalid()
             return
         }
-        val kernelIters = parsePositiveInt(inputKernelIters, 10000) ?: run {
+        val kernelIters = parsePositiveInt(inputKernelIters, 1000) ?: run {
             toastInvalid()
             return
         }
-        val instances = parsePositiveInt(inputInstances, 64) ?: run {
+        val instances = parsePositiveInt(inputInstances, 128) ?: run {
             toastInvalid()
             return
         }
@@ -183,11 +184,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         if (bits % limbBits != 0) {
-            Toast.makeText(
-                this,
-                "bits 必须是 $limbBits 的倍数",
-                Toast.LENGTH_SHORT,
-            ).show()
+            Toast.makeText(this, getString(R.string.toast_bits_multiple, limbBits), Toast.LENGTH_SHORT).show()
             return
         }
         runNative {
@@ -225,10 +222,10 @@ class MainActivity : AppCompatActivity() {
         progress.visibility = if (busy) View.VISIBLE else View.GONE
         findViewById<MaterialButton>(R.id.btn_probe).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_short).isEnabled = !busy
-        findViewById<MaterialButton>(R.id.btn_addsub_bench).isEnabled = !busy
-        findViewById<MaterialButton>(R.id.btn_addsub_bench_24).isEnabled = !busy
-        findViewById<MaterialButton>(R.id.btn_montsqr_bench).isEnabled = !busy
-        findViewById<MaterialButton>(R.id.btn_montsqr_bench_24).isEnabled = !busy
+        findViewById<MaterialButton>(R.id.btn_addsub_32).isEnabled = !busy
+        findViewById<MaterialButton>(R.id.btn_addsub_24).isEnabled = !busy
+        findViewById<MaterialButton>(R.id.btn_mont_32).isEnabled = !busy
+        findViewById<MaterialButton>(R.id.btn_mont_24).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_bench_16).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_bench_24).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_bench_32).isEnabled = !busy
