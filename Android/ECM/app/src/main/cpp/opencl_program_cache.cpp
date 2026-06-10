@@ -336,6 +336,10 @@ void set_opencl_cache_dir(const char* path) {
     LOGI("OpenCL cache root: %s", g_cache_root.empty() ? "(disabled)" : g_cache_root.c_str());
 }
 
+std::string get_opencl_cache_dir() {
+    return cache_dir_path();
+}
+
 std::string get_opencl_cache_status() {
     std::ostringstream out;
     out << "=== OpenCL compile cache ===\n";

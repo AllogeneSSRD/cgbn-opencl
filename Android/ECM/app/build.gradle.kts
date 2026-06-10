@@ -1,6 +1,24 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
 }
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+/** CMake-friendly path (forward slashes). */
+fun String.toCmakePath(): String = replace('\\', '/')
+
+val ecmAndroidGmpRoot: String? = sequenceOf(
+    localProperties.getProperty("ecm.android.gmp.root"),
+    project.findProperty("ecm.android.gmp.root") as String?,
+).mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
+    .firstOrNull()
+    ?.toCmakePath()
 
 android {
     namespace = "com.example.ecm"
@@ -21,6 +39,14 @@ android {
 
         ndk {
             abiFilters += listOf("arm64-v8a")
+        }
+
+        externalNativeBuild {
+            cmake {
+                if (ecmAndroidGmpRoot != null) {
+                    arguments += listOf("-DECM_ANDROID_GMP_ROOT=$ecmAndroidGmpRoot")
+                }
+            }
         }
     }
 
@@ -102,8 +128,30 @@ tasks.register<Copy>("syncMontsqrKernels") {
     into(layout.projectDirectory.dir("src/main/assets/kernels/cgbn/backends/opencl/kernels"))
 }
 
+val ecmStage1KernelIncludes = arrayOf(
+    "ecm_stage1.cl",
+    "ecm_stage1_mont4096_paths.cl",
+    "mp_addsub/stage1/asm_block32_stage1.cl",
+    "mp_addsub/stage1/asm_block16_stage1.cl",
+)
+
+tasks.register<Copy>("syncEcmStage1Kernels") {
+    from(mpaRoot.resolve("cgbn/backends/opencl/kernels")) {
+        ecmStage1KernelIncludes.forEach { include(it) }
+    }
+    into(layout.projectDirectory.dir("src/main/assets/kernels/cgbn/backends/opencl/kernels"))
+}
+
 tasks.named("preBuild") {
-    dependsOn("syncAddsubKernels", "syncAddsubKernelsFlat", "syncMontsqrKernels")
+    dependsOn("syncAddsubKernels", "syncAddsubKernelsFlat", "syncMontsqrKernels", "syncEcmStage1Kernels")
+}
+
+if (ecmAndroidGmpRoot != null) {
+    logger.lifecycle("ECM: linking GMP from ecm.android.gmp.root=$ecmAndroidGmpRoot")
+} else {
+    logger.lifecycle(
+        "ECM: ecm.android.gmp.root not set — factorization disabled; see docs/DEV_GMP_SETUP.md",
+    )
 }
 
 dependencies {

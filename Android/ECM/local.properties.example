@@ -1,0 +1,8 @@
+## Copy to local.properties (or append these lines). local.properties is gitignored.
+#
+# Android Studio usually creates sdk.dir automatically:
+sdk.dir=D\:\\AppData\\Android\\Sdk
+
+# After: vcpkg install gmp:arm64-android
+# Point to the vcpkg installed prefix (must contain include/gmp.h and lib/libgmp.a):
+ecm.android.gmp.root=D\:\\code\\vcpkg\\installed\\arm64-android

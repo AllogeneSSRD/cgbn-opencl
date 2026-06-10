@@ -321,10 +321,22 @@ std::string load_text_file(const char *path) {
     return content;
 }
 
+#if defined(__ANDROID__)
+std::string android_load_kernel_asset(const char *rel_path);
+#endif
+
 std::string load_kernel_file(const char *rel_path) {
     if (rel_path == nullptr || *rel_path == '\0') {
         return std::string();
     }
+#if defined(__ANDROID__)
+    {
+        std::string asset = android_load_kernel_asset(rel_path);
+        if (!asset.empty()) {
+            return asset;
+        }
+    }
+#endif
     const char *prefixes[] = {"", "../", "../../", "../../../", "../../../../"};
     for (const char *pfx : prefixes) {
         std::string path = std::string(pfx) + rel_path;

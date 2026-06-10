@@ -3,6 +3,7 @@
 #include "opencl_ecm_log.h"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 

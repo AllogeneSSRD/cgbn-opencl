@@ -95,3 +95,13 @@ std::string load_kernel_asset(const char* rel_path) {
                         rel_path == nullptr ? "(null)" : rel_path, tried.c_str());
     return {};
 }
+
+namespace cgbn {
+namespace opencl {
+
+std::string android_load_kernel_asset(const char* rel_path) {
+    return ::load_kernel_asset(rel_path);
+}
+
+} // namespace opencl
+} // namespace cgbn

@@ -3,6 +3,11 @@ project("ecm")
 
 set(MPA_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../../../../..")
 
+set(ECM_ANDROID_GMP_ROOT "${ECM_ANDROID_GMP_ROOT}" CACHE PATH
+    "Prefix with include/gmp.h and lib/libgmp.a (e.g. vcpkg arm64-android)")
+
+message(STATUS "ECM Android: ECM_ANDROID_GMP_ROOT='${ECM_ANDROID_GMP_ROOT}'")
+
 add_library(${CMAKE_PROJECT_NAME} SHARED
         native-lib.cpp
         jni_utf8.cpp
@@ -14,15 +19,48 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
         opencl_montsqr_bench.cpp
         kernel_assets.cpp
         sys_gpu_stats.cpp
+        ecm_android_run.cpp
+        opencl_android_shim.cpp
+        opencl_ecm_log_android.cpp
         "${MPA_ROOT}/src/opencl_ecm_addsub_manifest.cpp"
         "${MPA_ROOT}/src/opencl_ecm_montsqr_manifest.cpp")
 
 target_compile_features(${CMAKE_PROJECT_NAME} PRIVATE cxx_std_17)
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE __ANDROID__ CL_TARGET_OPENCL_VERSION=120)
 
 target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
-        "${MPA_ROOT}/include")
+        "${CMAKE_CURRENT_LIST_DIR}"
+        "${CMAKE_CURRENT_LIST_DIR}/CL"
+        "${MPA_ROOT}/include"
+        "${MPA_ROOT}/src"
+        "${MPA_ROOT}/cgbn/backends/opencl")
 
-target_link_libraries(${CMAKE_PROJECT_NAME}
+set(_ECM_GMP_HEADER "${ECM_ANDROID_GMP_ROOT}/include/gmp.h")
+set(_ECM_GMP_LIB "${ECM_ANDROID_GMP_ROOT}/lib/libgmp.a")
+
+if(ECM_ANDROID_GMP_ROOT AND EXISTS "${_ECM_GMP_HEADER}" AND EXISTS "${_ECM_GMP_LIB}")
+    message(STATUS "ECM Android: GMP found at ${ECM_ANDROID_GMP_ROOT}")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE ECM_HAVE_GMP=1)
+    target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE "${ECM_ANDROID_GMP_ROOT}/include")
+    target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+            "${MPA_ROOT}/src/ecm_expr.cpp"
+            "${MPA_ROOT}/src/opencl_ecm_entry.cpp"
+            "${MPA_ROOT}/src/cgbn_stage1_opencl.cpp"
+            "${MPA_ROOT}/src/ecm_params_init.cpp"
+            "${MPA_ROOT}/src/opencl_ecm_checkpoint.cpp"
+            "${MPA_ROOT}/src/opencl_ecm_debug_utils.cpp"
+            "${MPA_ROOT}/src/opencl_ecm_mont.cpp"
+            "${MPA_ROOT}/src/opencl_ecm_mont_path.cpp"
+            "${MPA_ROOT}/src/opencl_ecm_addsub_path.cpp"
+            "${MPA_ROOT}/src/opencl_ecm_selftest.cpp"
+            "${MPA_ROOT}/cgbn/backends/opencl/impl_opencl.cpp")
+    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE "${_ECM_GMP_LIB}")
+else()
+    message(STATUS "ECM Android: GMP not found (header=${_ECM_GMP_HEADER})")
+    message(STATUS "ECM Android: pass -DECM_ANDROID_GMP_ROOT=... from Gradle; see docs/DEV_GMP_SETUP.md")
+endif()
+
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
         android
         log
         dl)

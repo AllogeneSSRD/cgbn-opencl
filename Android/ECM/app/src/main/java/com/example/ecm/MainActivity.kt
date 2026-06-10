@@ -4,6 +4,9 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
@@ -11,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.NestedScrollView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.textfield.TextInputEditText
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -28,6 +32,20 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inputKernelIters: TextInputEditText
     private lateinit var inputInstances: TextInputEditText
     private lateinit var inputLaunchRepeats: TextInputEditText
+    private lateinit var inputNExpr: TextInputEditText
+    private lateinit var inputNPreset: AutoCompleteTextView
+    private lateinit var inputB1: TextInputEditText
+    private lateinit var inputB2: TextInputEditText
+    private lateinit var inputGpuCurves: TextInputEditText
+    private lateinit var inputDeviceIndex: TextInputEditText
+    private lateinit var inputGpuCkpt: TextInputEditText
+    private lateinit var inputSigma: TextInputEditText
+    private lateinit var inputMulPath: TextInputEditText
+    private lateinit var inputSqrPath: TextInputEditText
+    private lateinit var inputAddPath: TextInputEditText
+    private lateinit var inputSubPath: TextInputEditText
+    private lateinit var chkVerbose: MaterialCheckBox
+    private lateinit var ecmAdvancedPanel: LinearLayout
     private val benchExecutor = Executors.newSingleThreadExecutor()
     private val perfExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -59,8 +77,31 @@ class MainActivity : AppCompatActivity() {
         inputKernelIters = findViewById(R.id.input_kernel_iters)
         inputInstances = findViewById(R.id.input_instances)
         inputLaunchRepeats = findViewById(R.id.input_launch_repeats)
+        inputNExpr = findViewById(R.id.input_n_expr)
+        inputNPreset = findViewById(R.id.input_n_preset)
+        inputB1 = findViewById(R.id.input_b1)
+        inputB2 = findViewById(R.id.input_b2)
+        inputGpuCurves = findViewById(R.id.input_gpu_curves)
+        inputDeviceIndex = findViewById(R.id.input_device_index)
+        inputGpuCkpt = findViewById(R.id.input_gpu_ckpt)
+        inputSigma = findViewById(R.id.input_sigma)
+        inputMulPath = findViewById(R.id.input_mul_path)
+        inputSqrPath = findViewById(R.id.input_sqr_path)
+        inputAddPath = findViewById(R.id.input_add_path)
+        inputSubPath = findViewById(R.id.input_sub_path)
+        chkVerbose = findViewById(R.id.chk_verbose)
+        ecmAdvancedPanel = findViewById(R.id.ecm_advanced_panel)
 
         nativeInitAssets(assets, codeCacheDir.absolutePath)
+
+        setupEcmPresets()
+        findViewById<MaterialButton>(R.id.btn_toggle_advanced).setOnClickListener {
+            val show = ecmAdvancedPanel.visibility != View.VISIBLE
+            ecmAdvancedPanel.visibility = if (show) View.VISIBLE else View.GONE
+        }
+        findViewById<MaterialButton>(R.id.btn_run_ecm).setOnClickListener {
+            runEcm()
+        }
 
         findViewById<MaterialButton>(R.id.btn_probe).setOnClickListener {
             runNative { nativeProbe(openClLoadError) }
@@ -122,6 +163,76 @@ class MainActivity : AppCompatActivity() {
             } finally {
                 perfSampleRunning = false
             }
+        }
+    }
+
+    private fun setupEcmPresets() {
+        val presets = resources.getStringArray(R.array.ecm_n_presets)
+        val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, presets)
+        inputNPreset.setAdapter(adapter)
+        inputNPreset.setText(presets[0], false)
+        inputNPreset.setOnItemClickListener { _, _, position, _ ->
+            if (position < presets.size - 1) {
+                inputNExpr.setText(presets[position])
+            }
+        }
+    }
+
+    private fun parseNonNegativeInt(edit: TextInputEditText, fallback: Int): Int? {
+        val raw = edit.text?.toString()?.trim().orEmpty()
+        if (raw.isEmpty()) return fallback
+        val value = raw.toIntOrNull() ?: return null
+        return if (value >= 0) value else null
+    }
+
+    private fun parseDoubleField(edit: TextInputEditText, fallback: Double, allowZero: Boolean): Double? {
+        val raw = edit.text?.toString()?.trim().orEmpty()
+        if (raw.isEmpty()) return fallback
+        val value = raw.toDoubleOrNull() ?: return null
+        return if (value > 0.0 || (allowZero && value >= 0.0)) value else null
+    }
+
+    private fun runEcm() {
+        val nExpr = inputNExpr.text?.toString()?.trim().orEmpty()
+        if (nExpr.isEmpty()) {
+            Toast.makeText(this, R.string.toast_ecm_invalid, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val b1 = parseDoubleField(inputB1, 2000.0, allowZero = false) ?: run {
+            toastInvalid()
+            return
+        }
+        val b2 = parseDoubleField(inputB2, 0.0, allowZero = true) ?: run {
+            toastInvalid()
+            return
+        }
+        val gpuCurves = parsePositiveInt(inputGpuCurves, 64) ?: run {
+            toastInvalid()
+            return
+        }
+        val deviceIndex = parseNonNegativeInt(inputDeviceIndex, 0) ?: run {
+            toastInvalid()
+            return
+        }
+        val gpuCkpt = parseDoubleField(inputGpuCkpt, 600.0, allowZero = true) ?: run {
+            toastInvalid()
+            return
+        }
+        runNative {
+            nativeRunEcm(
+                nExpr,
+                b1,
+                b2,
+                gpuCurves,
+                deviceIndex,
+                chkVerbose.isChecked,
+                gpuCkpt,
+                inputSigma.text?.toString()?.trim().orEmpty(),
+                inputMulPath.text?.toString()?.trim().orEmpty(),
+                inputSqrPath.text?.toString()?.trim().orEmpty(),
+                inputAddPath.text?.toString()?.trim().orEmpty(),
+                inputSubPath.text?.toString()?.trim().orEmpty(),
+            )
         }
     }
 
@@ -229,10 +340,24 @@ class MainActivity : AppCompatActivity() {
         findViewById<MaterialButton>(R.id.btn_bench_16).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_bench_24).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_bench_32).isEnabled = !busy
+        findViewById<MaterialButton>(R.id.btn_run_ecm).isEnabled = !busy
         inputBits.isEnabled = !busy
         inputKernelIters.isEnabled = !busy
         inputInstances.isEnabled = !busy
         inputLaunchRepeats.isEnabled = !busy
+        inputNExpr.isEnabled = !busy
+        inputNPreset.isEnabled = !busy
+        inputB1.isEnabled = !busy
+        inputB2.isEnabled = !busy
+        inputGpuCurves.isEnabled = !busy
+        inputDeviceIndex.isEnabled = !busy
+        inputGpuCkpt.isEnabled = !busy
+        inputSigma.isEnabled = !busy
+        inputMulPath.isEnabled = !busy
+        inputSqrPath.isEnabled = !busy
+        inputAddPath.isEnabled = !busy
+        inputSubPath.isEnabled = !busy
+        chkVerbose.isEnabled = !busy
     }
 
     override fun onDestroy() {
@@ -270,6 +395,21 @@ class MainActivity : AppCompatActivity() {
         elements: Int,
         kernelIters: Int,
         launchRepeats: Int,
+    ): String
+
+    private external fun nativeRunEcm(
+        nExpr: String,
+        b1: Double,
+        b2: Double,
+        gpuCurves: Int,
+        deviceIndex: Int,
+        verbose: Boolean,
+        gpuCkptSec: Double,
+        sigma: String,
+        mulPath: String,
+        sqrPath: String,
+        addPath: String,
+        subPath: String,
     ): String
 
     companion object {

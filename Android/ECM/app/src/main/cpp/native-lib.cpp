@@ -4,10 +4,26 @@
 
 #include <string>
 
+#include "ecm_android_run.h"
 #include "kernel_assets.h"
 #include "jni_utf8.h"
 #include "opencl_program_cache.h"
 #include "opencl_runtime.h"
+
+#include <cstdint>
+
+static std::string jstring_to_utf8(JNIEnv* env, jstring value) {
+    if (env == nullptr || value == nullptr) {
+        return {};
+    }
+    const char* chars = env->GetStringUTFChars(value, nullptr);
+    if (chars == nullptr) {
+        return {};
+    }
+    std::string out(chars);
+    env->ReleaseStringUTFChars(value, chars);
+    return out;
+}
 
 static std::string prepend_opencl_error(JNIEnv* env, jstring j_err, const std::string& body) {
     std::string report;
@@ -102,6 +118,48 @@ Java_com_example_ecm_MainActivity_nativeMontSqrBench(
         env,
         run_montsqr_bench(bits, kernel_iters, instances, launch_repeats, use_wg == JNI_TRUE, tpi,
                           limb_bits));
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_example_ecm_MainActivity_nativeRunEcm(
+        JNIEnv* env,
+        jobject /* this */,
+        jstring j_n_expr,
+        jdouble b1,
+        jdouble b2,
+        jint gpu_curves,
+        jint device_index,
+        jboolean verbose,
+        jdouble gpu_ckpt_sec,
+        jstring j_sigma,
+        jstring j_mul_path,
+        jstring j_sqr_path,
+        jstring j_add_path,
+        jstring j_sub_path) {
+    EcmAndroidRunRequest req;
+    req.n_expr = jstring_to_utf8(env, j_n_expr);
+    req.b1 = b1;
+    req.b2 = b2;
+    req.gpu_curves = static_cast<uint32_t>(gpu_curves);
+    req.device_index = device_index;
+    req.verbose = verbose == JNI_TRUE;
+    req.gpu_ckpt_sec = gpu_ckpt_sec;
+
+    const std::string sigma = jstring_to_utf8(env, j_sigma);
+    if (!sigma.empty()) {
+        try {
+            req.sigma_fixed = true;
+            req.sigma = static_cast<uint32_t>(std::stoul(sigma));
+        } catch (...) {
+            return new_jstring_utf8(env, "Invalid sigma value");
+        }
+    }
+
+    req.mul_path = jstring_to_utf8(env, j_mul_path);
+    req.sqr_path = jstring_to_utf8(env, j_sqr_path);
+    req.add_path = jstring_to_utf8(env, j_add_path);
+    req.sub_path = jstring_to_utf8(env, j_sub_path);
+    return new_jstring_utf8(env, run_ecm_android(req));
 }
 
 extern "C" JNIEXPORT jstring JNICALL

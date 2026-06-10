@@ -8,6 +8,7 @@
 
 // App cache root (e.g. Context.getCodeCacheDir()); subdir opencl_cache/ is used.
 void set_opencl_cache_dir(const char* path);
+std::string get_opencl_cache_dir();
 
 // Human-readable cache dir status (for probe UI / adb debugging).
 std::string get_opencl_cache_status();
