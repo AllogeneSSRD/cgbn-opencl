@@ -34,6 +34,8 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var outputTextEcm: TextView
     private lateinit var outputTextBench: TextView
+    private lateinit var logPathEcm: TextView
+    private lateinit var logPathBench: TextView
     private lateinit var perfText: TextView
     private lateinit var perfUpdated: TextView
     private lateinit var progressEcm: ProgressBar
@@ -60,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var panelEcm: View
     private lateinit var panelBench: View
     private lateinit var toolbar: MaterialToolbar
+    private lateinit var logStore: RunLogStore
     private val benchExecutor = Executors.newSingleThreadExecutor()
     private val perfExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -84,8 +87,12 @@ class MainActivity : AppCompatActivity() {
         panelEcm = findViewById(R.id.panel_ecm)
         panelBench = findViewById(R.id.panel_bench)
 
+        logStore = RunLogStore(applicationContext)
         outputTextEcm = findViewById(R.id.output_ecm)
         outputTextBench = findViewById(R.id.output_bench)
+        logPathEcm = findViewById(R.id.log_path_ecm)
+        logPathBench = findViewById(R.id.log_path_bench)
+        updateLogPathLabels()
         perfText = findViewById(R.id.perf_text)
         perfUpdated = findViewById(R.id.perf_updated)
         progressEcm = findViewById(R.id.progress_ecm)
@@ -123,10 +130,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<MaterialButton>(R.id.btn_probe).setOnClickListener {
-            runNative(Tab.ECM) { nativeProbe(openClLoadError) }
+            runNative(Tab.ECM, sessionHeader = "OpenCL probe") { nativeProbe(openClLoadError) }
         }
         findViewById<MaterialButton>(R.id.btn_short).setOnClickListener {
-            runNative(Tab.ECM) { nativeShortTest() }
+            runNative(Tab.ECM, sessionHeader = "OpenCL short test") { nativeShortTest() }
         }
         findViewById<MaterialButton>(R.id.btn_addsub_32).setOnClickListener {
             runAddSubBench(limbBits = 32)
@@ -153,7 +160,9 @@ class MainActivity : AppCompatActivity() {
         setupBottomNav()
         showTab(Tab.ECM)
         scroll.post { preventInitialKeyboard() }
-        runNative(Tab.ECM) { nativeProbe(openClLoadError) }
+        runNative(Tab.ECM, sessionHeader = "OpenCL probe", showSavedToast = false) {
+            nativeProbe(openClLoadError)
+        }
     }
 
     private fun setupWindowInsets() {
@@ -195,6 +204,34 @@ class MainActivity : AppCompatActivity() {
             Tab.ECM -> outputTextEcm
             Tab.BENCH -> outputTextBench
         }
+    }
+
+    private fun channelFor(tab: Tab): RunLogStore.Channel {
+        return when (tab) {
+            Tab.ECM -> RunLogStore.Channel.ECM
+            Tab.BENCH -> RunLogStore.Channel.BENCH
+        }
+    }
+
+    private fun updateLogPathLabels() {
+        logPathEcm.text = getString(R.string.log_path_label, logStore.displayPath(RunLogStore.Channel.ECM))
+        logPathBench.text = getString(R.string.log_path_label, logStore.displayPath(RunLogStore.Channel.BENCH))
+    }
+
+    private fun beginLoggedSession(tab: Tab, header: String? = null) {
+        logStore.beginSession(channelFor(tab), header)
+    }
+
+    private fun appendToLog(tab: Tab, text: String) {
+        if (text.isEmpty()) {
+            return
+        }
+        logStore.append(channelFor(tab), text)
+    }
+
+    private fun notifyLogSaved(tab: Tab) {
+        val path = logStore.displayPath(channelFor(tab))
+        Toast.makeText(this, getString(R.string.log_saved_toast, path), Toast.LENGTH_SHORT).show()
     }
 
     private fun scrollToOutput(@Suppress("UNUSED_PARAMETER") tab: Tab) {
@@ -383,13 +420,19 @@ class MainActivity : AppCompatActivity() {
 
         setBusy(true, Tab.ECM)
         outputTextEcm.text = ""
+        val sessionHeader = buildString {
+            append("ECM -gpu N=$nExpr B1=$b1 B2=$b2 gpucurves=$gpuCurves device=$deviceIndex")
+            if (chkVerbose.isChecked) append(" -v")
+        }
         val logCallback = EcmLogCallback { line ->
+            appendToLog(Tab.ECM, line)
             mainHandler.post {
                 outputTextEcm.append(line)
                 scrollToOutput(Tab.ECM)
             }
         }
         benchExecutor.execute {
+            beginLoggedSession(Tab.ECM, sessionHeader)
             val tail = try {
                 nativeRunEcm(
                     nExpr,
@@ -412,9 +455,11 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 if (tail.isNotEmpty()) {
                     outputTextEcm.append(tail)
+                    appendToLog(Tab.ECM, tail)
                 }
                 setBusy(false, Tab.ECM)
                 scrollToOutput(Tab.ECM)
+                notifyLogSaved(Tab.ECM)
             }
         }
     }
@@ -454,7 +499,10 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val useWg = limbBits == 32 && bits != 512
-        runNative(Tab.BENCH) {
+        runNative(
+            Tab.BENCH,
+            sessionHeader = "Montgomery bench bits=$bits limbBits=$limbBits iters=$kernelIters inst=$instances repeats=$launchRepeats",
+        ) {
             nativeMontSqrBench(bits, kernelIters, instances, launchRepeats, useWg, tpi = 4, limbBits)
         }
     }
@@ -481,7 +529,10 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.toast_bits_multiple, limbBits), Toast.LENGTH_SHORT).show()
             return
         }
-        runNative(Tab.BENCH) {
+        runNative(
+            Tab.BENCH,
+            sessionHeader = "AddSub bench bits=$bits limbBits=$limbBits iters=$kernelIters inst=$instances repeats=$launchRepeats",
+        ) {
             nativeAddSubBench(bits, kernelIters, instances, launchRepeats, limbBits)
         }
     }
@@ -491,24 +542,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runBench(bits: Int) {
-        runNative(Tab.BENCH) {
+        runNative(Tab.BENCH, sessionHeader = "Limb add-mod bench limbBits=$bits") {
             nativeBitBench(bits, elements = 1 shl 18, kernelIters = 64, launchRepeats = 8)
         }
     }
 
-    private fun runNative(tab: Tab, block: () -> String) {
+    private fun runNative(
+        tab: Tab,
+        sessionHeader: String? = null,
+        showSavedToast: Boolean = true,
+        block: () -> String,
+    ) {
         val output = outputFor(tab)
         setBusy(true, tab)
         benchExecutor.execute {
+            beginLoggedSession(tab, sessionHeader)
             val result = try {
                 block()
             } catch (e: Exception) {
                 "Error: ${e.message}"
             }
+            appendToLog(tab, result)
+            if (!result.endsWith("\n")) {
+                appendToLog(tab, "\n")
+            }
             runOnUiThread {
                 output.text = result
                 setBusy(false, tab)
                 scrollToOutput(tab)
+                if (showSavedToast) {
+                    notifyLogSaved(tab)
+                }
             }
         }
     }

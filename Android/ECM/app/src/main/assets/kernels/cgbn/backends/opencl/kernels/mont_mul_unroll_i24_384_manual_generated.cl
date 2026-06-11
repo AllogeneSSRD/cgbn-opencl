@@ -8,7 +8,7 @@
 
 #if MONT_I24_LIMBS == MONT_I24_384_FIXED_LIMBS
 
-static inline void mont_mul_unroll_i24_384_manual_body(
+static inline void mont_mul_unroll_i24_384_manual_core(
     uint *out,
     const uint *a,
     const uint *b,
@@ -1772,14 +1772,59 @@ static inline void mont_mul_unroll_i24_384_manual_body(
     out[base + 15] = (D[15] & mask) | (t[15] & ~mask);
 }
 
-static inline void mont_sqr_unroll_i24_384_manual_body(
-    uint *out,
-    const uint *a,
-    const uint *n,
+static inline void mont_mul_unroll_i24_384_manual_body(
+    __global uint *out,
+    __global const uint *a,
+    __global const uint *b,
+    __constant uint *n,
     uint base,
     uint np0)
 {
-    mont_mul_unroll_i24_384_manual_body(out, a, a, n, base, np0);
+    uint n_local[MONT_I24_384_FIXED_LIMBS];
+    n_local[0] = n[0];
+    n_local[1] = n[1];
+    n_local[2] = n[2];
+    n_local[3] = n[3];
+    n_local[4] = n[4];
+    n_local[5] = n[5];
+    n_local[6] = n[6];
+    n_local[7] = n[7];
+    n_local[8] = n[8];
+    n_local[9] = n[9];
+    n_local[10] = n[10];
+    n_local[11] = n[11];
+    n_local[12] = n[12];
+    n_local[13] = n[13];
+    n_local[14] = n[14];
+    n_local[15] = n[15];
+    mont_mul_unroll_i24_384_manual_core(out, a, b, n_local, base, np0);
+}
+
+static inline void mont_sqr_unroll_i24_384_manual_body(
+    __global uint *out,
+    __global const uint *a,
+    __constant uint *n,
+    uint base,
+    uint np0)
+{
+    uint n_local[MONT_I24_384_FIXED_LIMBS];
+    n_local[0] = n[0];
+    n_local[1] = n[1];
+    n_local[2] = n[2];
+    n_local[3] = n[3];
+    n_local[4] = n[4];
+    n_local[5] = n[5];
+    n_local[6] = n[6];
+    n_local[7] = n[7];
+    n_local[8] = n[8];
+    n_local[9] = n[9];
+    n_local[10] = n[10];
+    n_local[11] = n[11];
+    n_local[12] = n[12];
+    n_local[13] = n[13];
+    n_local[14] = n[14];
+    n_local[15] = n[15];
+    mont_mul_unroll_i24_384_manual_core(out, a, a, n_local, base, np0);
 }
 
 static inline void mont_mul_priv_i24_u32_384_manual_body(
@@ -1789,7 +1834,7 @@ static inline void mont_mul_priv_i24_u32_384_manual_body(
     const uint *n,
     uint np0)
 {
-    mont_mul_unroll_i24_384_manual_body(out, a, b, n, 0u, np0);
+    mont_mul_unroll_i24_384_manual_core(out, a, b, n, 0u, np0);
 }
 
 static inline void mont_sqr_priv_i24_u32_384_manual_body(
@@ -1798,7 +1843,7 @@ static inline void mont_sqr_priv_i24_u32_384_manual_body(
     const uint *n,
     uint np0)
 {
-    mont_mul_priv_i24_u32_384_manual_body(out, a, a, n, np0);
+    mont_mul_unroll_i24_384_manual_core(out, a, a, n, 0u, np0);
 }
 
 #endif

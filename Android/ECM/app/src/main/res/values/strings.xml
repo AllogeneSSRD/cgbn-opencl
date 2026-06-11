@@ -61,6 +61,8 @@
     <string name="output_section_title">输出日志</string>
     <string name="output_hint_ecm">运行 ECM 或诊断后显示日志…</string>
     <string name="output_hint_bench">运行微基准后显示结果…</string>
+    <string name="log_path_label">日志文件（追加）: %1$s</string>
+    <string name="log_saved_toast">已写入 %1$s</string>
     <string name="running">运行中…</string>
     <string name="invalid_params">请填写有效的正整数参数</string>
     <string name="toast_bits_multiple">bits 必须是 %1$d 的倍数</string>

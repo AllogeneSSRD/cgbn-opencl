@@ -106,11 +106,18 @@ def emit_subtract_blsub() -> str:
     return "".join(lines)
 
 
+def emit_n_local_copy() -> str:
+    lines = ["    uint n_local[MONT_I24_384_FIXED_LIMBS];\n"]
+    for j in range(LIMBS):
+        lines.append(f"    n_local[{j}] = n[{j}];\n")
+    return "".join(lines)
+
+
 def emit_body() -> str:
-    # Unqualified pointers: bench passes __global/__constant; priv uses private — Adreno
-    # rejects __global parameters when priv wrappers call the same body.
+    # Core uses unqualified pointers (private / generic). Bench wrappers keep
+    # __global/__constant kernel ABI and copy n out of __constant before calling core.
     parts = [
-        "static inline void mont_mul_unroll_i24_384_manual_body(\n",
+        "static inline void mont_mul_unroll_i24_384_manual_core(\n",
         "    uint *out,\n",
         "    const uint *a,\n",
         "    const uint *b,\n",
@@ -125,14 +132,26 @@ def emit_body() -> str:
     parts.append(emit_subtract_blsub())
     parts.append("}\n\n")
     parts.append(
-        "static inline void mont_sqr_unroll_i24_384_manual_body(\n"
-        "    uint *out,\n"
-        "    const uint *a,\n"
-        "    const uint *n,\n"
+        "static inline void mont_mul_unroll_i24_384_manual_body(\n"
+        "    __global uint *out,\n"
+        "    __global const uint *a,\n"
+        "    __global const uint *b,\n"
+        "    __constant uint *n,\n"
         "    uint base,\n"
         "    uint np0)\n"
         "{\n"
-        "    mont_mul_unroll_i24_384_manual_body(out, a, a, n, base, np0);\n"
+        f"{emit_n_local_copy()}"
+        "    mont_mul_unroll_i24_384_manual_core(out, a, b, n_local, base, np0);\n"
+        "}\n\n"
+        "static inline void mont_sqr_unroll_i24_384_manual_body(\n"
+        "    __global uint *out,\n"
+        "    __global const uint *a,\n"
+        "    __constant uint *n,\n"
+        "    uint base,\n"
+        "    uint np0)\n"
+        "{\n"
+        f"{emit_n_local_copy()}"
+        "    mont_mul_unroll_i24_384_manual_core(out, a, a, n_local, base, np0);\n"
         "}\n\n"
         "static inline void mont_mul_priv_i24_u32_384_manual_body(\n"
         "    uint *out,\n"
@@ -141,7 +160,7 @@ def emit_body() -> str:
         "    const uint *n,\n"
         "    uint np0)\n"
         "{\n"
-        "    mont_mul_unroll_i24_384_manual_body(out, a, b, n, 0u, np0);\n"
+        "    mont_mul_unroll_i24_384_manual_core(out, a, b, n, 0u, np0);\n"
         "}\n\n"
         "static inline void mont_sqr_priv_i24_u32_384_manual_body(\n"
         "    uint *out,\n"
@@ -149,7 +168,7 @@ def emit_body() -> str:
         "    const uint *n,\n"
         "    uint np0)\n"
         "{\n"
-        "    mont_mul_priv_i24_u32_384_manual_body(out, a, a, n, np0);\n"
+        "    mont_mul_unroll_i24_384_manual_core(out, a, a, n, 0u, np0);\n"
         "}\n\n"
     )
     return "".join(parts)

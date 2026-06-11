@@ -16,7 +16,9 @@
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
             app:title="@string/app_name"
-            app:titleTextColor="@android:color/white" />
+            app:titleTextColor="@android:color/white"
+            app:subtitleTextColor="@color/white"
+            app:subtitleTextAppearance="@style/TextAppearance.ECM.Toolbar.Subtitle" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <LinearLayout
