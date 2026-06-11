@@ -17,6 +17,8 @@
 ├── logs/
 │   ├── ecm.log
 │   └── bench.log
+├── .ecm_ckpt_<bits>_<hex>.dat  ← GPU checkpoint 自动保存（相对工作目录）
+├── <save_file>                 ← -save / -savea 指定的分解结果行
 └── opencl_cache/
     └── opencl_<hash>.bin       ← OpenCL 编译磁盘缓存
 ```
@@ -33,6 +35,8 @@ Android 11+ 部分文件管理器需对「Android/data」授权后才可浏览�
 |------|------|----------|------|----------|------|
 | 设置 | XML 文件 | `.../config/ecm_app_settings.xml` | 保留 | **保留** | 删除 |
 | 运行日志 | 追加写入 | `.../logs/*.log` | 保留 | **保留** | 删除 |
+| GPU checkpoint | native 写入 | `.../.ecm_ckpt_*.dat` | 保留 | **通常保留**¹ | 删除 |
+| ECM 分解 save | native 追加 | `.../<save_file>` | 保留 | **保留** | 删除 |
 | OpenCL 磁盘缓存 | native 写入 | `.../opencl_cache/*.bin` | 保留 | **通常保留**¹ | 删除 |
 | OpenCL RAM 缓存 | 进程内存 | — | 不保留 | — | — |
 | 内核 `.cl` | APK assets | APK 内只读 | 随 APK | **随 APK 更新** | — |
@@ -64,7 +68,14 @@ Android 11+ 部分文件管理器需对「Android/data」授权后才可浏览�
 
 ---
 
-## 5. OpenCL 编译缓存
+## 5. ECM 数据文件（checkpoint / -save）
+
+- **工作目录**：与 OpenCL 缓存根相同，`AppStoragePaths.openClCacheRoot()` → `/Android/data/com.example.ecm/`
+- **初始化**：`nativeInitAssets` 同时调用 `opencl_ecm_set_work_dir(root)`
+- **Checkpoint**：`opencl_ecm_checkpoint_filename()` 生成 `.ecm_ckpt_<bits>_<hex>.dat`，相对路径会解析到工作目录（Android 进程 cwd 通常不可写，故必须设置 work dir）
+- **-save / -savea**：高级选项中指定文件名；相对路径同样写入工作目录。未勾选「追加」时行为同桌面 `-save`（文件已存在则拒绝覆盖）
+
+## 6. OpenCL 编译缓存
 
 - **初始化**：`MainActivity` → `nativeInitAssets(assets, AppStoragePaths.openClCacheRoot())`
 - **native**：`set_opencl_cache_dir(root)`，实际缓存目录为 `{root}/opencl_cache/`（见 `opencl_program_cache.cpp`）
@@ -73,9 +84,9 @@ Android 11+ 部分文件管理器需对「Android/data」授权后才可浏览�
 
 ---
 
-## 6. 查看与清理
+## 7. 查看与清理
 
-### 6.1 文件管理器 / adb（推荐调试）
+### 7.1 文件管理器 / adb（推荐调试）
 
 ```bash
 # 设置
@@ -84,11 +95,15 @@ adb shell cat /sdcard/Android/data/com.example.ecm/config/ecm_app_settings.xml
 # 日志
 adb pull /sdcard/Android/data/com.example.ecm/logs/
 
+# GPU checkpoint / save 文件
+adb shell ls -la /sdcard/Android/data/com.example.ecm/.ecm_ckpt_*
+adb shell ls -la /sdcard/Android/data/com.example.ecm/*.txt
+
 # OpenCL 缓存
 adb shell ls -la /sdcard/Android/data/com.example.ecm/opencl_cache/
 ```
 
-### 6.2 系统设置
+### 7.2 系统设置
 
 | 操作 | 影响 |
 |------|------|
@@ -97,18 +112,20 @@ adb shell ls -la /sdcard/Android/data/com.example.ecm/opencl_cache/
 
 ---
 
-## 7. 实现索引
+## 8. 实现索引
 
 | 组件 | 文件 |
 |------|------|
 | 路径解析 | `AppStoragePaths.kt` |
 | 设置读写 | `AppSettings.kt` |
 | 日志 | `RunLogStore.kt` |
-| 缓存根传入 native | `MainActivity.kt` → `nativeInitAssets` |
+| 缓存 / 数据根传入 native | `MainActivity.kt` → `nativeInitAssets` |
+| Checkpoint / work dir | `opencl_ecm_checkpoint.cpp` |
+| -save / -savea 行格式 | `opencl_ecm_save.cpp` |
 | OpenCL 缓存逻辑 | `opencl_program_cache.cpp` |
 
 ---
 
-## 8. 与 UI 文档
+## 9. 与 UI 文档
 
 见 [DEV_ANDROID_UI.md §3.1](DEV_ANDROID_UI.md#31-数据存储)。

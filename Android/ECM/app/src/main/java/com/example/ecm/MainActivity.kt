@@ -54,6 +54,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inputGpuCurves: TextInputEditText
     private lateinit var inputDeviceIndex: TextInputEditText
     private lateinit var inputGpuCkpt: TextInputEditText
+    private lateinit var inputSaveFile: TextInputEditText
+    private lateinit var chkSaveAppend: MaterialCheckBox
     private lateinit var inputSigma: TextInputEditText
     private lateinit var inputMulPath: AutoCompleteTextView
     private lateinit var inputSqrPath: AutoCompleteTextView
@@ -121,6 +123,8 @@ class MainActivity : AppCompatActivity() {
         inputGpuCurves = findViewById(R.id.input_gpu_curves)
         inputDeviceIndex = findViewById(R.id.input_device_index)
         inputGpuCkpt = findViewById(R.id.input_gpu_ckpt)
+        inputSaveFile = findViewById(R.id.input_save_file)
+        chkSaveAppend = findViewById(R.id.chk_save_append)
         inputSigma = findViewById(R.id.input_sigma)
         inputMulPath = findViewById(R.id.input_mul_path)
         inputSqrPath = findViewById(R.id.input_sqr_path)
@@ -470,9 +474,14 @@ class MainActivity : AppCompatActivity() {
 
         setBusy(true, Tab.ECM)
         outputTextEcm.text = ""
+        val saveFile = inputSaveFile.text?.toString()?.trim().orEmpty()
         val sessionHeader = buildString {
             append("ECM -gpu N=$nExpr B1=$b1 B2=$b2 gpucurves=$gpuCurves device=$deviceIndex")
             if (chkVerbose.isChecked) append(" -v")
+            if (saveFile.isNotEmpty()) {
+                append(if (chkSaveAppend.isChecked) " -savea " else " -save ")
+                append(saveFile)
+            }
         }
         val logCallback = EcmLogCallback { line ->
             appendToLog(Tab.ECM, line)
@@ -497,6 +506,8 @@ class MainActivity : AppCompatActivity() {
                     pathArgForNative(selectedPathValue(inputSqrPath)),
                     pathArgForNative(selectedPathValue(inputAddPath)),
                     pathArgForNative(selectedPathValue(inputSubPath)),
+                    saveFile,
+                    chkSaveAppend.isChecked,
                     logCallback,
                 )
             } catch (e: Exception) {
@@ -713,6 +724,8 @@ class MainActivity : AppCompatActivity() {
         sqrPath: String,
         addPath: String,
         subPath: String,
+        saveFile: String,
+        saveAppend: Boolean,
         logCallback: EcmLogCallback?,
     ): String
 

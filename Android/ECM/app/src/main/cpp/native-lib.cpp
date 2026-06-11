@@ -11,6 +11,8 @@
 #include "opencl_program_cache.h"
 #include "opencl_runtime.h"
 
+#include "opencl_ecm_checkpoint.h"
+
 #include <cstdint>
 
 static std::string jstring_to_utf8(JNIEnv* env, jstring value) {
@@ -68,6 +70,7 @@ Java_com_example_ecm_MainActivity_nativeInitAssets(
         const char* path = env->GetStringUTFChars(cache_dir, nullptr);
         if (path != nullptr) {
             set_opencl_cache_dir(path);
+            opencl_ecm_set_work_dir(path);
             env->ReleaseStringUTFChars(cache_dir, path);
         }
     }
@@ -137,6 +140,8 @@ Java_com_example_ecm_MainActivity_nativeRunEcm(
         jstring j_sqr_path,
         jstring j_add_path,
         jstring j_sub_path,
+        jstring j_save_file,
+        jboolean j_save_append,
         jobject j_log_callback) {
     EcmAndroidRunRequest req;
     req.n_expr = jstring_to_utf8(env, j_n_expr);
@@ -161,6 +166,8 @@ Java_com_example_ecm_MainActivity_nativeRunEcm(
     req.sqr_path = jstring_to_utf8(env, j_sqr_path);
     req.add_path = jstring_to_utf8(env, j_add_path);
     req.sub_path = jstring_to_utf8(env, j_sub_path);
+    req.save_file = jstring_to_utf8(env, j_save_file);
+    req.save_append = j_save_append == JNI_TRUE;
     android_ecm_log_set_listener(env, j_log_callback);
     const std::string result = run_ecm_android(req);
     android_ecm_log_clear_listener(env);

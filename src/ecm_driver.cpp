@@ -26,6 +26,7 @@
 #include <gmp.h>
 
 #include "opencl_ecm_entry.h"
+#include "opencl_ecm_save.h"
 #include "opencl_ecm_addsub_path.h"
 #include "ecm.h"
 #include "cgbn_stage1.h"
@@ -338,33 +339,6 @@ static bool parse_sigma_arg(const std::string &arg, uint32_t *sigma_out) {
     }
 }
 
-static constexpr unsigned long CHKSUMMOD = 4294967291UL;
-
-static bool check_save_file_writable(const std::string &savefilename, bool saveappend) {
-    if (!saveappend && access(savefilename.c_str(), 0) == 0) {
-        std::cerr << "Save file " << savefilename << " already exists, will not overwrite" << std::endl;
-        return false;
-    }
-    FILE *savefile = fopen(savefilename.c_str(), "a");
-    if (savefile == nullptr) {
-        std::cerr << "Could not open file " << savefilename << " for writing" << std::endl;
-        return false;
-    }
-    fclose(savefile);
-    if (!saveappend) {
-        struct stat st {};
-        if (stat(savefilename.c_str(), &st) != 0 || st.st_size != 0) {
-            std::cerr << "Save file " << savefilename << " initialization failed" << std::endl;
-            return false;
-        }
-        if (remove(savefilename.c_str()) != 0) {
-            std::cerr << "Save file " << savefilename << " could not be cleaned up" << std::endl;
-            return false;
-        }
-    }
-    return true;
-}
-
 static std::string mpz_to_dec_string(const mpz_t v) {
     char *s = mpz_get_str(nullptr, 10, v);
     std::string out = s ? s : "";
@@ -610,133 +584,6 @@ static bool compute_group_order_pari_for_sigma3(mpz_t order_out, const mpz_t p,
         if (err) *err = "failed to parse gp ellcard integer";
         return false;
     }
-    return true;
-}
-
-static std::string build_saved_n_expr(const std::string &original_expr, const mpz_t N,
-                                      uint32_t curves, mpz_t *factors, int *array_found) {
-    std::string expr = original_expr.empty() ? mpz_to_dec_string(N) : original_expr;
-    mpz_t remaining;
-    mpz_init_set(remaining, N);
-
-    std::vector<std::string> uniq_factors_dec;
-    uniq_factors_dec.reserve(curves);
-    for (uint32_t i = 0; i < curves; ++i) {
-        if (array_found[i] == ECM_NO_FACTOR_FOUND) {
-            continue;
-        }
-        if (mpz_cmp_ui(factors[i], 1) <= 0 || mpz_cmp(factors[i], N) >= 0) {
-            continue;
-        }
-        std::string dec = mpz_to_dec_string(factors[i]);
-        if (std::find(uniq_factors_dec.begin(), uniq_factors_dec.end(), dec) == uniq_factors_dec.end()) {
-            uniq_factors_dec.push_back(dec);
-        }
-    }
-
-    std::sort(uniq_factors_dec.begin(), uniq_factors_dec.end(),
-              [](const std::string &a, const std::string &b) {
-                  if (a.size() != b.size()) {
-                      return a.size() < b.size();
-                  }
-                  return a < b;
-              });
-
-    mpz_t f;
-    mpz_init(f);
-    for (const std::string &dec : uniq_factors_dec) {
-        if (mpz_set_str(f, dec.c_str(), 10) != 0) {
-            continue;
-        }
-        if (!mpz_divisible_p(remaining, f)) {
-            continue;
-        }
-        expr = "(" + expr + ")/" + dec;
-        mpz_divexact(remaining, remaining, f);
-    }
-    mpz_clear(f);
-    mpz_clear(remaining);
-    return expr;
-}
-
-static std::string build_who_field() {
-    const char *uname = std::getenv("LOGNAME");
-    if (!uname || !*uname) {
-        uname = std::getenv("USERNAME");
-    }
-    std::string user = (uname && *uname) ? uname : "";
-
-    std::string host;
-#ifdef _WIN32
-    char hbuf[MAX_COMPUTERNAME_LENGTH + 2] = {0};
-    DWORD sz = MAX_COMPUTERNAME_LENGTH + 1;
-    if (GetComputerNameA(hbuf, &sz) && sz > 0) {
-        host.assign(hbuf, hbuf + sz);
-    }
-#else
-    char hbuf[64] = {0};
-    if (gethostname(hbuf, sizeof(hbuf) - 1) == 0) {
-        host = hbuf;
-    }
-#endif
-
-    if (user.empty() && host.empty()) {
-        return "";
-    }
-    return user + "@" + host;
-}
-
-static bool append_opencl_save_lines(const std::string &savefilename, const mpz_t N, double B1,
-                                     uint32_t firstsigma, uint32_t curves, mpz_t *factors,
-                                     const std::string &n_expr_save) {
-    std::ofstream out(savefilename, std::ios::out | std::ios::app);
-    if (!out.is_open()) {
-        std::cerr << "Could not open file " << savefilename << " for appending" << std::endl;
-        return false;
-    }
-
-    mpz_t sigma_mpz, checksum;
-    mpz_init(sigma_mpz);
-    mpz_init(checksum);
-
-    const time_t t = std::time(nullptr);
-    char timebuf[128] = {0};
-    const tm *lt = std::localtime(&t);
-    if (lt) {
-        std::strftime(timebuf, sizeof(timebuf), "%a %b %d %H:%M:%S %Y", lt);
-    }
-    const std::string who = build_who_field();
-
-    for (uint32_t i = 0; i < curves; ++i) {
-        mpz_set_ui(sigma_mpz, firstsigma + i);
-        mpz_set_d(checksum, B1);
-        mpz_mul_ui(checksum, checksum, mpz_fdiv_ui(sigma_mpz, CHKSUMMOD));
-        mpz_mul_ui(checksum, checksum, mpz_fdiv_ui(N, CHKSUMMOD));
-        mpz_mul_ui(checksum, checksum, mpz_fdiv_ui(factors[i], CHKSUMMOD));
-        mpz_mul_ui(checksum, checksum, (ECM_PARAM_BATCH_32BITS_D + 1) % CHKSUMMOD);
-        const unsigned long csum = mpz_fdiv_ui(checksum, CHKSUMMOD);
-
-        char *sigma_dec = mpz_get_str(nullptr, 10, sigma_mpz);
-        char *x_hex = mpz_get_str(nullptr, 16, factors[i]);
-
-        out << "METHOD=ECM; PARAM=" << ECM_PARAM_BATCH_32BITS_D
-            << "; SIGMA=" << sigma_dec
-            << "; B1=" << std::llround(B1)
-            << "; N=" << n_expr_save
-            << "; X=0x" << x_hex
-            << "; CHECKSUM=" << csum
-            << "; PROGRAM=GMP-ECM 7.0.6;"
-            << " X0=0x0; Y0=0x0;"
-            << (who.empty() ? "" : (" WHO=" + who + ";"))
-            << " TIME=" << timebuf << ";"
-            << "\n";
-
-        free(sigma_dec);
-        free(x_hex);
-    }
-
-    mpz_clear(sigma_mpz);
-    mpz_clear(checksum);
     return true;
 }
 
@@ -1073,7 +920,8 @@ int main(int argc, char **argv){
     }
 
     if (!savefilename.empty()) {
-        if (!check_save_file_writable(savefilename, saveappend)) {
+        savefilename = opencl_ecm_resolve_data_path(savefilename.c_str());
+        if (!opencl_ecm_check_save_file_writable(savefilename, saveappend)) {
             mpz_clear(N);
             mpz_clear(batch_s);
             ecm_clear(params);
@@ -1152,10 +1000,11 @@ int main(int argc, char **argv){
             }
         }
     }
-    std::string n_expr_save = build_saved_n_expr(nline, N, curves, factors, array_found);
+    std::string n_expr_save = opencl_ecm_build_saved_n_expr(nline, N, curves, factors, array_found);
 
     if (ret != ECM_ERROR && !savefilename.empty()) {
-        if (!append_opencl_save_lines(savefilename, N, B1, firstsigma, curves, factors, n_expr_save)) {
+        if (!opencl_ecm_append_save_lines(savefilename, N, B1, firstsigma, curves, factors,
+                                          n_expr_save)) {
             std::cerr << "Failed to append OpenCL save lines into " << savefilename << std::endl;
             return 1;
         }

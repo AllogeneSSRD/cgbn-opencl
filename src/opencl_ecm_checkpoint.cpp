@@ -2,17 +2,132 @@
 
 #include "opencl_ecm_log.h"
 
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <string>
+
+#ifdef _WIN32
+#include <direct.h>
+#else
+#include <sys/stat.h>
+#endif
+
+namespace {
+
+std::string g_work_dir;
+
+bool is_absolute_path(const char *path) {
+    if (path == nullptr || path[0] == '\0') {
+        return false;
+    }
+#ifdef _WIN32
+    if ((path[0] >= 'A' && path[0] <= 'Z') || (path[0] >= 'a' && path[0] <= 'z')) {
+        return path[1] == ':' && (path[2] == '\\' || path[2] == '/');
+    }
+#endif
+    return path[0] == '/';
+}
+
+void trim_trailing_slashes(std::string &s) {
+    while (!s.empty() && (s.back() == '/' || s.back() == '\\')) {
+        s.pop_back();
+    }
+}
+
+} // namespace
+
+void opencl_ecm_set_work_dir(const char *dir) {
+    if (dir == nullptr || dir[0] == '\0') {
+        g_work_dir.clear();
+        return;
+    }
+    g_work_dir = dir;
+    trim_trailing_slashes(g_work_dir);
+}
+
+const char *opencl_ecm_get_work_dir() {
+    return g_work_dir.c_str();
+}
+
+std::string opencl_ecm_resolve_data_path_buf(const char *path) {
+    if (path == nullptr || path[0] == '\0') {
+        return {};
+    }
+    if (is_absolute_path(path)) {
+        return path;
+    }
+    if (g_work_dir.empty()) {
+        return path;
+    }
+    return g_work_dir + "/" + path;
+}
+
+bool opencl_ecm_ensure_parent_dir(const char *filepath) {
+    if (filepath == nullptr || filepath[0] == '\0') {
+        return false;
+    }
+    std::string parent;
+    const char *slash = std::strrchr(filepath, '/');
+#ifdef _WIN32
+    const char *bslash = std::strrchr(filepath, '\\');
+    if (bslash != nullptr && (slash == nullptr || bslash > slash)) {
+        slash = bslash;
+    }
+#endif
+    if (slash == nullptr || slash == filepath) {
+        return true;
+    }
+    parent.assign(filepath, slash);
+    if (parent.empty()) {
+        return true;
+    }
+
+    std::string built;
+    size_t i = 0;
+    if (parent.size() >= 2 && parent[1] == ':') {
+        built = parent.substr(0, 2);
+        i = 2;
+    } else if (!parent.empty() && parent[0] == '/') {
+        built = "/";
+        i = 1;
+    }
+
+    while (i < parent.size()) {
+        while (i < parent.size() && (parent[i] == '/' || parent[i] == '\\')) {
+            ++i;
+        }
+        if (i >= parent.size()) {
+            break;
+        }
+        size_t j = i;
+        while (j < parent.size() && parent[j] != '/' && parent[j] != '\\') {
+            ++j;
+        }
+        if (!built.empty() && built.back() != '/') {
+            built.push_back('/');
+        }
+        built.append(parent, i, j - i);
+#ifdef _WIN32
+        _mkdir(built.c_str());
+#else
+        mkdir(built.c_str(), 0755);
+#endif
+        i = j;
+    }
+    return true;
+}
 
 const char *opencl_ecm_checkpoint_filename(const mpz_t N) {
-    static char filename[512];
+    static char filename[1024];
     const size_t nbits = mpz_sizeinbase(N, 2);
     char *N_str = mpz_get_str(nullptr, 16, N);
     if (!N_str) {
-        snprintf(filename, sizeof(filename), ".ecm_ckpt_%zu_alloc_fail.dat", nbits);
+        const std::string resolved =
+            opencl_ecm_resolve_data_path_buf(".ecm_ckpt_alloc_fail.dat");
+        std::snprintf(filename, sizeof(filename), "%s", resolved.c_str());
         return filename;
     }
     const size_t len = strlen(N_str);
@@ -22,21 +137,32 @@ const char *opencl_ecm_checkpoint_filename(const mpz_t N) {
     if (len > 8u) {
         strncpy(last_hex, N_str + len - 8u, 8u);
     }
+
+    char basename[512];
     if (len > 8u && last_hex[0] != '\0') {
-        snprintf(filename, sizeof(filename), ".ecm_ckpt_%zu_%s_%s.dat", nbits, first_hex, last_hex);
+        std::snprintf(basename, sizeof(basename), ".ecm_ckpt_%zu_%s_%s.dat", nbits, first_hex,
+                      last_hex);
     } else {
-        snprintf(filename, sizeof(filename), ".ecm_ckpt_%zu_%s.dat", nbits, first_hex);
+        std::snprintf(basename, sizeof(basename), ".ecm_ckpt_%zu_%s.dat", nbits, first_hex);
     }
     free(N_str);
+
+    const std::string resolved = opencl_ecm_resolve_data_path_buf(basename);
+    std::snprintf(filename, sizeof(filename), "%s", resolved.c_str());
     return filename;
 }
 
 int opencl_ecm_checkpoint_save(const char *filename, const opencl_ecm_checkpoint_header_t *header,
                                const uint32_t *data, size_t data_size) {
+    if (!opencl_ecm_ensure_parent_dir(filename)) {
+        ecm_ts_fprintf(stderr, "Warning: Could not create directory for checkpoint '%s'\n",
+                       filename);
+        return ECM_ERROR;
+    }
     FILE *f = fopen(filename, "wb");
     if (!f) {
-        ecm_ts_fprintf(stderr, "Warning: Could not open checkpoint file '%s' for writing\n",
-                       filename);
+        ecm_ts_fprintf(stderr, "Warning: Could not open checkpoint file '%s' for writing (%s)\n",
+                       filename, std::strerror(errno));
         return ECM_ERROR;
     }
     if (fwrite(header, sizeof(opencl_ecm_checkpoint_header_t), 1, f) != 1) {
@@ -50,7 +176,7 @@ int opencl_ecm_checkpoint_save(const char *filename, const opencl_ecm_checkpoint
         return ECM_ERROR;
     }
     fclose(f);
-    ecm_ts_fprintf(stderr, "Checkpoint saved: s_partial=%llu/%llu (%.1f%%)\n",
+    ecm_ts_fprintf(stderr, "Checkpoint saved: %s s_partial=%llu/%llu (%.1f%%)\n", filename,
                    (unsigned long long)header->s_partial,
                    (unsigned long long)header->s_num_bits,
                    header->s_num_bits ? (100.0 * header->s_partial / header->s_num_bits) : 0.0);

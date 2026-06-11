@@ -24,6 +24,8 @@
     <string name="default_device_index">0</string>
     <string name="hint_gpu_ckpt">-gpuckpt (秒, 0=禁用)</string>
     <string name="default_gpu_ckpt">60</string>
+    <string name="hint_save_file">-save / -savea 文件名 (空=禁用)</string>
+    <string name="chk_save_append">-savea 追加到已有文件</string>
     <string name="hint_sigma">-sigma (空=随机)</string>
     <string name="hint_mul_path">--mul</string>
     <string name="hint_sqr_path">--sqr</string>

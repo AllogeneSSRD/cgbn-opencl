@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 #define OPENCL_ECM_CHECKPOINT_MAGIC 0x45555047u  // "GPUE" little-endian
 #define OPENCL_ECM_CHECKPOINT_VERSION 3
@@ -26,6 +27,16 @@ struct opencl_ecm_checkpoint_header_t {
 
 static_assert(sizeof(opencl_ecm_checkpoint_header_t) == 64,
               "opencl_ecm_checkpoint_header_t layout must match cgbn_stage1.cu");
+
+/** Writable base directory for checkpoint/save relative paths (e.g. Android app data root). */
+void opencl_ecm_set_work_dir(const char *dir);
+const char *opencl_ecm_get_work_dir();
+
+/** Resolve relative paths against work_dir; absolute paths are unchanged. */
+std::string opencl_ecm_resolve_data_path_buf(const char *path);
+
+/** Create parent directories for a file path; returns false on failure. */
+bool opencl_ecm_ensure_parent_dir(const char *filepath);
 
 const char *opencl_ecm_checkpoint_filename(const mpz_t N);
 int opencl_ecm_checkpoint_save(const char *filename, const opencl_ecm_checkpoint_header_t *header,

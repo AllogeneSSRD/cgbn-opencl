@@ -34,7 +34,9 @@ std::string run_ecm_android(const EcmAndroidRunRequest& req) {
 #else
 
 #include "ecm_expr.h"
+#include "opencl_ecm_checkpoint.h"
 #include "opencl_ecm_entry.h"
+#include "opencl_ecm_save.h"
 
 #include "ecm.h"
 #include "cgbn_stage1.h"
@@ -69,7 +71,11 @@ std::string run_ecm_android(const EcmAndroidRunRequest& req) {
         header << " -v";
     }
     header << " -d " << req.device_index << " -gpu -gpucurves " << req.gpu_curves << " "
-           << static_cast<long long>(req.b1) << " " << static_cast<long long>(req.b2) << "\n\n";
+           << static_cast<long long>(req.b1) << " " << static_cast<long long>(req.b2);
+    if (!req.save_file.empty()) {
+        header << (req.save_append ? " -savea " : " -save ") << req.save_file;
+    }
+    header << "\n\n";
 
     std::string body;
     android_ecm_log_begin(&body);
@@ -159,6 +165,26 @@ std::string run_ecm_android(const EcmAndroidRunRequest& req) {
 
     ecm_ts_fprintf(stdout, "Parsed N bit-size: %zu\n", mpz_sizeinbase(N, 2));
     ecm_ts_fprintf(stdout, "batch_s bit-size: %zu\n", mpz_sizeinbase(batch_s, 2));
+    if (const char *work_dir = opencl_ecm_get_work_dir(); work_dir != nullptr && work_dir[0] != '\0') {
+        ecm_ts_fprintf(stdout, "Data work dir: %s\n", work_dir);
+    }
+    ecm_ts_fprintf(stdout, "Checkpoint file: %s\n", opencl_ecm_checkpoint_filename(N));
+
+    std::string resolved_save;
+    if (!req.save_file.empty()) {
+        resolved_save = opencl_ecm_resolve_data_path(req.save_file.c_str());
+        if (!opencl_ecm_check_save_file_writable(resolved_save, req.save_append)) {
+            mpz_clear(N);
+            mpz_clear(batch_s);
+            ecm_clear(params);
+            android_ecm_unbind_opencl_api();
+            unload_opencl_api(api, own_lib);
+            android_ecm_log_end();
+            return header.str() + "Save file is not writable: " + resolved_save + "\n";
+        }
+        ecm_ts_fprintf(stdout, "Save file: %s (%s)\n", resolved_save.c_str(),
+                       req.save_append ? "append" : "create");
+    }
 
     const int prep = gpu_prepare_opencl(
         static_cast<size_t>(mpz_sizeinbase(N, 2)), params->verbose,
@@ -235,6 +261,15 @@ std::string run_ecm_android(const EcmAndroidRunRequest& req) {
     }
     if (found_count == 0) {
         ecm_ts_fprintf(stdout, "No factor found in this batch.\n");
+    }
+
+    if (ret != ECM_ERROR && !resolved_save.empty()) {
+        const std::string n_expr_save =
+            opencl_ecm_build_saved_n_expr(req.n_expr, N, curves, factors, array_found);
+        if (!opencl_ecm_append_save_lines(resolved_save, N, req.b1, firstsigma, curves, factors,
+                                          n_expr_save)) {
+            ecm_ts_fprintf(stderr, "Failed to append save lines into %s\n", resolved_save.c_str());
+        }
     }
 
     for (uint32_t i = 0; i < curves; ++i) {
