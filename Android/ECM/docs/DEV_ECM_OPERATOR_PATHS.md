@@ -212,7 +212,9 @@ sub 下拉无 `asm_b16`（与 desktop CLI 一致）。
 | 128 (4096) | AMD | `asm_b32` | `fused_unroll_b32` |
 | 128 | 其它 | `fused_unroll_b32` | `fused_unroll_b32` |
 | 16 (512) | AMD | `asm_b16` | `fused_unroll_b16` |
-| 16 | 其它（Adreno） | `fused_unroll_b16` | `fused_unroll_b16` |
+| 16 | 其它（Adreno） | **`fused`** | **`fused`** |
+
+**Adreno 与并行度：** Auto 默认 **`fused`**（1～512 curves 更快）。极高 `gpucurves`（~2048+）可手动选 **`fused_unroll_b16`**。详见 **[`DEV_ECM_ADDSUB_ANDROID.md`](DEV_ECM_ADDSUB_ANDROID.md)**。
 | 其它 | — | `fused_unroll` | `fused_unroll` |
 
 **i24 模式**（`ECM_STAGE1_USE_I24_384`）：仍按上述 id 编译，但 `mp_add_mod` / `mp_sub_mod` 在 `limbs==16` 时优先调用 **`mp_*_fused_unroll_i24`**（24-bit limb radix），与 Montgomery i24 数据布局一致。
@@ -443,7 +445,7 @@ const bool force_unroll384 =
 | 128 | AMD | `asm_b32` | `fused_unroll_b32` |
 | 128 | 非 AMD | `fused_unroll_b32` | `fused_unroll_b32` |
 | 16 | AMD + add | `asm_b16` | `fused_unroll_b16` |
-| 16 | 其它 | `fused_unroll_b16` | `fused_unroll_b16` |
+| 16 | 其它（Adreno） | `fused` | `fused` |
 | 其它 | — | `fused_unroll` | `fused_unroll` |
 
 若要 **「i24 且 limbs≤17 时用 fused_unroll_i24 专用 addmod id」**，需要：

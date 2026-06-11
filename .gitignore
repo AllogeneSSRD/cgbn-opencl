@@ -9,3 +9,7 @@ build/
 docs/ecm/
 *.save
 *-*signature.txt
+
+# Android Studio apk
+Android/ECM/app/debug/
+

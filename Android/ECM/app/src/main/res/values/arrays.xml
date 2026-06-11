@@ -9,7 +9,7 @@
     </string-array>
 
     <string-array name="ecm_mul_path_labels">
-        <item>自动 (&lt;288b→i24; 288–377b→unroll384; 378–506b→unroll512)</item>
+        <item>自动 (&lt;264b→i24 blsub; 264–377b→unroll384; 378–506b→unroll512; 更大→i24)</item>
         <item>i24_u32_blsub</item>
         <item>i24_u32</item>
         <item>unroll_only_384 (384-bit)</item>

@@ -172,7 +172,25 @@ echo '(2^421-1)' | .\build\Debug\ecm.exe -v -d 0 -gpu -gpucurves 64 100 0
 
 ---
 
-## 5. 常见问题
+## 5. Windows 桌面 `ecm.exe`（与 Android 独立）
+
+根目录 `CMakeLists.txt` 编译桌面目标（`ecm`、`opencl_ecm_entry` 等）需要 **x64-windows** GMP，与 **`gmp:arm64-android`** 无关。
+
+```powershell
+D:\code\vcpkg\vcpkg.exe install gmp:x64-windows
+```
+
+CMake 自动探测顺序：
+
+1. `-DECM_WINDOWS_GMP_ROOT=<prefix>`
+2. 环境变量 `VCPKG_ROOT` → `installed/x64-windows`
+3. 回退 `D:/code/vcpkg/installed/x64-windows`
+
+配置日志应含：`GMP: include=... lib=...`。若仅安装过 arm64-android，桌面编译会报 `无法打开包括文件: gmp.h` — 需再装 **x64-windows** triplet。
+
+---
+
+## 6. 常见问题
 
 | 现象 | 处理 |
 |------|------|
@@ -185,7 +203,7 @@ echo '(2^421-1)' | .\build\Debug\ecm.exe -v -d 0 -gpu -gpucurves 64 100 0
 
 ---
 
-## 6. 相关文档与代码
+## 7. 相关文档与代码
 
 | 资源 | 说明 |
 |------|------|
@@ -196,7 +214,7 @@ echo '(2^421-1)' | .\build\Debug\ecm.exe -v -d 0 -gpu -gpucurves 64 100 0
 
 ---
 
-## 7. 安装完成后的检查清单
+## 8. 安装完成后的检查清单
 
 - [ ] `vcpkg install gmp:arm64-android` 成功结束
 - [ ] `include/gmp.h` 与 `lib/libgmp.a` 存在
