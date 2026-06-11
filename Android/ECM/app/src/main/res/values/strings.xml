@@ -1,12 +1,14 @@
 <resources>
+    <!-- 顶边栏 -->
     <string name="app_name">ECM OpenCL</string>
     <string name="subtitle">GPU OpenCL ECM 分解 &amp; 微基准</string>
     <string name="subtitle_ecm">GPU OpenCL ECM Stage-1 分解</string>
     <string name="subtitle_bench">OpenCL 算子微基准</string>
+    <!-- 底边栏 -->
     <string name="nav_ecm">ECM</string>
     <string name="nav_bench">基准</string>
     <string name="ecm_diag_title">OpenCL 诊断</string>
-    <string name="bench_section_hint">Add/Sub、Montgomery、Limb 微基准（与 ECM 分解独立）</string>
+    <string name="bench_section_hint">Add/Sub、Montgomery、Limb 微基准</string>
     <string name="ecm_section_title">ECM GPU 分解 (Stage-1)</string>
     <string name="ecm_section_hint">对应桌面: echo \'N\' | ecm.exe -gpu -gpucurves … B1 B2</string>
     <string name="hint_n_expr">N 表达式 (stdin)</string>
@@ -36,22 +38,23 @@
     <string name="perf_updated">更新: %1$s</string>
     <string name="btn_probe">设备探测</string>
     <string name="btn_short">简短测试</string>
-    <string name="bench_card_title">ECM 微基准</string>
+    <!-- content_bench.xml -->
+    <string name="bench_card_title">算子 benchmark</string>
     <string name="bench_params_title">参数</string>
-    <string name="section_addsub">Add / Sub</string>
-    <string name="section_mont">Montgomery Mul / Sqr</string>
-    <string name="limb_section_title">Limb add-mod 微基准</string>
     <string name="hint_bits">bits</string>
     <string name="hint_kernel_iters">kernel_iterations</string>
     <string name="hint_instances">instances</string>
     <string name="hint_launch_repeats">launch_repeats</string>
     <string name="default_bits">384</string>
+    <string name="default_bits_24">504</string>
     <string name="default_kernel_iters">1000</string>
     <string name="default_instances">128</string>
     <string name="default_launch_repeats">10</string>
+    <string name="section_addsub">Add / Sub Mod</string>
+    <string name="section_mont">Montgomery Mul / Sqr</string>
     <string name="btn_limb_32">32-bit</string>
     <string name="btn_limb_24">24-bit</string>
-    <string name="default_bits_24">504</string>
+    <string name="limb_section_title">Limb add-mod 微基准</string>
     <string name="btn_bench_16">16-bit</string>
     <string name="btn_bench_24">24-bit</string>
     <string name="btn_bench_32">32-bit</string>

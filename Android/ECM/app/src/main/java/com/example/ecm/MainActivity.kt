@@ -1,5 +1,6 @@
 package com.example.ecm
 
+import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -12,7 +13,13 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.updatePadding
 import androidx.core.widget.NestedScrollView
+import com.google.android.material.appbar.AppBarLayout
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
@@ -69,7 +76,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_main)
+        setupWindowInsets()
 
         toolbar = findViewById(R.id.toolbar)
         panelEcm = findViewById(R.id.panel_ecm)
@@ -145,6 +154,32 @@ class MainActivity : AppCompatActivity() {
         showTab(Tab.ECM)
         scroll.post { preventInitialKeyboard() }
         runNative(Tab.ECM) { nativeProbe(openClLoadError) }
+    }
+
+    private fun setupWindowInsets() {
+        window.statusBarColor = Color.TRANSPARENT
+        window.navigationBarColor = Color.TRANSPARENT
+        WindowInsetsControllerCompat(window, window.decorView).apply {
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = true
+        }
+
+        val appBar = findViewById<AppBarLayout>(R.id.app_bar)
+        val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_nav)
+
+        ViewCompat.setOnApplyWindowInsetsListener(appBar) { view, windowInsets ->
+            val safeTop = windowInsets.getInsets(
+                WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout(),
+            ).top
+            view.updatePadding(top = safeTop)
+            windowInsets
+        }
+
+        ViewCompat.setOnApplyWindowInsetsListener(bottomNav) { view, windowInsets ->
+            val safeBottom = windowInsets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+            view.updatePadding(bottom = safeBottom)
+            windowInsets
+        }
     }
 
     private fun preventInitialKeyboard() {

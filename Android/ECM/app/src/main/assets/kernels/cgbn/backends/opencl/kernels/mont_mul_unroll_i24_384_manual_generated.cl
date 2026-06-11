@@ -9,10 +9,10 @@
 #if MONT_I24_LIMBS == MONT_I24_384_FIXED_LIMBS
 
 static inline void mont_mul_unroll_i24_384_manual_body(
-    __global uint *out,
-    __global const uint *a,
-    __global const uint *b,
-    __constant uint *n,
+    uint *out,
+    const uint *a,
+    const uint *b,
+    const uint *n,
     uint base,
     uint np0)
 {
@@ -1773,9 +1773,9 @@ static inline void mont_mul_unroll_i24_384_manual_body(
 }
 
 static inline void mont_sqr_unroll_i24_384_manual_body(
-    __global uint *out,
-    __global const uint *a,
-    __constant uint *n,
+    uint *out,
+    const uint *a,
+    const uint *n,
     uint base,
     uint np0)
 {

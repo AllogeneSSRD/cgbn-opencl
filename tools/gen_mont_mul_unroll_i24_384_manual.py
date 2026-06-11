@@ -107,12 +107,14 @@ def emit_subtract_blsub() -> str:
 
 
 def emit_body() -> str:
+    # Unqualified pointers: bench passes __global/__constant; priv uses private — Adreno
+    # rejects __global parameters when priv wrappers call the same body.
     parts = [
         "static inline void mont_mul_unroll_i24_384_manual_body(\n",
-        "    __global uint *out,\n",
-        "    __global const uint *a,\n",
-        "    __global const uint *b,\n",
-        "    __constant uint *n,\n",
+        "    uint *out,\n",
+        "    const uint *a,\n",
+        "    const uint *b,\n",
+        "    const uint *n,\n",
         "    uint base,\n",
         "    uint np0)\n",
         "{\n",
@@ -124,9 +126,9 @@ def emit_body() -> str:
     parts.append("}\n\n")
     parts.append(
         "static inline void mont_sqr_unroll_i24_384_manual_body(\n"
-        "    __global uint *out,\n"
-        "    __global const uint *a,\n"
-        "    __constant uint *n,\n"
+        "    uint *out,\n"
+        "    const uint *a,\n"
+        "    const uint *n,\n"
         "    uint base,\n"
         "    uint np0)\n"
         "{\n"
