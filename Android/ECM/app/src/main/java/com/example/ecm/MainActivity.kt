@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
+import android.view.inputmethod.InputMethodManager
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.LinearLayout
@@ -13,6 +14,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.NestedScrollView
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.textfield.TextInputEditText
@@ -23,10 +25,12 @@ import java.util.concurrent.Executors
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var outputText: TextView
+    private lateinit var outputTextEcm: TextView
+    private lateinit var outputTextBench: TextView
     private lateinit var perfText: TextView
     private lateinit var perfUpdated: TextView
-    private lateinit var progress: ProgressBar
+    private lateinit var progressEcm: ProgressBar
+    private lateinit var progressBench: ProgressBar
     private lateinit var scroll: NestedScrollView
     private lateinit var inputBits: TextInputEditText
     private lateinit var inputKernelIters: TextInputEditText
@@ -46,6 +50,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inputSubPath: AutoCompleteTextView
     private lateinit var chkVerbose: MaterialCheckBox
     private lateinit var ecmAdvancedPanel: LinearLayout
+    private lateinit var panelEcm: View
+    private lateinit var panelBench: View
+    private lateinit var toolbar: MaterialToolbar
     private val benchExecutor = Executors.newSingleThreadExecutor()
     private val perfExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -64,14 +71,16 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        findViewById<MaterialToolbar>(R.id.toolbar).apply {
-            subtitle = getString(R.string.subtitle)
-        }
+        toolbar = findViewById(R.id.toolbar)
+        panelEcm = findViewById(R.id.panel_ecm)
+        panelBench = findViewById(R.id.panel_bench)
 
-        outputText = findViewById(R.id.output_text)
+        outputTextEcm = findViewById(R.id.output_ecm)
+        outputTextBench = findViewById(R.id.output_bench)
         perfText = findViewById(R.id.perf_text)
         perfUpdated = findViewById(R.id.perf_updated)
-        progress = findViewById(R.id.progress)
+        progressEcm = findViewById(R.id.progress_ecm)
+        progressBench = findViewById(R.id.progress_bench)
         scroll = findViewById(R.id.nestedScrollView)
         inputBits = findViewById(R.id.input_bits)
         inputKernelIters = findViewById(R.id.input_kernel_iters)
@@ -105,10 +114,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         findViewById<MaterialButton>(R.id.btn_probe).setOnClickListener {
-            runNative { nativeProbe(openClLoadError) }
+            runNative(Tab.ECM) { nativeProbe(openClLoadError) }
         }
         findViewById<MaterialButton>(R.id.btn_short).setOnClickListener {
-            runNative { nativeShortTest() }
+            runNative(Tab.ECM) { nativeShortTest() }
         }
         findViewById<MaterialButton>(R.id.btn_addsub_32).setOnClickListener {
             runAddSubBench(limbBits = 32)
@@ -132,7 +141,67 @@ class MainActivity : AppCompatActivity() {
             runBench(32)
         }
 
-        runNative { nativeProbe(openClLoadError) }
+        setupBottomNav()
+        showTab(Tab.ECM)
+        scroll.post { preventInitialKeyboard() }
+        runNative(Tab.ECM) { nativeProbe(openClLoadError) }
+    }
+
+    private fun preventInitialKeyboard() {
+        scroll.requestFocus()
+        inputNExpr.clearFocus()
+        inputNPreset.clearFocus()
+        val imm = getSystemService(InputMethodManager::class.java)
+        imm?.hideSoftInputFromWindow(scroll.windowToken, 0)
+    }
+
+    private fun outputFor(tab: Tab): TextView {
+        return when (tab) {
+            Tab.ECM -> outputTextEcm
+            Tab.BENCH -> outputTextBench
+        }
+    }
+
+    private fun scrollToOutput(@Suppress("UNUSED_PARAMETER") tab: Tab) {
+        scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+    }
+
+    private enum class Tab {
+        ECM,
+        BENCH,
+    }
+
+    private fun setupBottomNav() {
+        val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_nav)
+        bottomNav.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_ecm -> {
+                    showTab(Tab.ECM)
+                    true
+                }
+                R.id.nav_bench -> {
+                    showTab(Tab.BENCH)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun showTab(tab: Tab) {
+        when (tab) {
+            Tab.ECM -> {
+                panelEcm.visibility = View.VISIBLE
+                panelBench.visibility = View.GONE
+                toolbar.subtitle = getString(R.string.subtitle_ecm)
+            }
+            Tab.BENCH -> {
+                panelEcm.visibility = View.GONE
+                panelBench.visibility = View.VISIBLE
+                toolbar.subtitle = getString(R.string.subtitle_bench)
+            }
+        }
+        scroll.post { scroll.scrollTo(0, 0) }
     }
 
     override fun onResume() {
@@ -277,12 +346,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        setBusy(true)
-        outputText.text = ""
+        setBusy(true, Tab.ECM)
+        outputTextEcm.text = ""
         val logCallback = EcmLogCallback { line ->
             mainHandler.post {
-                outputText.append(line)
-                scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                outputTextEcm.append(line)
+                scrollToOutput(Tab.ECM)
             }
         }
         benchExecutor.execute {
@@ -307,10 +376,10 @@ class MainActivity : AppCompatActivity() {
             }
             runOnUiThread {
                 if (tail.isNotEmpty()) {
-                    outputText.append(tail)
+                    outputTextEcm.append(tail)
                 }
-                setBusy(false)
-                scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                setBusy(false, Tab.ECM)
+                scrollToOutput(Tab.ECM)
             }
         }
     }
@@ -350,7 +419,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         val useWg = limbBits == 32 && bits != 512
-        runNative {
+        runNative(Tab.BENCH) {
             nativeMontSqrBench(bits, kernelIters, instances, launchRepeats, useWg, tpi = 4, limbBits)
         }
     }
@@ -377,7 +446,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, getString(R.string.toast_bits_multiple, limbBits), Toast.LENGTH_SHORT).show()
             return
         }
-        runNative {
+        runNative(Tab.BENCH) {
             nativeAddSubBench(bits, kernelIters, instances, launchRepeats, limbBits)
         }
     }
@@ -387,13 +456,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runBench(bits: Int) {
-        runNative {
+        runNative(Tab.BENCH) {
             nativeBitBench(bits, elements = 1 shl 18, kernelIters = 64, launchRepeats = 8)
         }
     }
 
-    private fun runNative(block: () -> String) {
-        setBusy(true)
+    private fun runNative(tab: Tab, block: () -> String) {
+        val output = outputFor(tab)
+        setBusy(true, tab)
         benchExecutor.execute {
             val result = try {
                 block()
@@ -401,15 +471,18 @@ class MainActivity : AppCompatActivity() {
                 "Error: ${e.message}"
             }
             runOnUiThread {
-                outputText.text = result
-                setBusy(false)
-                scroll.post { scroll.fullScroll(View.FOCUS_DOWN) }
+                output.text = result
+                setBusy(false, tab)
+                scrollToOutput(tab)
             }
         }
     }
 
-    private fun setBusy(busy: Boolean) {
-        progress.visibility = if (busy) View.VISIBLE else View.GONE
+    private fun setBusy(busy: Boolean, tab: Tab) {
+        when (tab) {
+            Tab.ECM -> progressEcm.visibility = if (busy) View.VISIBLE else View.GONE
+            Tab.BENCH -> progressBench.visibility = if (busy) View.VISIBLE else View.GONE
+        }
         findViewById<MaterialButton>(R.id.btn_probe).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_short).isEnabled = !busy
         findViewById<MaterialButton>(R.id.btn_addsub_32).isEnabled = !busy

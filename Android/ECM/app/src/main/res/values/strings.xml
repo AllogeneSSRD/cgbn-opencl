@@ -1,11 +1,17 @@
 <resources>
     <string name="app_name">ECM OpenCL</string>
     <string name="subtitle">GPU OpenCL ECM 分解 &amp; 微基准</string>
+    <string name="subtitle_ecm">GPU OpenCL ECM Stage-1 分解</string>
+    <string name="subtitle_bench">OpenCL 算子微基准</string>
+    <string name="nav_ecm">ECM</string>
+    <string name="nav_bench">基准</string>
+    <string name="ecm_diag_title">OpenCL 诊断</string>
+    <string name="bench_section_hint">Add/Sub、Montgomery、Limb 微基准（与 ECM 分解独立）</string>
     <string name="ecm_section_title">ECM GPU 分解 (Stage-1)</string>
     <string name="ecm_section_hint">对应桌面: echo \'N\' | ecm.exe -gpu -gpucurves … B1 B2</string>
     <string name="hint_n_expr">N 表达式 (stdin)</string>
     <string name="hint_n_preset">预设</string>
-    <string name="default_n_expr">(2^371-1)</string>
+    <string name="default_n_expr">(2^347-1)</string>
     <string name="hint_b1">B1</string>
     <string name="hint_b2">B2</string>
     <string name="default_b1">10000</string>
@@ -49,7 +55,9 @@
     <string name="btn_bench_16">16-bit</string>
     <string name="btn_bench_24">24-bit</string>
     <string name="btn_bench_32">32-bit</string>
-    <string name="output_hint">点击按钮运行测试…</string>
+    <string name="output_section_title">输出日志</string>
+    <string name="output_hint_ecm">运行 ECM 或诊断后显示日志…</string>
+    <string name="output_hint_bench">运行微基准后显示结果…</string>
     <string name="running">运行中…</string>
     <string name="invalid_params">请填写有效的正整数参数</string>
     <string name="toast_bits_multiple">bits 必须是 %1$d 的倍数</string>

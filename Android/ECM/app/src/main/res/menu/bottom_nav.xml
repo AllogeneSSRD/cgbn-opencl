@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/nav_ecm"
+        android:icon="@drawable/ic_nav_ecm"
+        android:title="@string/nav_ecm" />
+    <item
+        android:id="@+id/nav_bench"
+        android:icon="@drawable/ic_nav_bench"
+        android:title="@string/nav_bench" />
+</menu>
