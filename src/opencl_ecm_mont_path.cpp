@@ -43,6 +43,20 @@ bool path_requests_unroll32(const char *path) {
             strcmp(path, "mont_mul_stage1_unroll32") == 0);
 }
 
+bool path_requests_priv_opt(const char *path) {
+    return path != nullptr &&
+           (strcmp(path, "priv_opt") == 0 || strcmp(path, "mont_mul_priv_opt") == 0 ||
+            strcmp(path, "mont_sqr_priv_opt") == 0 ||
+            strcmp(path, "mont_mul_stage1_priv_opt") == 0);
+}
+
+bool path_requests_unroll384(const char *path) {
+    return path != nullptr &&
+           (strcmp(path, "unroll_only_384") == 0 ||
+            strcmp(path, "mont_mul_priv_unroll_only_384") == 0 ||
+            strcmp(path, "mont_sqr_priv_unroll_only_384") == 0);
+}
+
 } // namespace
 
 bool opencl_ecm_stage1_should_use_i24(ecm_stage1_mont_mode mode, size_t n_bit_size, int verbose) {
@@ -67,7 +81,8 @@ int opencl_ecm_parse_mont4096_path(const char *path) {
         return 0;
     }
     if (path_requests_i24_any(path) || path_requests_unroll512(path) ||
-        path_requests_unroll32(path)) {
+        path_requests_unroll32(path) || path_requests_unroll384(path) ||
+        path_requests_priv_opt(path)) {
         return 0;
     }
     if (strcmp(path, "unroll64_4096") == 0) {
@@ -154,16 +169,36 @@ ecm_stage1_mont_mode opencl_ecm_resolve_stage1_mont_mode(const char *gpu_mul_pat
     if (path_requests_unroll32(gpu_mul_path) || path_requests_unroll32(gpu_sqr_path)) {
         return ECM_STAGE1_MONT_UNROLL32;
     }
+    if (path_requests_priv_opt(gpu_mul_path) || path_requests_priv_opt(gpu_sqr_path)) {
+        return ECM_STAGE1_MONT_PRIV_OPT;
+    }
+    if (path_requests_unroll384(gpu_mul_path) || path_requests_unroll384(gpu_sqr_path)) {
+        if (opencl_ecm_stage1_n_fits_unroll384(n_bit_size)) {
+            return ECM_STAGE1_MONT_UNROLL384;
+        }
+        ecm_ts_fprintf(stderr,
+                       "Warning: unroll_only_384 requires N+%zu<%zu bits (N<%zu), got %zu; "
+                       "using unroll512\n",
+                       ECM_STAGE1_MONT_CARRY_BITS, ECM_STAGE1_UNROLL384_MAX_BITS,
+                       ECM_STAGE1_UNROLL384_MAX_BITS - ECM_STAGE1_MONT_CARRY_BITS, n_bit_size);
+        return ECM_STAGE1_MONT_UNROLL512;
+    }
 
     const bool mul_blsub = path_requests_i24_u32_blsub(gpu_mul_path);
     const bool sqr_blsub = path_requests_i24_u32_blsub(gpu_sqr_path);
     const bool mul_u32 = path_requests_i24_u32_branchy(gpu_mul_path);
     const bool sqr_u32 = path_requests_i24_u32_branchy(gpu_sqr_path);
-    const bool auto_blsub =
-        path_is_auto(gpu_mul_path) && path_is_auto(gpu_sqr_path) && n_bit_size < 384u;
+    const bool both_auto = path_is_auto(gpu_mul_path) && path_is_auto(gpu_sqr_path);
+    const bool auto_blsub = both_auto && n_bit_size < ECM_STAGE1_AUTO_I24_MAX_BITS;
+    const bool auto_unroll384 =
+        both_auto && n_bit_size >= ECM_STAGE1_AUTO_I24_MAX_BITS &&
+        opencl_ecm_stage1_n_fits_unroll384(n_bit_size);
 
     if (mul_blsub || sqr_blsub || auto_blsub) {
         return ECM_STAGE1_MONT_I24_U32_BLSUB;
+    }
+    if (auto_unroll384) {
+        return ECM_STAGE1_MONT_UNROLL384;
     }
     if (mul_u32 || sqr_u32) {
         return ECM_STAGE1_MONT_I24_U32;
@@ -183,6 +218,10 @@ const char *opencl_ecm_stage1_mont_mode_name(ecm_stage1_mont_mode mode) {
         return "mont_mul_unroll_i24_u32_blsub";
     case ECM_STAGE1_MONT_UNROLL32:
         return "mont_mul_stage1_unroll32";
+    case ECM_STAGE1_MONT_UNROLL384:
+        return "mont_mul_priv_unroll_only_384";
+    case ECM_STAGE1_MONT_PRIV_OPT:
+        return "mont_mul_stage1_priv_opt";
     default:
         return "mont_mul_priv_unroll_only_512";
     }
@@ -196,6 +235,10 @@ const char *opencl_ecm_stage1_mont_sqr_mode_name(ecm_stage1_mont_mode mode) {
         return "mont_sqr_unroll_i24_u32_blsub";
     case ECM_STAGE1_MONT_UNROLL32:
         return "mont_sqr_stage1_unroll32";
+    case ECM_STAGE1_MONT_UNROLL384:
+        return "mont_sqr_priv_unroll_only_384";
+    case ECM_STAGE1_MONT_PRIV_OPT:
+        return "mont_sqr_stage1_priv_opt";
     default:
         return "mont_sqr_priv_unroll_only_512";
     }

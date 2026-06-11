@@ -52,6 +52,8 @@ static bool g_kernel_use_coop_wg = false;
 static bool g_kernel_use_i24 = false;
 static bool g_kernel_use_i24_blsub = false;
 static bool g_kernel_force_unroll32 = false;
+static bool g_kernel_force_unroll384 = false;
+static bool g_kernel_force_priv_opt = false;
 static bool g_device_info_printed = false;
 
 static void strip_pragma_once(std::string &src) {
@@ -612,7 +614,8 @@ static uint32_t select_bits(size_t n_log2) {
 
 static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr_path, int add_path,
                              int sub_path, bool use_i24, bool use_i24_blsub, bool force_unroll32,
-                             int verbose, double *device_init_ms) {
+                             bool force_unroll384, bool force_priv_opt, int verbose,
+                             double *device_init_ms) {
     const int coop_wg =
         (limbs == 128u)
             ? std::max(opencl_ecm_mont4096_coop_wg_size(mul_path),
@@ -635,7 +638,9 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
         g_kernel_mul_path == mul_path && g_kernel_sqr_path == sqr_path &&
         g_kernel_add_path == add_path && g_kernel_sub_path == sub_path &&
         g_kernel_use_i24 == use_i24 && g_kernel_use_i24_blsub == use_i24_blsub &&
-        g_kernel_force_unroll32 == force_unroll32) {
+        g_kernel_force_unroll32 == force_unroll32 &&
+        g_kernel_force_unroll384 == force_unroll384 &&
+        g_kernel_force_priv_opt == force_priv_opt) {
         if (device_init_ms) {
             *device_init_ms = 0.0;
         }
@@ -726,11 +731,13 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
              "-DECM_STAGE1_COOP_SCRATCH_U32=%d -DECM_STAGE1_HAS_FIPS4096=%d "
              "-DECM_STAGE1_ADDMOD_PATH=%d -DECM_STAGE1_SUBMOD_PATH=%d -DECM_STAGE1_ASM_B32=%d "
              "-DECM_STAGE1_ASM_B16=%d -DECM_STAGE1_USE_I24_384=%d -DECM_STAGE1_I24_U32_BLSUB=%d "
-             "-DECM_STAGE1_FORCE_UNROLL32=%d -DMP_LIMB_BITS=%u",
+             "-DECM_STAGE1_FORCE_UNROLL32=%d -DECM_STAGE1_FORCE_UNROLL384=%d "
+             "-DECM_STAGE1_FORCE_PRIV_OPT=%d -DMP_LIMB_BITS=%u",
              limbs, tpi, stage1_force_normalize, add_mod_fused_unroll, mul_path, sqr_path, coop_wg,
              coop_scratch, has_fips4096, add_path, sub_path, needs_asm_b32 ? 1 : 0,
              needs_asm_b16 ? 1 : 0, use_i24 ? 1 : 0, use_i24_blsub ? 1 : 0,
-             force_unroll32 ? 1 : 0, use_i24 ? 24u : 32u);
+             force_unroll32 ? 1 : 0, force_unroll384 ? 1 : 0, force_priv_opt ? 1 : 0,
+             use_i24 ? 24u : 32u);
 
     cl_int buildErr = CL_SUCCESS;
     g_ecm_program = cgbn::opencl::build_program_from_source(g_ctx, src.c_str(), opts, buildErr);
@@ -769,6 +776,8 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
     g_kernel_use_i24 = use_i24;
     g_kernel_use_i24_blsub = use_i24_blsub;
     g_kernel_force_unroll32 = force_unroll32;
+    g_kernel_force_unroll384 = force_unroll384;
+    g_kernel_force_priv_opt = force_priv_opt;
     auto t_init1 = std::chrono::high_resolution_clock::now();
     double init_ms =
         std::chrono::duration<double, std::milli>(t_init1 - t_init0).count();
@@ -852,8 +861,13 @@ extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mu
         use_i24 && mont_mode == ECM_STAGE1_MONT_I24_U32_BLSUB;
     const bool force_unroll32 =
         !use_i24 && mont_mode == ECM_STAGE1_MONT_UNROLL32;
+    const bool force_unroll384 =
+        !use_i24 && mont_mode == ECM_STAGE1_MONT_UNROLL384;
+    const bool force_priv_opt =
+        !use_i24 && mont_mode == ECM_STAGE1_MONT_PRIV_OPT;
     return ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, add_path, sub_path, use_i24,
-                             use_i24_blsub, force_unroll32, verbose, &init_ms);
+                             use_i24_blsub, force_unroll32, force_unroll384, force_priv_opt,
+                             verbose, &init_ms);
 }
 
 extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, const mpz_t s,
@@ -985,10 +999,30 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         use_i24 && mont_mode == ECM_STAGE1_MONT_I24_U32_BLSUB;
     const bool force_unroll32 =
         !use_i24 && mont_mode == ECM_STAGE1_MONT_UNROLL32;
+    const bool force_unroll384 =
+        !use_i24 && mont_mode == ECM_STAGE1_MONT_UNROLL384;
+    const bool force_priv_opt =
+        !use_i24 && mont_mode == ECM_STAGE1_MONT_PRIV_OPT;
+    bool effective_force_unroll384 = force_unroll384;
+    if (effective_force_unroll384 && !opencl_ecm_stage1_n_fits_unroll384(n_log2)) {
+        ecm_ts_fprintf(stderr,
+                       "Warning: unroll_only_384 requires N+%u<%u bits, got %zu; "
+                       "using mont_mul_priv_unroll_only_512\n",
+                       ECM_STAGE1_MONT_CARRY_BITS,
+                       static_cast<unsigned>(ECM_STAGE1_UNROLL384_MAX_BITS), n_log2);
+        effective_force_unroll384 = false;
+    } else if (effective_force_unroll384 && limbs != 16u) {
+        ecm_ts_fprintf(stderr,
+                       "Warning: unroll_only_384 requires 512-bit container (16 limbs), got %u; "
+                       "using mont_mul_stage1_priv_opt\n",
+                       limbs);
+        effective_force_unroll384 = false;
+    }
 
     double device_init_ms = 0.0;
     if (ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, add_path, sub_path, use_i24,
-                          use_i24_blsub, force_unroll32, verbose, &device_init_ms) != 0) {
+                          use_i24_blsub, force_unroll32, effective_force_unroll384, force_priv_opt,
+                          verbose, &device_init_ms) != 0) {
         free(s_bits);
         if (ckpt_data) {
             free(ckpt_data);
@@ -1053,16 +1087,24 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         use_i24 ? opencl_ecm_stage1_mont_mode_name(mont_mode)
                 : mont_mode == ECM_STAGE1_MONT_UNROLL32
                       ? opencl_ecm_stage1_mont_mode_name(mont_mode)
+                : mont_mode == ECM_STAGE1_MONT_PRIV_OPT
+                      ? opencl_ecm_stage1_mont_mode_name(mont_mode)
+                : mont_mode == ECM_STAGE1_MONT_UNROLL384 && limbs == 16u
+                      ? opencl_ecm_stage1_mont_mode_name(mont_mode)
                 : (limbs == 16u) ? "mont_mul_priv_unroll_only_512"
                 : (limbs == 128u) ? opencl_ecm_mont4096_path_name(mul_path)
-                                  : "mont_mul_stage1_unroll32";
+                                  : "mont_mul_stage1_priv_opt";
     const char *mont_sqr_op =
         use_i24 ? opencl_ecm_stage1_mont_sqr_mode_name(mont_mode)
                 : mont_mode == ECM_STAGE1_MONT_UNROLL32
                       ? opencl_ecm_stage1_mont_sqr_mode_name(mont_mode)
+                : mont_mode == ECM_STAGE1_MONT_PRIV_OPT
+                      ? opencl_ecm_stage1_mont_sqr_mode_name(mont_mode)
+                : mont_mode == ECM_STAGE1_MONT_UNROLL384 && limbs == 16u
+                      ? opencl_ecm_stage1_mont_sqr_mode_name(mont_mode)
                 : (limbs == 16u) ? "mont_sqr_priv_unroll_only_512"
                 : (limbs == 128u) ? opencl_ecm_mont4096_path_name(sqr_path)
-                                  : "mont_sqr_stage1_unroll32";
+                                  : "mont_sqr_stage1_priv_opt";
     const char *addmod_op = opencl_ecm_addsub_path_name(add_path);
     const char *submod_op = opencl_ecm_addsub_path_name(sub_path);
     ecm_ts_fprintf(stdout,

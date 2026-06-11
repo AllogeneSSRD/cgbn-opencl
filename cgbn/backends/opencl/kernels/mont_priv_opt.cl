@@ -7,6 +7,7 @@
 #endif
 
 #define MONT_OPT2_FIXED_LIMBS 16u
+#define MONT_OPT2_384_LIMBS 12u
 #define MONT_FIXED_4096_LIMBS 128u
 
 static inline void mont_mul_priv_opt_core(__global uint *out, __global const uint *a,
@@ -818,6 +819,95 @@ static inline void mont_mul_priv_unroll_only_512_body(
     for (uint i = 0u; i < MONT_OPT2_FIXED_LIMBS; ++i) {
         out[base + i] = (D[i] & mask) | (t[i] & ~mask);
     }
+}
+
+// 384-bit CIOS (12 active 32-bit limbs), 16-limb layout. Requires N + CARRY_BITS < 384.
+static inline void mont_mul_priv_unroll_only_384_body(
+    __global uint *out,
+    __global const uint *a,
+    __global const uint *b,
+    __constant uint *n,
+    uint base,
+    uint np0)
+{
+    uint t[MONT_OPT2_384_LIMBS + 2u];
+    #pragma unroll
+    for (uint i = 0u; i < MONT_OPT2_384_LIMBS + 2u; ++i) {
+        t[i] = 0u;
+    }
+    uint B[MONT_OPT2_FIXED_LIMBS];
+    uint N[MONT_OPT2_FIXED_LIMBS];
+    #pragma unroll
+    for (uint j = 0u; j < MONT_OPT2_FIXED_LIMBS; ++j) {
+        B[j] = b[base + j];
+        N[j] = n[j];
+    }
+
+    #pragma unroll
+    for (uint i = 0u; i < MONT_OPT2_384_LIMBS; ++i) {
+        uint ai = a[base + i];
+        ulong carry = 0ul;
+        #pragma unroll
+        for (uint j = 0u; j < MONT_OPT2_384_LIMBS; ++j) {
+            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
+            t[j] = (uint)uv;
+            carry = uv >> 32;
+        }
+        ulong top = (ulong)t[MONT_OPT2_384_LIMBS] + carry;
+        t[MONT_OPT2_384_LIMBS] = (uint)top;
+        t[MONT_OPT2_384_LIMBS + 1u] = (uint)(top >> 32);
+
+        uint m = (uint)((ulong)t[0] * (ulong)np0);
+        carry = 0ul;
+        #pragma unroll
+        for (uint j = 0u; j < MONT_OPT2_384_LIMBS; ++j) {
+            ulong uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
+            if (j > 0u) {
+                t[j - 1u] = (uint)uv;
+            }
+            carry = uv >> 32;
+        }
+        top = (ulong)t[MONT_OPT2_384_LIMBS] + carry;
+        t[MONT_OPT2_384_LIMBS - 1u] = (uint)top;
+        top = (ulong)t[MONT_OPT2_384_LIMBS + 1u] + (top >> 32);
+        t[MONT_OPT2_384_LIMBS] = (uint)top;
+        t[MONT_OPT2_384_LIMBS + 1u] = (uint)(top >> 32);
+    }
+
+    ulong borrow = 0ul;
+    uint D[MONT_OPT2_384_LIMBS];
+    #pragma unroll
+    for (uint i = 0u; i < MONT_OPT2_384_LIMBS; ++i) {
+        ulong tv = (ulong)t[i];
+        ulong nv = (ulong)N[i];
+        ulong w = tv - nv - borrow;
+        D[i] = (uint)w;
+        borrow = (tv < nv + borrow) ? 1ul : 0ul;
+    }
+
+    uint any_high = (t[MONT_OPT2_384_LIMBS] | t[MONT_OPT2_384_LIMBS + 1u]) != 0u;
+    uint no_borrow = (borrow == 0u);
+    uint need_sub = any_high | no_borrow;
+    uint mask = 0u - need_sub;
+
+    #pragma unroll
+    for (uint i = 0u; i < MONT_OPT2_384_LIMBS; ++i) {
+        out[base + i] = (D[i] & mask) | (t[i] & ~mask);
+    }
+    #pragma unroll
+    for (uint i = MONT_OPT2_384_LIMBS; i < MONT_OPT2_FIXED_LIMBS; ++i) {
+        out[base + i] = 0u;
+    }
+}
+
+static inline void mont_sqr_priv_unroll_only_384_body(
+    __global uint *out,
+    __global const uint *a,
+    __constant uint *n,
+    uint base,
+    uint np0)
+{
+    mont_mul_priv_unroll_only_384_body(out, a, a, n, base, np0);
 }
 
 // GMP sqr_basecase (n=16): off-diagonal triangle in tp, double + diagonal -> rp[2n].
@@ -2366,6 +2456,30 @@ __kernel void cgbn_mont_sqr_unroll_only_512(__global const uint *a, __constant u
     uint base = gid * limbs;
     uint np0 = np0_ptr[0];
     mont_sqr_priv_unroll_only_512_body(out, a, n, base, np0);
+}
+
+__kernel void cgbn_mont_mul_unroll_only_384(__global const uint *a, __global const uint *b,
+                                             __constant uint *n, __global uint *out,
+                                             __constant uint *np0_ptr, uint limbs) {
+    if (limbs != MONT_OPT2_FIXED_LIMBS) {
+        return;
+    }
+    uint gid = get_global_id(0);
+    uint base = gid * limbs;
+    uint np0 = np0_ptr[0];
+    mont_mul_priv_unroll_only_384_body(out, a, b, n, base, np0);
+}
+
+__kernel void cgbn_mont_sqr_unroll_only_384(__global const uint *a, __constant uint *n,
+                                             __global uint *out, __constant uint *np0_ptr,
+                                             uint limbs) {
+    if (limbs != MONT_OPT2_FIXED_LIMBS) {
+        return;
+    }
+    uint gid = get_global_id(0);
+    uint base = gid * limbs;
+    uint np0 = np0_ptr[0];
+    mont_sqr_priv_unroll_only_384_body(out, a, n, base, np0);
 }
 
 __kernel void cgbn_mont_mul_local_only_512(__global const uint *a, __global const uint *b,

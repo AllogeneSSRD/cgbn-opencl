@@ -9,10 +9,12 @@
     </string-array>
 
     <string-array name="ecm_mul_path_labels">
-        <item>自动 (&lt;384b → i24_u32_blsub)</item>
+        <item>自动 (&lt;288b→i24; 288–377b→unroll384; 378–506b→unroll512)</item>
         <item>i24_u32_blsub</item>
         <item>i24_u32</item>
+        <item>unroll_only_384 (384-bit)</item>
         <item>unroll_only_512 (512-bit)</item>
+        <item>priv_opt</item>
         <item>unroll32</item>
         <item>unroll64_4096 (4096-bit)</item>
         <item>unroll64_4096_mt2</item>
@@ -24,7 +26,9 @@
         <item>auto</item>
         <item>i24_u32_blsub</item>
         <item>i24_u32</item>
+        <item>unroll_only_384</item>
         <item>unroll_only_512</item>
+        <item>priv_opt</item>
         <item>unroll32</item>
         <item>unroll64_4096</item>
         <item>unroll64_4096_mt2</item>
@@ -34,10 +38,12 @@
     </string-array>
 
     <string-array name="ecm_sqr_path_labels">
-        <item>自动 (&lt;384b → i24_u32_blsub)</item>
+        <item>自动 (&lt;288b→i24; 288–377b→unroll384; 378–506b→unroll512)</item>
         <item>i24_u32_blsub</item>
         <item>i24_u32</item>
+        <item>unroll_only_384 (384-bit)</item>
         <item>unroll_only_512 (512-bit)</item>
+        <item>priv_opt</item>
         <item>unroll32</item>
         <item>unroll64_4096 (4096-bit)</item>
         <item>unroll64_4096_mt2</item>
@@ -49,7 +55,9 @@
         <item>auto</item>
         <item>i24_u32_blsub</item>
         <item>i24_u32</item>
+        <item>unroll_only_384</item>
         <item>unroll_only_512</item>
+        <item>priv_opt</item>
         <item>unroll32</item>
         <item>unroll64_4096</item>
         <item>unroll64_4096_mt2</item>

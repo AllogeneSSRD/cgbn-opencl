@@ -142,6 +142,43 @@ __kernel void ecm_mont_sqr_priv_unroll_only_512_bench(__global const uint *a, __
     }
 }
 
+__kernel void ecm_mont_mul_priv_unroll_only_384_bench(__global const uint *a, __global const uint *b,
+                                                       __constant uint *n, __global uint *out,
+                                                       __constant uint *np0_ptr, uint limbs,
+                                                       uint iterations) {
+    if (limbs != MONT_OPT2_FIXED_LIMBS) {
+        return;
+    }
+    uint gid = get_global_id(0);
+    uint base = gid * limbs;
+    uint np0 = np0_ptr[0];
+    for (uint it = 0u; it < iterations; ++it) {
+        if (it == 0u) {
+            mont_mul_priv_unroll_only_384_body(out, a, b, n, base, np0);
+        } else {
+            mont_mul_priv_unroll_only_384_body(out, out, b, n, base, np0);
+        }
+    }
+}
+
+__kernel void ecm_mont_sqr_priv_unroll_only_384_bench(__global const uint *a, __constant uint *n,
+                                                       __global uint *out, __constant uint *np0_ptr,
+                                                       uint limbs, uint iterations) {
+    if (limbs != MONT_OPT2_FIXED_LIMBS) {
+        return;
+    }
+    uint gid = get_global_id(0);
+    uint base = gid * limbs;
+    uint np0 = np0_ptr[0];
+    for (uint it = 0u; it < iterations; ++it) {
+        if (it == 0u) {
+            mont_sqr_priv_unroll_only_384_body(out, a, n, base, np0);
+        } else {
+            mont_sqr_priv_unroll_only_384_body(out, out, n, base, np0);
+        }
+    }
+}
+
 __kernel void ecm_mont_mul_priv_fips512_bench(__global const uint *a, __global const uint *b,
                                                __constant uint *n, __global uint *out,
                                                __constant uint *np0_ptr, uint limbs,

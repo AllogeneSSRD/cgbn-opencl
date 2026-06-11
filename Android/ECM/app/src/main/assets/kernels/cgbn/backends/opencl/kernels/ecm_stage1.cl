@@ -33,11 +33,27 @@
 #endif
 
 #ifndef ECM_STAGE1_I24_U32_BLSUB
-#define ECM_STAGE1_I24_U32_BLSUB 1
+#define ECM_STAGE1_I24_U32_BLSUB 0
 #endif
 
 #ifndef ECM_STAGE1_FORCE_UNROLL32
 #define ECM_STAGE1_FORCE_UNROLL32 0
+#endif
+
+#ifndef ECM_STAGE1_FORCE_UNROLL384
+#define ECM_STAGE1_FORCE_UNROLL384 0
+#endif
+
+#ifndef ECM_STAGE1_FORCE_PRIV_OPT
+#define ECM_STAGE1_FORCE_PRIV_OPT 0
+#endif
+
+#ifndef ECM_STAGE1_384_LIMBS
+#define ECM_STAGE1_384_LIMBS 12u
+#endif
+
+#ifndef ECM_STAGE1_512_CONTAINER_LIMBS
+#define ECM_STAGE1_512_CONTAINER_LIMBS 16u
 #endif
 
 // Path ids: 0=unroll64_4096, 1=unroll64_4096_mt2, 2=fips4096, 3=fips4096_mt8, 4=fips4096_mt16
@@ -100,6 +116,77 @@ static inline void mont_mul_stage1_unroll_only_512(uint *out, const uint *a, con
     uint mask = 0u - need_sub;
     #pragma unroll
     for (uint i = 0u; i < 16u; ++i) out[i] = (D[i] & mask) | (t[i] & ~mask);
+}
+
+// 384-bit CIOS: 12 active 32-bit limbs in a 16-limb private layout.
+// Valid only when N + CARRY_BITS < 384 (host: opencl_ecm_stage1_n_fits_unroll384).
+static inline void mont_mul_stage1_unroll_only_384(uint *out, const uint *a, const uint *b,
+                                                   const uint *N, uint np0) {
+    uint t[ECM_STAGE1_384_LIMBS + 2u];
+    #pragma unroll
+    for (uint i = 0u; i < ECM_STAGE1_384_LIMBS + 2u; ++i) {
+        t[i] = 0u;
+    }
+    uint B[ECM_STAGE1_512_CONTAINER_LIMBS];
+    #pragma unroll
+    for (uint j = 0u; j < ECM_STAGE1_512_CONTAINER_LIMBS; ++j) {
+        B[j] = b[j];
+    }
+
+    #pragma unroll
+    for (uint i = 0u; i < ECM_STAGE1_384_LIMBS; ++i) {
+        uint ai = a[i];
+        ulong carry = 0ul;
+        #pragma unroll
+        for (uint j = 0u; j < ECM_STAGE1_384_LIMBS; ++j) {
+            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
+            t[j] = (uint)uv;
+            carry = uv >> 32;
+        }
+        ulong top = (ulong)t[ECM_STAGE1_384_LIMBS] + carry;
+        t[ECM_STAGE1_384_LIMBS] = (uint)top;
+        t[ECM_STAGE1_384_LIMBS + 1u] = (uint)(top >> 32);
+
+        uint m = (uint)((ulong)t[0] * (ulong)np0);
+        carry = 0ul;
+        #pragma unroll
+        for (uint j = 0u; j < ECM_STAGE1_384_LIMBS; ++j) {
+            ulong uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
+            if (j > 0u) {
+                t[j - 1u] = (uint)uv;
+            }
+            carry = uv >> 32;
+        }
+        top = (ulong)t[ECM_STAGE1_384_LIMBS] + carry;
+        t[ECM_STAGE1_384_LIMBS - 1u] = (uint)top;
+        top = (ulong)t[ECM_STAGE1_384_LIMBS + 1u] + (top >> 32);
+        t[ECM_STAGE1_384_LIMBS] = (uint)top;
+        t[ECM_STAGE1_384_LIMBS + 1u] = (uint)(top >> 32);
+    }
+
+    ulong borrow = 0ul;
+    uint D[ECM_STAGE1_384_LIMBS];
+    #pragma unroll
+    for (uint i = 0u; i < ECM_STAGE1_384_LIMBS; ++i) {
+        ulong tv = (ulong)t[i];
+        ulong nv = (ulong)N[i];
+        ulong w = tv - nv - borrow;
+        D[i] = (uint)w;
+        borrow = (tv < nv + borrow) ? 1ul : 0ul;
+    }
+
+    uint any_high =
+        (t[ECM_STAGE1_384_LIMBS] | t[ECM_STAGE1_384_LIMBS + 1u]) != 0u;
+    uint need_sub = any_high | (borrow == 0u);
+    uint mask = 0u - need_sub;
+    #pragma unroll
+    for (uint i = 0u; i < ECM_STAGE1_384_LIMBS; ++i) {
+        out[i] = (D[i] & mask) | (t[i] & ~mask);
+    }
+    #pragma unroll
+    for (uint i = ECM_STAGE1_384_LIMBS; i < ECM_STAGE1_512_CONTAINER_LIMBS; ++i) {
+        out[i] = 0u;
+    }
 }
 
 static inline void mont_mul_stage1_unroll64_4096(uint *out, const uint *a, const uint *b,
@@ -277,6 +364,71 @@ static inline void mont_mul_stage1_unroll64_4096_mt2_local(
     }
 }
 
+// Generic Montgomery mul: cached B + speculative final subtract (mont_mul_priv_opt_core ABI).
+static inline void mont_mul_stage1_priv_opt(uint *out, const uint *a, const uint *b,
+                                            const uint *N, uint np0, uint limbs) {
+    if (limbs == 0u || limbs > MAX_LIMBS) {
+        return;
+    }
+
+    uint t[MAX_LIMBS + 2u];
+    for (uint i = 0u; i < limbs + 2u; ++i) {
+        t[i] = 0u;
+    }
+
+    uint B[MAX_LIMBS];
+    for (uint j = 0u; j < limbs; ++j) {
+        B[j] = b[j];
+    }
+
+    for (uint i = 0u; i < limbs; ++i) {
+        uint ai = a[i];
+
+        ulong carry = 0ul;
+        for (uint j = 0u; j < limbs; ++j) {
+            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
+            t[j] = (uint)uv;
+            carry = uv >> 32;
+        }
+        ulong top = (ulong)t[limbs] + carry;
+        t[limbs] = (uint)top;
+        t[limbs + 1u] = (uint)(top >> 32);
+
+        uint m = (uint)((ulong)t[0] * (ulong)np0);
+        carry = 0ul;
+        for (uint j = 0u; j < limbs; ++j) {
+            ulong uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
+            if (j > 0u) {
+                t[j - 1u] = (uint)uv;
+            }
+            carry = uv >> 32;
+        }
+        top = (ulong)t[limbs] + carry;
+        t[limbs - 1u] = (uint)top;
+        top = (ulong)t[limbs + 1u] + (top >> 32);
+        t[limbs] = (uint)top;
+        t[limbs + 1u] = (uint)(top >> 32);
+    }
+
+    ulong borrow = 0ul;
+    uint D[MAX_LIMBS];
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong tv = (ulong)t[i];
+        ulong nv = (ulong)N[i];
+        ulong w = tv - nv - borrow;
+        D[i] = (uint)w;
+        borrow = (tv < nv + borrow) ? 1ul : 0ul;
+    }
+
+    uint need_sub = (t[limbs] != 0u || t[limbs + 1u] != 0u) ? 1u : 0u;
+    need_sub = (borrow == 0u) ? 1u : need_sub;
+    uint mask = 0u - need_sub;
+
+    for (uint i = 0u; i < limbs; ++i) {
+        out[i] = (D[i] & mask) | (t[i] & ~mask);
+    }
+}
+
 static inline void mont_mul_stage1_unroll32(uint *out, const uint *a, const uint *b,
                                             const uint *N, uint np0, uint limbs) {
     uint t[MAX_LIMBS + 2u];
@@ -345,7 +497,7 @@ static inline void mont_sqr_stage1_i24(uint *out, const uint *a, const uint *N, 
 // Default stage1 montgomery selector:
 // - 512-bit: use fixed unroll-only path
 // - 4096-bit: use fixed unroll64 path
-// - others: use generic unroll32 path
+// - others: use generic priv_opt path (bench: faster than unroll32 on Adreno)
 static inline void mont_mul_stage1(uint *out, const uint *a, const uint *b,
                                    const uint *N, uint np0, uint limbs) {
 #if ECM_STAGE1_USE_I24_384
@@ -358,8 +510,16 @@ static inline void mont_mul_stage1(uint *out, const uint *a, const uint *b,
     mont_mul_stage1_unroll32(out, a, b, N, np0, limbs);
     return;
 #endif
+#if ECM_STAGE1_FORCE_PRIV_OPT
+    mont_mul_stage1_priv_opt(out, a, b, N, np0, limbs);
+    return;
+#endif
     if (limbs == 16u) {
+#if ECM_STAGE1_FORCE_UNROLL384
+        mont_mul_stage1_unroll_only_384(out, a, b, N, np0);
+#else
         mont_mul_stage1_unroll_only_512(out, a, b, N, np0);
+#endif
     } else if (limbs == 128u) {
 #if ECM_STAGE1_MUL_PATH == 2
         mont_mul_stage1_fips4096(out, a, b, N, np0);
@@ -367,7 +527,7 @@ static inline void mont_mul_stage1(uint *out, const uint *a, const uint *b,
         mont_mul_stage1_unroll64_4096(out, a, b, N, np0);
 #endif
     } else {
-        mont_mul_stage1_unroll32(out, a, b, N, np0, limbs);
+        mont_mul_stage1_priv_opt(out, a, b, N, np0, limbs);
     }
 }
 
