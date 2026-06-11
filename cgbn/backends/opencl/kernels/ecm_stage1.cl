@@ -1019,7 +1019,103 @@ static inline int mp_sub_mod(uint *r, const uint *a, const uint *b, const uint *
     return 0;
 }
 
+#if ECM_STAGE1_USE_I24_384
+static inline uint mp_add_n_i24(uint *r, const uint *a, const uint *b, uint limbs) {
+    const uint mask = MONT_I24_LIMB_MASK;
+    ulong carry = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong sum = (ulong)(a[i] & mask) + (ulong)(b[i] & mask) + carry;
+        r[i] = (uint)(sum & mask);
+        carry = sum >> 24;
+    }
+    return (uint)carry;
+}
+
+static inline void shift_right_24_limbs(uint *r, uint limbs) {
+    for (uint i = 0u; i + 1u < limbs; ++i) {
+        r[i] = r[i + 1u];
+    }
+    r[limbs - 1u] = 0u;
+}
+
+static inline uint mul_ui24_limbs(uint *r, uint m, uint limbs) {
+    const uint mask = MONT_I24_LIMB_MASK;
+    ulong carry = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong prod = mont_i24_mul_full(r[i] & mask, m) + carry;
+        r[i] = (uint)(prod & mask);
+        carry = prod >> 24;
+    }
+    return (uint)carry;
+}
+
+static inline void special_mult_ui24(uint *r, uint m, const uint *N, uint np0, uint limbs) {
+    uint carry_t1 = mul_ui24_limbs(r, m, limbs);
+    const uint t1_0 = r[0] & MONT_I24_LIMB_MASK;
+    const uint q = mul24(t1_0, np0);
+
+    uint temp[MAX_LIMBS];
+    mp_copy(temp, N, limbs);
+    const uint carry_t2 = mul_ui24_limbs(temp, q, limbs);
+
+    shift_right_24_limbs(r, limbs);
+    shift_right_24_limbs(temp, limbs);
+    r[limbs - 1u] = carry_t1;
+    temp[limbs - 1u] = carry_t2;
+
+    int carry_q = (int)mp_add_n_i24(r, r, temp, limbs);
+    if (t1_0 != 0u) {
+        ulong c = 1ul;
+        for (uint i = 0u; i < limbs; ++i) {
+            ulong sum = (ulong)(r[i] & MONT_I24_LIMB_MASK) + c;
+            r[i] = (uint)(sum & MONT_I24_LIMB_MASK);
+            c = sum >> 24;
+        }
+        carry_q += (int)c;
+    }
+    if (carry_q > 0) {
+        mp_sub_n_i24(r, r, N, limbs);
+    }
+    if (mp_ge_i24(r, N, limbs)) {
+        mp_sub_n_i24(r, r, N, limbs);
+    }
+}
+
+static inline void mp_shift_left_1_mod_i24(uint *r, const uint *a, const uint *N, uint limbs) {
+    const uint mask = MONT_I24_LIMB_MASK;
+    uint carry = 0u;
+    for (uint i = 0u; i < limbs; ++i) {
+        const uint old = a[i] & mask;
+        r[i] = ((old << 1) | carry) & mask;
+        carry = old >> 23;
+    }
+    if (carry != 0u || mp_ge_i24(r, N, limbs)) {
+        mp_sub_n_i24(r, r, N, limbs);
+    }
+}
+#endif
+
+static inline uint mul_ui32_limbs(uint *r, uint m, uint limbs);
+static inline void shift_right_32_limbs(uint *r, uint limbs);
+static inline void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs);
+
+static inline void special_mult_stage1(uint *r, uint m, const uint *N, uint np0, uint limbs) {
+#if ECM_STAGE1_USE_I24_384
+    if (limbs == MAX_LIMBS) {
+        special_mult_ui24(r, m, N, np0, limbs);
+        return;
+    }
+#endif
+    special_mult_ui32(r, m, N, np0, limbs);
+}
+
 static inline void mp_shift_left_1_mod(uint *r, const uint *a, const uint *N, uint limbs) {
+#if ECM_STAGE1_USE_I24_384
+    if (limbs == MAX_LIMBS) {
+        mp_shift_left_1_mod_i24(r, a, N, limbs);
+        return;
+    }
+#endif
     uint carry = 0u;
     for (uint i = 0u; i < limbs; ++i) {
         uint old = a[i];
@@ -1074,7 +1170,7 @@ static inline void shift_right_32_limbs(uint *r, uint limbs) {
 }
 
 // (r * m) / 2^32 mod N — ported from CUDA curve_t::special_mult_ui32
-void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
+static inline void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
     uint carry_t1 = mul_ui32_limbs(r, m, limbs);
     uint t1_0 = r[0];
     uint q = (uint)((ulong)t1_0 * (ulong)np0);
@@ -1564,7 +1660,7 @@ static inline void double_add_v2(
     (void)mp_sub_mod(K, AA, BB, N, limbs);
 
     mp_copy(dK, K, limbs);
-    special_mult_ui32(dK, d, N, np0, limbs);
+    special_mult_stage1(dK, d, N, np0, limbs);
 
     mp_add_mod(u, BB, dK, N, limbs);
     mont_mul_stage1(u, K, u, N, np0, limbs);
@@ -1632,7 +1728,7 @@ static inline void double_add_v2_coop(
         maybe_mont_normalize(q, N, limbs);
         (void)mp_sub_mod(K, AA, BB, N, limbs);
         mp_copy(dK, K, limbs);
-        special_mult_ui32(dK, d, N, np0, limbs);
+        special_mult_stage1(dK, d, N, np0, limbs);
         mp_add_mod(u, BB, dK, N, limbs);
     }
     barrier(CLK_LOCAL_MEM_FENCE);

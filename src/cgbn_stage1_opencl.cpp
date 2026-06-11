@@ -488,18 +488,27 @@ static int findfactor(mpz_t factor, const mpz_t N, const mpz_t x_final, const mp
     return ECM_FACTOR_FOUND_STEP1;
 }
 
+static bool limb24_slots_equal(const uint32_t *a, const uint32_t *b, uint32_t limbs) {
+    for (uint32_t i = 0; i < limbs; ++i) {
+        if ((a[i] & ECM_LIMB24_MASK) != (b[i] & ECM_LIMB24_MASK)) {
+            return false;
+        }
+    }
+    return true;
+}
+
 static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
                            const uint32_t *data, uint32_t limbs, int curves, uint32_t sigma,
-                           int verbose, bool use_i24) {
-    mpz_t modulo, x_std, z_std;
-    mpz_init(modulo);
+                           int verbose, bool use_i24, const uint32_t *n_limbs_buf,
+                           uint32_t np0_i24) {
+    mpz_t x_std, z_std;
     mpz_init(x_std);
     mpz_init(z_std);
 
     const bool verify_results = env_flag_enabled("ECM_VERIFY_GPU_RESULTS");
     const bool verify_strict = env_flag_enabled("ECM_VERIFY_GPU_STRICT");
 
-    const uint32_t np0 = ecm_find_np0(N);
+    const uint32_t np0 = use_i24 ? np0_i24 : ecm_find_np0(N);
     int youpi = ECM_NO_FACTOR_FOUND;
     int errors = 0;
     int verify_errors = 0;
@@ -508,26 +517,42 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
         const uint32_t *datum = data + (5 * i * limbs);
 
         if (use_i24) {
-            ecm_limb24_to_mpz(modulo, datum + 0 * limbs, limbs);
+            if (!limb24_slots_equal(datum, n_limbs_buf, limbs)) {
+                ecm_ts_fprintf(stderr, "GPU: curve %d modulus mismatch\n", i);
+                if (verbose >= 2 && i == 0) {
+                    ecm_ts_fprintf(stderr, "  slot0:");
+                    for (uint32_t j = 0; j < limbs; ++j) {
+                        ecm_ts_fprintf(stderr, " %06x", datum[j] & ECM_LIMB24_MASK);
+                    }
+                    ecm_ts_fprintf(stderr, " expected:");
+                    for (uint32_t j = 0; j < limbs; ++j) {
+                        ecm_ts_fprintf(stderr, " %06x", n_limbs_buf[j] & ECM_LIMB24_MASK);
+                    }
+                    ecm_ts_fprintf(stderr, "\n");
+                }
+            }
         } else {
+            mpz_t modulo;
+            mpz_init(modulo);
             ecm_to_mpz(modulo, datum + 0 * limbs, limbs);
-        }
-        if (mpz_cmp(modulo, N) != 0) {
-            ecm_ts_fprintf(stderr, "GPU: curve %d modulus mismatch\n", i);
+            if (mpz_cmp(modulo, N) != 0) {
+                ecm_ts_fprintf(stderr, "GPU: curve %d modulus mismatch\n", i);
+            }
+            mpz_clear(modulo);
         }
 
         mpz_t x_mont, z_mont;
         mpz_init(x_mont);
         mpz_init(z_mont);
         if (use_i24) {
-            ecm_limb24_to_mpz(x_mont, datum + 1 * limbs, limbs);
-            ecm_limb24_to_mpz(z_mont, datum + 2 * limbs, limbs);
+            ecm_limb24_to_mpz(x_std, datum + 1 * limbs, limbs);
+            ecm_limb24_to_mpz(z_std, datum + 2 * limbs, limbs);
         } else {
             ecm_to_mpz(x_mont, datum + 1 * limbs, limbs);
             ecm_to_mpz(z_mont, datum + 2 * limbs, limbs);
+            mpz_set(x_std, x_mont);
+            mpz_set(z_std, z_mont);
         }
-        mpz_set(x_std, x_mont);
-        mpz_set(z_std, z_mont);
 
         mpz_clear(x_mont);
         mpz_clear(z_mont);
@@ -555,7 +580,6 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
                     if (verify_strict) {
                         mpz_clear(rem);
                         mpz_clear(gcdz);
-                        mpz_clear(modulo);
                         mpz_clear(x_std);
                         mpz_clear(z_std);
                         return ECM_ERROR;
@@ -571,7 +595,6 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
                     if (verify_strict) {
                         mpz_clear(rem);
                         mpz_clear(gcdz);
-                        mpz_clear(modulo);
                         mpz_clear(x_std);
                         mpz_clear(z_std);
                         return ECM_ERROR;
@@ -586,7 +609,6 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
         }
     }
 
-    mpz_clear(modulo);
     mpz_clear(x_std);
     mpz_clear(z_std);
 
@@ -732,7 +754,7 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
              "-DECM_STAGE1_ADDMOD_PATH=%d -DECM_STAGE1_SUBMOD_PATH=%d -DECM_STAGE1_ASM_B32=%d "
              "-DECM_STAGE1_ASM_B16=%d -DECM_STAGE1_USE_I24_384=%d -DECM_STAGE1_I24_U32_BLSUB=%d "
              "-DECM_STAGE1_FORCE_UNROLL32=%d -DECM_STAGE1_FORCE_UNROLL384=%d "
-             "-DECM_STAGE1_FORCE_PRIV_OPT=%d -DMP_LIMB_BITS=%u",
+             "-DECM_STAGE1_FORCE_PRIV_OPT=%d -DMP_LIMB_BITS=%u -DECM_STAGE1_KERNEL_REV=4",
              limbs, tpi, stage1_force_normalize, add_mod_fused_unroll, mul_path, sqr_path, coop_wg,
              coop_scratch, has_fips4096, add_path, sub_path, needs_asm_b32 ? 1 : 0,
              needs_asm_b16 ? 1 : 0, use_i24 ? 1 : 0, use_i24_blsub ? 1 : 0,
@@ -1037,6 +1059,14 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         ecm_from_mpz(N, n_limbs_buf, limbs);
     }
     const uint32_t np0 = use_i24 ? ecm_find_np0_limb24(n_limbs_buf) : ecm_find_np0(N);
+    if (!ckpt_loaded && use_i24 && opencl_ecm_selftest_montgomery_limb24(N, limbs) != 0) {
+        free(s_bits);
+        return ECM_ERROR;
+    }
+    if (!ckpt_loaded && use_i24 &&
+        opencl_ecm_selftest_i24_mont_mul(g_ctx, N, limbs, np0, use_i24_blsub) != 0) {
+        ecm_ts_fprintf(stderr, "GPU: warning: i24 mont mul self-test failed\n");
+    }
     if (!ckpt_loaded && !use_i24 && opencl_ecm_selftest_montgomery(N, BITS) != 0) {
         free(s_bits);
         return ECM_ERROR;
@@ -1308,10 +1338,22 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         emit_ops_profile(counts, curves, s_num_bits, batches_complete, gputime_local, verbose);
     }
 
+    // Kernel reads N from slot 0 once per curve and never writes it back; restore after readback
+    // so host-side checks see the standard modulus (GPU may leave stale bits in the copy).
+    if (err == CL_SUCCESS && use_i24) {
+        const uint32_t stride = 5u * limbs;
+        for (uint32_t c = 0; c < curves; ++c) {
+            uint32_t *slot_n = data + c * stride;
+            for (uint32_t j = 0; j < limbs; ++j) {
+                slot_n[j] = n_limbs_buf[j];
+            }
+        }
+    }
+
     int youpi = ECM_NO_FACTOR_FOUND;
     if (err == CL_SUCCESS) {
         youpi = process_results(factors, array_found, N, data, limbs, (int)curves, sigma, verbose,
-                                use_i24);
+                                use_i24, n_limbs_buf, np0);
     } else {
         youpi = ECM_ERROR;
     }

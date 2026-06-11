@@ -1247,6 +1247,7 @@ static inline void mont_sqr_priv_local_only_512_body(
     }
 }
 
+#if MAX_LIMBS >= 128
 // Fixed 4096-bit (128 limbs) local-only path:
 // keep loops dynamic to avoid huge codegen / VGPR blow-up from full unroll.
 static inline void mont_mul_priv_local_only_4096_body(
@@ -2403,6 +2404,7 @@ static inline void mont_sqr_priv_unroll64_4096_mt2_weak_body(
     mont_mul_priv_unroll64_4096_mt2_weak_body(out, a, a, n, base, np0, local_mem, lid);
 }
 
+#endif // MAX_LIMBS >= 128 (4096 bodies)
 
 // Raw kernels for RGA analysis (no benchmark loop wrapper).
 __kernel void cgbn_mont_mul_opt2_512_local(__global const uint *a, __global const uint *b,
@@ -2511,6 +2513,7 @@ __kernel void cgbn_mont_sqr_local_only_512(__global const uint *a, __constant ui
     mont_sqr_priv_local_only_512_body(out, a, n, base, np0, local_mem, lid, lsize);
 }
 
+#if MAX_LIMBS >= 128
 __kernel void cgbn_mont_mul_local_only_4096(__global const uint *a, __global const uint *b,
                                              __constant uint *n, __global uint *out,
                                              __constant uint *np0_ptr, uint limbs,
@@ -2539,6 +2542,8 @@ __kernel void cgbn_mont_sqr_local_only_4096(__global const uint *a, __constant u
     uint np0 = np0_ptr[0];
     mont_sqr_priv_local_only_4096_body(out, a, n, base, np0, local_mem, lid, lsize);
 }
+
+#endif // MAX_LIMBS >= 128 (4096 local-only entry kernels)
 
 // removed: unroll2/4/8 raw kernels (replaced by unroll32/64)
 
@@ -2699,6 +2704,7 @@ __kernel void cgbn_mont_sqr_unroll64(__global const uint *a, __constant uint *n,
     mont_sqr_priv_unroll64_body(out, a, n, base, np0, limbs);
 }
 
+#if MAX_LIMBS >= 128
 // Dedicated fixed-4096 kernels (for ISA/resource comparison vs generic unroll64).
 __kernel void cgbn_mont_mul_unroll64_4096(__global const uint *a, __global const uint *b,
                                            __constant uint *n, __global uint *out,
@@ -2805,3 +2811,4 @@ __kernel void cgbn_mont_sqr_unroll64_4096_mt8(__global const uint *a, __constant
     uint lid = get_local_id(0);
     mont_sqr_priv_unroll64_4096_mt8_body(out, a, n, base, np0, local_mem, lid);
 }
+#endif // MAX_LIMBS >= 128

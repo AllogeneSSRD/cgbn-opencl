@@ -38,10 +38,14 @@ void ecm_limb24_from_mpz(uint32_t *out, uint32_t limbs, const mpz_t s) {
 
 void ecm_limb24_to_mpz(mpz_t r, const uint32_t *x, uint32_t limbs) {
     mpz_set_ui(r, 0);
-    for (uint32_t i = 0; i < limbs; ++i) {
-        mpz_mul_2exp(r, r, 24);
-        mpz_add_ui(r, r, x[i] & ECM_LIMB24_MASK);
+    mpz_t limb;
+    mpz_init(limb);
+    for (uint32_t i = 0u; i < limbs; ++i) {
+        mpz_set_ui(limb, x[i] & ECM_LIMB24_MASK);
+        mpz_mul_2exp(limb, limb, 24u * i);
+        mpz_add(r, r, limb);
     }
+    mpz_clear(limb);
 }
 
 uint32_t ecm_find_np0_limb24(const uint32_t *n_limbs) {
@@ -60,21 +64,23 @@ void ecm_to_montgomery_limb24(uint32_t *out, const mpz_t bn, const mpz_t N, uint
 
 void ecm_from_montgomery_limb24(mpz_t out, const mpz_t mont, const mpz_t N, uint32_t np0,
                                 uint32_t limbs) {
-    mpz_t prod, add;
+    (void)np0;
+    const uint32_t mont_bits = limbs * 24u;
+    mpz_t r_inv, prod;
+    mpz_init(r_inv);
     mpz_init(prod);
-    mpz_init(add);
-    mpz_set(prod, mont);
-    for (uint32_t index = 0; index < limbs; ++index) {
-        const uint32_t low = np0 * (static_cast<uint32_t>(mpz_get_ui(prod)) & ECM_LIMB24_MASK);
-        mpz_mul_ui(add, N, low);
-        mpz_add(prod, prod, add);
-        mpz_fdiv_q_2exp(prod, prod, 24);
+    mpz_set_ui(r_inv, 2);
+    mpz_pow_ui(r_inv, r_inv, mont_bits);
+    if (!mpz_invert(r_inv, r_inv, N)) {
+        ecm_ts_fprintf(stderr, "limb24: R^-1 mod N does not exist\n");
+        mpz_set_ui(out, 0);
+        mpz_clear(r_inv);
+        mpz_clear(prod);
+        return;
     }
-    if (mpz_cmp(prod, N) < 0) {
-        mpz_set(out, prod);
-    } else {
-        mpz_sub(out, prod, N);
-    }
+    mpz_mul(prod, mont, r_inv);
+    mpz_mod(prod, prod, N);
+    mpz_set(out, prod);
+    mpz_clear(r_inv);
     mpz_clear(prod);
-    mpz_clear(add);
 }

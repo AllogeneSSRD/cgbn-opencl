@@ -64,8 +64,11 @@ bool opencl_ecm_stage1_n_fits_i24_container(size_t n_bit_size) {
 }
 
 ecm_stage1_mont_mode opencl_ecm_stage1_compatible_mont_fallback(size_t n_bit_size) {
-    if (opencl_ecm_stage1_n_fits_i24_container(n_bit_size)) {
-        return ECM_STAGE1_MONT_I24_U32;
+    if (opencl_ecm_stage1_n_fits_unroll384(n_bit_size)) {
+        return ECM_STAGE1_MONT_UNROLL384;
+    }
+    if (opencl_ecm_stage1_n_fits_unroll512_container(n_bit_size)) {
+        return ECM_STAGE1_MONT_UNROLL512;
     }
     return ECM_STAGE1_MONT_PRIV_OPT;
 }
@@ -208,23 +211,9 @@ ecm_stage1_mont_mode opencl_ecm_resolve_stage1_mont_mode(const char *gpu_mul_pat
     const bool mul_u32 = path_requests_i24_u32_branchy(gpu_mul_path);
     const bool sqr_u32 = path_requests_i24_u32_branchy(gpu_sqr_path);
     const bool both_auto = path_is_auto(gpu_mul_path) && path_is_auto(gpu_sqr_path);
-    const bool auto_blsub =
-        both_auto && n_bit_size < ECM_STAGE1_AUTO_I24_BLSUB_MAX_BITS;
-    const bool auto_unroll384 =
-        both_auto && n_bit_size >= ECM_STAGE1_AUTO_I24_BLSUB_MAX_BITS &&
-        opencl_ecm_stage1_n_fits_unroll384(n_bit_size);
-    const bool auto_unroll512 =
-        both_auto && !opencl_ecm_stage1_n_fits_unroll384(n_bit_size) &&
-        opencl_ecm_stage1_n_fits_unroll512_container(n_bit_size);
 
-    if (mul_blsub || sqr_blsub || auto_blsub) {
+    if (mul_blsub || sqr_blsub) {
         return ECM_STAGE1_MONT_I24_U32_BLSUB;
-    }
-    if (auto_unroll384) {
-        return ECM_STAGE1_MONT_UNROLL384;
-    }
-    if (auto_unroll512) {
-        return ECM_STAGE1_MONT_UNROLL512;
     }
     if (mul_u32 || sqr_u32) {
         return ECM_STAGE1_MONT_I24_U32;

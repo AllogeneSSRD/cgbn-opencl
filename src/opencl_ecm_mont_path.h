@@ -26,7 +26,7 @@ enum ecm_stage1_mont_mode {
     ECM_STAGE1_MONT_UNROLL512 = 0,
     /** Same algorithm as mont_mul_unroll_i24_u32_body (private ABI in stage1). */
     ECM_STAGE1_MONT_I24_U32 = 1,
-    /** Same algorithm as mont_mul_unroll_i24_u32_blsub_body; default for N < 384 auto. */
+    /** Same algorithm as mont_mul_unroll_i24_u32_blsub_body; explicit --mul/--sqr only. */
     ECM_STAGE1_MONT_I24_U32_BLSUB = 2,
     /** Generic mont_mul_stage1_unroll32 (any limb count). */
     ECM_STAGE1_MONT_UNROLL32 = 3,
@@ -36,9 +36,8 @@ enum ecm_stage1_mont_mode {
     ECM_STAGE1_MONT_PRIV_OPT = 5,
 };
 
-/** Auto: N below this uses i24_u32_blsub when mul/sqr are both auto (beats unroll384 here). */
+/** Legacy bench threshold; stage-1 auto no longer selects i24 (explicit --mul/--sqr only). */
 constexpr size_t ECM_STAGE1_AUTO_I24_BLSUB_MAX_BITS = 264u;
-/** Legacy alias. */
 constexpr size_t ECM_STAGE1_AUTO_I24_MAX_BITS = ECM_STAGE1_AUTO_I24_BLSUB_MAX_BITS;
 constexpr size_t ECM_STAGE1_MONT_CARRY_BITS = 6u;
 /** 12-limb CIOS width (32-bit limbs); Montgomery headroom uses CARRY_BITS. */
@@ -56,7 +55,7 @@ inline bool opencl_ecm_stage1_n_fits_unroll512_container(size_t n_bit_size) {
 
 /** i24 stage-1 data fits host/OpenCL buffer (see OPENCL_ECM_MAX_LIMBS). */
 bool opencl_ecm_stage1_n_fits_i24_container(size_t n_bit_size);
-/** Generic fallback when no fixed-bit mont path applies (prefer i24_u32, else priv_opt). */
+/** Generic fallback when no fixed-bit mont path applies (unroll384 → unroll512 → priv_opt). */
 ecm_stage1_mont_mode opencl_ecm_stage1_compatible_mont_fallback(size_t n_bit_size);
 
 /** Resolve mul/sqr path strings for stage1. Empty/null = auto. */

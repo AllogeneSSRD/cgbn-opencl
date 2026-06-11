@@ -16,7 +16,12 @@
 
 namespace {
 
+#if defined(__ANDROID__)
+constexpr uint32_t kMaxBenchBits = 2048;
+#else
 constexpr uint32_t kMaxBenchBits = 8192;
+#endif
+
 constexpr uint32_t kLimb24Mask = (1u << 24) - 1u;
 constexpr uint32_t kMontI24Limbs512 = 22u;
 constexpr const char* kKernelAssetRoot = "cgbn/backends/opencl/kernels/";
@@ -643,6 +648,10 @@ std::string run_montsqr_bench(int bits, int kernel_iterations, int instances, in
     out << bits << "-bit, kernel_iterations=" << kernel_iterations << ", instances=" << instances
         << ", launch_repeats=" << launch_repeats << ", mode=" << (use_wg ? "wg" : "priv")
         << ", tpi=" << tpi << "\n";
+#if defined(__ANDROID__)
+    out << "note: Android u32 bench capped at " << kMaxBenchBits
+        << " bits; 4096 mont paths omitted when MAX_LIMBS<128\n";
+#endif
     out << "note: AMD asm paths omitted on Android\n";
 
     OpenCLApi api{};

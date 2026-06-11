@@ -14,7 +14,12 @@
 
 namespace {
 
+#if defined(__ANDROID__)
+constexpr uint32_t kMaxBenchBits = 2048;
+#else
 constexpr uint32_t kMaxBenchBits = 8192;
+#endif
+
 constexpr uint32_t kLimb24Mask = (1u << 24) - 1u;
 
 struct Limb24AddBenchKernel {
@@ -268,6 +273,10 @@ std::string run_addsub_bench(int bits, int kernel_iterations, int instances, int
     out << bits << "-bit, limb_bits=" << limb_bits << ", limbs=" << words
         << ", kernel_iterations=" << kernel_iterations << ", instances=" << instances
         << ", launch_repeats=" << launch_repeats << "\n";
+#if defined(__ANDROID__)
+    out << "note: Android u32 bench capped at " << kMaxBenchBits
+        << " bits; manual fused_unroll omitted at >=1024 bits\n";
+#endif
 
     OpenCLApi api{};
     bool own_lib = false;

@@ -5,6 +5,12 @@
 
 namespace {
 
+#if defined(__ANDROID__)
+constexpr bool kAndroidBenchLite = true;
+#else
+constexpr bool kAndroidBenchLite = false;
+#endif
+
 void push(std::vector<std::string>& paths, const char* rel) {
     paths.emplace_back(rel);
 }
@@ -79,8 +85,10 @@ std::vector<EcmMontSqrBenchKernel> opencl_ecm_montsqr_mul_kernels(uint32_t words
     }
     k.push_back(kspec("ecm_mont_mul_priv_unroll32_bench", "mont_mul_priv_unroll32", true,
                       MontDispatch::PrivUnroll, words));
-    k.push_back(kspec("ecm_mont_mul_priv_unroll64_bench", "mont_mul_priv_unroll64", true,
-                      MontDispatch::PrivUnroll, words));
+    if (!(kAndroidBenchLite && words >= 32u)) {
+        k.push_back(kspec("ecm_mont_mul_priv_unroll64_bench", "mont_mul_priv_unroll64", true,
+                          MontDispatch::PrivUnroll, words));
+    }
     if (use_wg && words != 16u) {
         k.push_back(kspec("cgbn_mont_mul_wg_bench", "mont_mul_wg", true, MontDispatch::Wg));
     }
@@ -96,8 +104,10 @@ std::vector<EcmMontSqrBenchKernel> opencl_ecm_montsqr_sqr_kernels(uint32_t words
     }
     k.push_back(kspec("ecm_mont_sqr_priv_unroll32_bench", "mont_sqr_priv_unroll32", false,
                       MontDispatch::PrivUnroll, words));
-    k.push_back(kspec("ecm_mont_sqr_priv_unroll64_bench", "mont_sqr_priv_unroll64", false,
-                      MontDispatch::PrivUnroll, words));
+    if (!(kAndroidBenchLite && words >= 32u)) {
+        k.push_back(kspec("ecm_mont_sqr_priv_unroll64_bench", "mont_sqr_priv_unroll64", false,
+                          MontDispatch::PrivUnroll, words));
+    }
     if (use_wg && words != 16u) {
         k.push_back(kspec("cgbn_mont_sqr_wg_bench", "mont_sqr_wg", false, MontDispatch::Wg));
     }

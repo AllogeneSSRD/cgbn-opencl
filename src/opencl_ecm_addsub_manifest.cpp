@@ -5,6 +5,12 @@
 
 namespace {
 
+#if defined(__ANDROID__)
+constexpr bool kAndroidBenchLite = true;
+#else
+constexpr bool kAndroidBenchLite = false;
+#endif
+
 constexpr const char *kKernelsRoot = "cgbn/backends/opencl/kernels";
 
 void push_if(std::vector<std::string> &paths, const char *rel) {
@@ -23,8 +29,12 @@ EcmAddSubBuildManifest opencl_ecm_addsub_build_manifest(uint32_t words, bool asm
                                                         bool asm_b64_enabled) {
     EcmAddSubBuildManifest m;
     push_if(m.source_paths, "ecm_addsub_bench.cl");
-    push_if(m.source_paths, "mp_addsub/generated/add_fused_unroll_manual.cl");
-    push_if(m.source_paths, "mp_addsub/generated/sub_fused_unroll_manual.cl");
+    // Manual full-unroll sources are ~1 MiB and include 4096-bit bodies; skip on Android @1024+.
+    const bool skip_manual_unroll = kAndroidBenchLite && words >= 32u;
+    if (!skip_manual_unroll) {
+        push_if(m.source_paths, "mp_addsub/generated/add_fused_unroll_manual.cl");
+        push_if(m.source_paths, "mp_addsub/generated/sub_fused_unroll_manual.cl");
+    }
     push_if(m.source_paths, "mp_addsub/generated/fused_unroll_auto.cl");
     if (asm_enabled) {
         push_if(m.source_paths, "mp_addsub/asm_base.cl");
@@ -93,10 +103,12 @@ std::vector<EcmAddSubBenchKernel> opencl_ecm_addsub_add_kernels(uint32_t words, 
         snprintf(label, sizeof(label), "fused_lpt%d", chunk);
         k.push_back(kspec(kname, label, EcmAddSubTier::Lpt, true, false, true, chunk, "fused_unroll"));
     }
-    k.push_back(kspec("ecm_mp_add_mod_fused_unroll", "fused_unroll", EcmAddSubTier::FusedUnrollManual, true,
-                      false, false, 0, "fused"));
-    k.push_back(kspec("ecm_mp_add_mod_fused_unroll_priv", "fused_unroll_priv",
-                      EcmAddSubTier::FusedUnrollManual, true, false, false, 0, "fused_unroll"));
+    if (!(kAndroidBenchLite && words >= 32u)) {
+        k.push_back(kspec("ecm_mp_add_mod_fused_unroll", "fused_unroll", EcmAddSubTier::FusedUnrollManual,
+                          true, false, false, 0, "fused"));
+        k.push_back(kspec("ecm_mp_add_mod_fused_unroll_priv", "fused_unroll_priv",
+                          EcmAddSubTier::FusedUnrollManual, true, false, false, 0, "fused_unroll"));
+    }
     k.push_back(kspec("ecm_mp_add_mod_fused_unroll_auto", "fused_unroll_auto", EcmAddSubTier::FusedUnrollAuto,
                       true, false, false, 0, "fused_unroll"));
     if (!bench_unroll_only) {
@@ -122,10 +134,12 @@ std::vector<EcmAddSubBenchKernel> opencl_ecm_addsub_sub_kernels(uint32_t words, 
         k.push_back(kspec("ecm_mp_sub_mod_fused_unroll_asm_b32", "fused_unroll_asm_b32", EcmAddSubTier::Asm,
                           false, true, false, 0, "fused_unroll"));
     }
-    k.push_back(kspec("ecm_mp_sub_mod_fused_unroll", "fused_unroll", EcmAddSubTier::FusedUnrollManual, false,
-                      false, false, 0, "ecm_mp_sub_mod"));
-    k.push_back(kspec("ecm_mp_sub_mod_fused_unroll_priv", "fused_unroll_priv",
-                      EcmAddSubTier::FusedUnrollManual, false, false, false, 0, "fused_unroll"));
+    if (!(kAndroidBenchLite && words >= 32u)) {
+        k.push_back(kspec("ecm_mp_sub_mod_fused_unroll", "fused_unroll", EcmAddSubTier::FusedUnrollManual,
+                          false, false, false, 0, "ecm_mp_sub_mod"));
+        k.push_back(kspec("ecm_mp_sub_mod_fused_unroll_priv", "fused_unroll_priv",
+                          EcmAddSubTier::FusedUnrollManual, false, false, false, 0, "fused_unroll"));
+    }
     k.push_back(kspec("ecm_mp_sub_mod_fused_unroll_auto", "fused_unroll_auto", EcmAddSubTier::FusedUnrollAuto,
                       false, false, false, 0, "fused_unroll"));
     k.push_back(kspec("ecm_mp_sub_mod", "fused_loop", EcmAddSubTier::Fused, false, false, false, 0,

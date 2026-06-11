@@ -36,6 +36,7 @@
 #define MONT_I24_LIMB_MASK 0xFFFFFFu
 
 static inline ulong mont_i24_mul_full(uint a, uint b) {
+#if defined(__ADRENO__) || defined(__qcom__)
     const uint mask12 = 0xFFFu;
     const uint a0 = a & mask12;
     const uint a1 = a >> 12;
@@ -48,6 +49,9 @@ static inline ulong mont_i24_mul_full(uint a, uint b) {
     const uint lo48 = (p00 & mask12) | ((mid2 & mask12) << 12);
     const uint hi48 = mad24(a1, b1, mid2 >> 12);
     return ((ulong)hi48 << 24) | lo48;
+#else
+    return (ulong)(a & MONT_I24_LIMB_MASK) * (ulong)(b & MONT_I24_LIMB_MASK);
+#endif
 }
 
 static inline ulong mont_i24_add3(ulong x, ulong y, ulong z) {
@@ -55,6 +59,7 @@ static inline ulong mont_i24_add3(ulong x, ulong y, ulong z) {
 }
 
 static inline uint2 mont_i24_mul_full_split(uint a, uint b) {
+#if defined(__ADRENO__) || defined(__qcom__)
     const uint mask12 = 0xFFFu;
     const uint a0 = a & mask12;
     const uint a1 = a >> 12;
@@ -67,6 +72,10 @@ static inline uint2 mont_i24_mul_full_split(uint a, uint b) {
     const uint lo48 = (p00 & mask12) | ((mid2 & mask12) << 12);
     const uint hi48 = mad24(a1, b1, mid2 >> 12);
     return (uint2)(lo48, hi48);
+#else
+    const ulong prod = mont_i24_mul_full(a, b);
+    return (uint2)((uint)(prod & MONT_I24_LIMB_MASK), (uint)(prod >> MONT_I24_RADIX_BITS));
+#endif
 }
 
 static inline uint mont_i24_cios_mac_u32(uint *t_j, uint ai, uint bj, uint carry) {
@@ -200,7 +209,7 @@ static inline void mont_mul_unroll_i24_u32_blsub_priv_body(uint *out, const uint
         const uint tv = t[i];
         const uint nv = N[i];
         D[i] = tv - nv - borrow;
-        borrow = (uint)((tv < nv) | ((tv == nv) & borrow));
+        borrow = (uint)(((ulong)tv < (ulong)nv + (ulong)borrow) ? 1ul : 0ul);
     }
     const uint any_high = (t[MONT_I24_LIMBS] | t[MONT_I24_LIMBS + 1u]) != 0u;
     const uint need_sub = any_high | (borrow == 0u);
@@ -415,7 +424,7 @@ static inline void mont_mul_unroll_i24_blsub_body(
         const uint tv = t[i];
         const uint nv = N[i];
         D[i] = tv - nv - borrow;
-        borrow = (uint)((tv < nv) | ((tv == nv) & borrow));
+        borrow = (uint)(((ulong)tv < (ulong)nv + (ulong)borrow) ? 1ul : 0ul);
     }
     const uint any_high = (t[MONT_I24_LIMBS] | t[MONT_I24_LIMBS + 1u]) != 0u;
     const uint need_sub = any_high | (borrow == 0u);
@@ -482,7 +491,7 @@ static inline void mont_mul_unroll_i24_u32_blsub_body(
         const uint tv = t[i];
         const uint nv = N[i];
         D[i] = tv - nv - borrow;
-        borrow = (uint)((tv < nv) | ((tv == nv) & borrow));
+        borrow = (uint)(((ulong)tv < (ulong)nv + (ulong)borrow) ? 1ul : 0ul);
     }
     const uint any_high = (t[MONT_I24_LIMBS] | t[MONT_I24_LIMBS + 1u]) != 0u;
     const uint need_sub = any_high | (borrow == 0u);
