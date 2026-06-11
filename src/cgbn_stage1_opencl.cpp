@@ -35,7 +35,7 @@
 #endif
 #include <ctime>
 
-#define CARRY_BITS 6
+#define CARRY_BITS ECM_STAGE1_CARRY_BITS
 
 static cgbn::opencl::context_t g_ctx;
 static bool g_ctx_ready = false;
@@ -49,7 +49,9 @@ static int g_kernel_add_path = ECM_ADDSUB_PATH_FUSED_UNROLL_B32;
 static int g_kernel_sub_path = ECM_ADDSUB_PATH_FUSED_UNROLL;
 static int g_kernel_coop_wg = 1;
 static bool g_kernel_use_coop_wg = false;
-static bool g_kernel_use_i24_384 = false;
+static bool g_kernel_use_i24 = false;
+static bool g_kernel_use_i24_blsub = false;
+static bool g_kernel_force_unroll32 = false;
 static bool g_device_info_printed = false;
 
 static void strip_pragma_once(std::string &src) {
@@ -382,7 +384,7 @@ static uint32_t *allocate_and_set_s_bits(const mpz_t s, uint64_t *nbits) {
 static void stage1_curves_to_montgomery(uint32_t *data, uint32_t curves, uint32_t limbs,
                                         const mpz_t N, uint32_t bits, bool use_i24) {
     const uint32_t stride = 5u * limbs;
-    const uint32_t mont_bits = use_i24 ? ECM_I24_384_BITS : bits;
+    const uint32_t mont_bits = use_i24 ? ecm_limb24_mont_bits(limbs) : bits;
     mpz_t t, mont;
     mpz_init(t);
     mpz_init(mont);
@@ -402,11 +404,34 @@ static void stage1_curves_to_montgomery(uint32_t *data, uint32_t curves, uint32_
     mpz_clear(mont);
 }
 
+static void stage1_curves_from_montgomery(uint32_t *data, uint32_t curves, uint32_t limbs,
+                                          const mpz_t N, uint32_t np0, bool use_i24) {
+    const uint32_t stride = 5u * limbs;
+    mpz_t t, mont;
+    mpz_init(t);
+    mpz_init(mont);
+    for (uint32_t c = 0; c < curves; ++c) {
+        uint32_t *datum = data + c * stride;
+        for (uint32_t slot = 1; slot <= 4; ++slot) {
+            if (use_i24) {
+                ecm_limb24_to_mpz(mont, datum + slot * limbs, limbs);
+                ecm_from_montgomery_limb24(t, mont, N, np0, limbs);
+                ecm_limb24_from_mpz(datum + slot * limbs, limbs, t);
+            } else {
+                ecm_to_mpz(mont, datum + slot * limbs, limbs);
+                ecm_from_montgomery(t, mont, N, np0, limbs);
+                ecm_from_mpz(t, datum + slot * limbs, limbs);
+            }
+        }
+    }
+    mpz_clear(t);
+    mpz_clear(mont);
+}
+
 // CUDA set_p_2p: N, P=(2,1), 2P=(9, 64*d+8) in standard form; bn2mont before each GPU batch.
-static uint32_t *set_p_2p(const mpz_t N, uint32_t curves, uint32_t sigma, uint32_t BITS,
+static uint32_t *set_p_2p(const mpz_t N, uint32_t curves, uint32_t sigma, uint32_t limbs,
                           size_t *data_size, bool use_i24) {
-    const uint32_t limbs_per = BITS / 32;
-    *data_size = 5 * curves * limbs_per * sizeof(uint32_t);
+    *data_size = 5 * curves * limbs * sizeof(uint32_t);
     uint32_t *data = (uint32_t *)malloc(*data_size);
     uint32_t *datum = data;
 
@@ -416,24 +441,24 @@ static uint32_t *set_p_2p(const mpz_t N, uint32_t curves, uint32_t sigma, uint32
 
     auto export_slot = [&](uint32_t *dst, const mpz_t v) {
         if (use_i24) {
-            ecm_limb24_from_mpz(dst, limbs_per, v);
+            ecm_limb24_from_mpz(dst, limbs, v);
         } else {
-            ecm_from_mpz(v, dst, limbs_per);
+            ecm_from_mpz(v, dst, limbs);
         }
     };
 
     for (uint32_t index = 0; index < curves; index++) {
         uint32_t d = sigma + index;
 
-        export_slot(datum + 0 * limbs_per, N);
+        export_slot(datum + 0 * limbs, N);
 
         mpz_set_ui(x, 2);
-        export_slot(datum + 1 * limbs_per, x);
+        export_slot(datum + 1 * limbs, x);
         mpz_set_ui(x, 1);
-        export_slot(datum + 2 * limbs_per, x);
+        export_slot(datum + 2 * limbs, x);
 
         mpz_set_ui(x, 9);
-        export_slot(datum + 3 * limbs_per, x);
+        export_slot(datum + 3 * limbs, x);
 
         mpz_ui_pow_ui(t, 2, 32);
         mpz_invert(t, t, N);
@@ -441,9 +466,9 @@ static uint32_t *set_p_2p(const mpz_t N, uint32_t curves, uint32_t sigma, uint32
         mpz_mul_ui(t, t, 64);
         mpz_add_ui(t, t, 8);
         mpz_mod(t, t, N);
-        export_slot(datum + 4 * limbs_per, t);
+        export_slot(datum + 4 * limbs, t);
 
-        datum += 5 * limbs_per;
+        datum += 5 * limbs;
     }
 
     mpz_clear(x);
@@ -462,8 +487,8 @@ static int findfactor(mpz_t factor, const mpz_t N, const mpz_t x_final, const mp
 }
 
 static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
-                           const uint32_t *data, uint32_t cgbn_bits, int curves,
-                           uint32_t sigma, int verbose, bool use_i24) {
+                           const uint32_t *data, uint32_t limbs, int curves, uint32_t sigma,
+                           int verbose, bool use_i24) {
     mpz_t modulo, x_std, z_std;
     mpz_init(modulo);
     mpz_init(x_std);
@@ -472,19 +497,18 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
     const bool verify_results = env_flag_enabled("ECM_VERIFY_GPU_RESULTS");
     const bool verify_strict = env_flag_enabled("ECM_VERIFY_GPU_STRICT");
 
-    const uint32_t limbs_per = cgbn_bits / 32;
     const uint32_t np0 = ecm_find_np0(N);
     int youpi = ECM_NO_FACTOR_FOUND;
     int errors = 0;
     int verify_errors = 0;
 
     for (int i = 0; i < curves; i++) {
-        const uint32_t *datum = data + (5 * i * limbs_per);
+        const uint32_t *datum = data + (5 * i * limbs);
 
         if (use_i24) {
-            ecm_limb24_to_mpz(modulo, datum + 0 * limbs_per, limbs_per);
+            ecm_limb24_to_mpz(modulo, datum + 0 * limbs, limbs);
         } else {
-            ecm_to_mpz(modulo, datum + 0 * limbs_per, limbs_per);
+            ecm_to_mpz(modulo, datum + 0 * limbs, limbs);
         }
         if (mpz_cmp(modulo, N) != 0) {
             ecm_ts_fprintf(stderr, "GPU: curve %d modulus mismatch\n", i);
@@ -494,11 +518,11 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
         mpz_init(x_mont);
         mpz_init(z_mont);
         if (use_i24) {
-            ecm_limb24_to_mpz(x_mont, datum + 1 * limbs_per, limbs_per);
-            ecm_limb24_to_mpz(z_mont, datum + 2 * limbs_per, limbs_per);
+            ecm_limb24_to_mpz(x_mont, datum + 1 * limbs, limbs);
+            ecm_limb24_to_mpz(z_mont, datum + 2 * limbs, limbs);
         } else {
-            ecm_to_mpz(x_mont, datum + 1 * limbs_per, limbs_per);
-            ecm_to_mpz(z_mont, datum + 2 * limbs_per, limbs_per);
+            ecm_to_mpz(x_mont, datum + 1 * limbs, limbs);
+            ecm_to_mpz(z_mont, datum + 2 * limbs, limbs);
         }
         mpz_set(x_std, x_mont);
         mpz_set(z_std, z_mont);
@@ -587,7 +611,8 @@ static uint32_t select_bits(size_t n_log2) {
 }
 
 static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr_path, int add_path,
-                             int sub_path, bool use_i24_384, int verbose, double *device_init_ms) {
+                             int sub_path, bool use_i24, bool use_i24_blsub, bool force_unroll32,
+                             int verbose, double *device_init_ms) {
     const int coop_wg =
         (limbs == 128u)
             ? std::max(opencl_ecm_mont4096_coop_wg_size(mul_path),
@@ -609,7 +634,8 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
     if (g_ecm_kernel && g_kernel_limbs == limbs && g_kernel_tpi == tpi &&
         g_kernel_mul_path == mul_path && g_kernel_sqr_path == sqr_path &&
         g_kernel_add_path == add_path && g_kernel_sub_path == sub_path &&
-        g_kernel_use_i24_384 == use_i24_384) {
+        g_kernel_use_i24 == use_i24 && g_kernel_use_i24_blsub == use_i24_blsub &&
+        g_kernel_force_unroll32 == force_unroll32) {
         if (device_init_ms) {
             *device_init_ms = 0.0;
         }
@@ -646,7 +672,7 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
     } else {
         src = ecm_src;
     }
-    if (use_i24_384 && limbs == 16u) {
+    if (use_i24) {
         std::string i24_helpers =
             cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_mul_unroll_i24.cl");
         if (i24_helpers.empty()) {
@@ -699,11 +725,12 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
              "-DECM_STAGE1_MUL_PATH=%d -DECM_STAGE1_SQR_PATH=%d -DECM_STAGE1_COOP_WG=%d "
              "-DECM_STAGE1_COOP_SCRATCH_U32=%d -DECM_STAGE1_HAS_FIPS4096=%d "
              "-DECM_STAGE1_ADDMOD_PATH=%d -DECM_STAGE1_SUBMOD_PATH=%d -DECM_STAGE1_ASM_B32=%d "
-             "-DECM_STAGE1_ASM_B16=%d -DECM_STAGE1_USE_I24_384=%d -DMP_LIMB_BITS=%u",
+             "-DECM_STAGE1_ASM_B16=%d -DECM_STAGE1_USE_I24_384=%d -DECM_STAGE1_I24_U32_BLSUB=%d "
+             "-DECM_STAGE1_FORCE_UNROLL32=%d -DMP_LIMB_BITS=%u",
              limbs, tpi, stage1_force_normalize, add_mod_fused_unroll, mul_path, sqr_path, coop_wg,
              coop_scratch, has_fips4096, add_path, sub_path, needs_asm_b32 ? 1 : 0,
-             needs_asm_b16 ? 1 : 0, use_i24_384 && limbs == 16u ? 1 : 0,
-             use_i24_384 && limbs == 16u ? 24u : 32u);
+             needs_asm_b16 ? 1 : 0, use_i24 ? 1 : 0, use_i24_blsub ? 1 : 0,
+             force_unroll32 ? 1 : 0, use_i24 ? 24u : 32u);
 
     cl_int buildErr = CL_SUCCESS;
     g_ecm_program = cgbn::opencl::build_program_from_source(g_ctx, src.c_str(), opts, buildErr);
@@ -739,7 +766,9 @@ static int ensure_ecm_kernel(uint32_t limbs, uint32_t tpi, int mul_path, int sqr
     g_kernel_sub_path = sub_path;
     g_kernel_coop_wg = coop_wg;
     g_kernel_use_coop_wg = use_coop_wg;
-    g_kernel_use_i24_384 = use_i24_384 && limbs == 16u;
+    g_kernel_use_i24 = use_i24;
+    g_kernel_use_i24_blsub = use_i24_blsub;
+    g_kernel_force_unroll32 = force_unroll32;
     auto t_init1 = std::chrono::high_resolution_clock::now();
     double init_ms =
         std::chrono::duration<double, std::milli>(t_init1 - t_init0).count();
@@ -785,19 +814,33 @@ static int resolve_mont4096_paths(const char *gpu_mul_path, const char *gpu_sqr_
     return 0;
 }
 
+static uint32_t stage1_ckpt_limbs(size_t data_size, uint32_t curves) {
+    return static_cast<uint32_t>(data_size / (5ull * curves * sizeof(uint32_t)));
+}
+
 extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mul_path,
                                   const char *gpu_sqr_path, const char *gpu_add_path,
                                   const char *gpu_sub_path) {
-    uint32_t BITS = select_bits(n_log2);
-    if (BITS == 0) {
-        return ECM_ERROR;
+    const ecm_stage1_mont_mode mont_mode =
+        opencl_ecm_resolve_stage1_mont_mode(gpu_mul_path, gpu_sqr_path, n_log2);
+    const bool use_i24 = opencl_ecm_stage1_should_use_i24(mont_mode, n_log2, verbose);
+
+    uint32_t limbs = 0;
+    if (use_i24) {
+        limbs = ecm_limb24_stage1_limbs(n_log2);
+    } else {
+        const uint32_t bits = select_bits(n_log2);
+        if (bits == 0) {
+            return ECM_ERROR;
+        }
+        limbs = bits / 32;
     }
+
     int mul_path = 0;
     int sqr_path = 0;
     if (resolve_mont4096_paths(gpu_mul_path, gpu_sqr_path, &mul_path, &sqr_path) != 0) {
         return ECM_ERROR;
     }
-    const uint32_t limbs = BITS / 32;
     int add_path = 0;
     int sub_path = 0;
     if (resolve_addsub_paths(gpu_add_path, gpu_sub_path, limbs, &add_path, &sub_path) != 0) {
@@ -805,12 +848,12 @@ extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mu
     }
     double init_ms = 0.0;
     const uint32_t tpi = choose_effective_tpi(limbs);
-    const ecm_stage1_mont_mode mont_mode =
-        opencl_ecm_resolve_stage1_mont_mode(gpu_mul_path, gpu_sqr_path, n_log2);
-    const bool use_i24_384 =
-        (mont_mode == ECM_STAGE1_MONT_I24_384 && limbs == 16u);
-    return ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, add_path, sub_path, use_i24_384,
-                             verbose, &init_ms);
+    const bool use_i24_blsub =
+        use_i24 && mont_mode == ECM_STAGE1_MONT_I24_U32_BLSUB;
+    const bool force_unroll32 =
+        !use_i24 && mont_mode == ECM_STAGE1_MONT_UNROLL32;
+    return ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, add_path, sub_path, use_i24,
+                             use_i24_blsub, force_unroll32, verbose, &init_ms);
 }
 
 extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, const mpz_t s,
@@ -869,18 +912,47 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         }
     }
 
-    uint32_t BITS = ckpt_loaded ? ckpt_header.BITS : select_bits(n_log2);
-    if (BITS == 0) {
-        ecm_ts_fprintf(stderr, "No OpenCL kernel large enough for N (%zu bits)\n", n_log2);
-        free(s_bits);
-        if (ckpt_data) {
+    const ecm_stage1_mont_mode mont_mode =
+        opencl_ecm_resolve_stage1_mont_mode(gpu_mul_path, gpu_sqr_path, n_log2);
+    const bool use_i24 = opencl_ecm_stage1_should_use_i24(mont_mode, n_log2, verbose);
+
+    uint32_t limbs = 0;
+    uint32_t BITS = 0;
+    if (ckpt_loaded) {
+        limbs = stage1_ckpt_limbs(ckpt_data_size, curves);
+        BITS = ckpt_header.BITS;
+        const bool ckpt_i24 = ecm_checkpoint_is_i24_layout(BITS, limbs);
+        const uint32_t expect_limbs =
+            use_i24 ? ecm_limb24_stage1_limbs(n_log2) : select_bits(n_log2) / 32u;
+        const uint32_t expect_bits =
+            use_i24 ? ecm_limb24_mont_bits(expect_limbs) : select_bits(n_log2);
+        if (ckpt_i24 != use_i24 || limbs != expect_limbs || BITS != expect_bits) {
+            ecm_ts_fprintf(stderr,
+                           "Checkpoint container mismatch (i24=%d limbs=%u bits=%u, expected "
+                           "i24=%d limbs=%u bits=%u), starting fresh\n",
+                           ckpt_i24 ? 1 : 0, limbs, BITS, use_i24 ? 1 : 0, expect_limbs,
+                           expect_bits);
+            ckpt_loaded = 0;
             free(ckpt_data);
+            ckpt_data = nullptr;
         }
-        return ECM_ERROR;
     }
-    const uint32_t limbs = BITS / 32;
-    const uint32_t tpi =
-        ckpt_loaded ? ckpt_header.TPI : choose_effective_tpi(limbs);
+    if (!ckpt_loaded) {
+        if (use_i24) {
+            limbs = ecm_limb24_stage1_limbs(n_log2);
+            BITS = ecm_limb24_mont_bits(limbs);
+        } else {
+            BITS = select_bits(n_log2);
+            if (BITS == 0) {
+                ecm_ts_fprintf(stderr, "No OpenCL kernel large enough for N (%zu bits)\n", n_log2);
+                free(s_bits);
+                return ECM_ERROR;
+            }
+            limbs = BITS / 32;
+        }
+    }
+
+    const uint32_t tpi = ckpt_loaded ? ckpt_header.TPI : choose_effective_tpi(limbs);
 
     int add_path = 0;
     int sub_path = 0;
@@ -892,14 +964,14 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         return ECM_ERROR;
     }
 
-    if (limbs != 128u && (mul_path != 0 || sqr_path != 0)) {
+    if (!use_i24 && limbs != 128u && (mul_path != 0 || sqr_path != 0)) {
         ecm_ts_fprintf(stderr,
                        "Warning: --mul/--sqr 4096 paths ignored (need 4096-bit kernel, got %u-bit)\n",
                        BITS);
         mul_path = 0;
         sqr_path = 0;
     }
-    if (limbs != 128u &&
+    if (!use_i24 && limbs != 128u &&
         (opencl_ecm_addsub_path_needs_asm_b32(add_path) ||
          opencl_ecm_addsub_path_needs_asm_b32(sub_path))) {
         ecm_ts_fprintf(stderr,
@@ -909,14 +981,14 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         sub_path = ECM_ADDSUB_PATH_FUSED_UNROLL_B32;
     }
 
-    const ecm_stage1_mont_mode mont_mode =
-        opencl_ecm_resolve_stage1_mont_mode(gpu_mul_path, gpu_sqr_path, n_log2);
-    const bool use_i24_384 =
-        (mont_mode == ECM_STAGE1_MONT_I24_384 && limbs == 16u);
+    const bool use_i24_blsub =
+        use_i24 && mont_mode == ECM_STAGE1_MONT_I24_U32_BLSUB;
+    const bool force_unroll32 =
+        !use_i24 && mont_mode == ECM_STAGE1_MONT_UNROLL32;
 
     double device_init_ms = 0.0;
-    if (ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, add_path, sub_path, use_i24_384,
-                          verbose, &device_init_ms) != 0) {
+    if (ensure_ecm_kernel(limbs, tpi, mul_path, sqr_path, add_path, sub_path, use_i24,
+                          use_i24_blsub, force_unroll32, verbose, &device_init_ms) != 0) {
         free(s_bits);
         if (ckpt_data) {
             free(ckpt_data);
@@ -925,18 +997,17 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     }
 
     uint32_t n_limbs_buf[OPENCL_ECM_MAX_LIMBS] = {0};
-    if (use_i24_384) {
+    if (use_i24) {
         ecm_limb24_from_mpz(n_limbs_buf, limbs, N);
     } else {
         ecm_from_mpz(N, n_limbs_buf, limbs);
     }
-    const uint32_t np0 =
-        use_i24_384 ? ecm_find_np0_limb24(n_limbs_buf) : ecm_find_np0(N);
-    if (!ckpt_loaded && !use_i24_384 && opencl_ecm_selftest_montgomery(N, BITS) != 0) {
+    const uint32_t np0 = use_i24 ? ecm_find_np0_limb24(n_limbs_buf) : ecm_find_np0(N);
+    if (!ckpt_loaded && !use_i24 && opencl_ecm_selftest_montgomery(N, BITS) != 0) {
         free(s_bits);
         return ECM_ERROR;
     }
-    if (!ckpt_loaded && !use_i24_384 &&
+    if (!ckpt_loaded && !use_i24 &&
         opencl_ecm_selftest_mont_mul(g_ctx, N, BITS, np0) != 0) {
         ecm_ts_fprintf(stderr, "GPU: warning: mont.cl mul self-test failed\n");
     }
@@ -951,9 +1022,10 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         s_partial = ckpt_header.s_partial;
         batches_complete = ckpt_header.batches_complete;
         ckpt_data = nullptr;
-        ocl_log_verbose(verbose, "Checkpoint: restored BITS=%u, TPI=%u\n", BITS, tpi);
+        ocl_log_verbose(verbose, "Checkpoint: restored BITS=%u, TPI=%u, limbs=%u\n", BITS, tpi,
+                        limbs);
     } else {
-        data = set_p_2p(N, curves, sigma, BITS, &data_size, use_i24_384);
+        data = set_p_2p(N, curves, sigma, limbs, &data_size, use_i24);
         s_partial = 1;
         batches_complete = 0;
     }
@@ -973,14 +1045,24 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             "GPU: CGBN<%u,%u> kernel, %zu-bit N, %u curves, sigma=%u-%u, s=%llu bits, np0=0x%08x\n",
             BITS, tpi, n_log2, curves, sigma, sigma + curves - 1,
             (unsigned long long)s_num_bits, np0);
-    const char *mont_mul_op = use_i24_384 ? opencl_ecm_stage1_mont_mode_name(ECM_STAGE1_MONT_I24_384)
-                             : (limbs == 16u) ? "mont_mul_priv_unroll_only_512"
-                             : (limbs == 128u) ? opencl_ecm_mont4096_path_name(mul_path)
-                                               : "mont_mul_priv_unroll32";
-    const char *mont_sqr_op = use_i24_384 ? "mont_sqr_priv_i24_u32_blsub"
-                             : (limbs == 16u) ? "mont_sqr_priv_unroll_only_512"
-                             : (limbs == 128u) ? opencl_ecm_mont4096_path_name(sqr_path)
-                                               : "mont_sqr_priv_unroll32";
+    if (use_i24) {
+        ocl_log_verbose(verbose, "GPU: i24 container: %u limbs (%u-bit mont, R=2^%u)\n", limbs, BITS,
+                        BITS);
+    }
+    const char *mont_mul_op =
+        use_i24 ? opencl_ecm_stage1_mont_mode_name(mont_mode)
+                : mont_mode == ECM_STAGE1_MONT_UNROLL32
+                      ? opencl_ecm_stage1_mont_mode_name(mont_mode)
+                : (limbs == 16u) ? "mont_mul_priv_unroll_only_512"
+                : (limbs == 128u) ? opencl_ecm_mont4096_path_name(mul_path)
+                                  : "mont_mul_stage1_unroll32";
+    const char *mont_sqr_op =
+        use_i24 ? opencl_ecm_stage1_mont_sqr_mode_name(mont_mode)
+                : mont_mode == ECM_STAGE1_MONT_UNROLL32
+                      ? opencl_ecm_stage1_mont_sqr_mode_name(mont_mode)
+                : (limbs == 16u) ? "mont_sqr_priv_unroll_only_512"
+                : (limbs == 128u) ? opencl_ecm_mont4096_path_name(sqr_path)
+                                  : "mont_sqr_stage1_unroll32";
     const char *addmod_op = opencl_ecm_addsub_path_name(add_path);
     const char *submod_op = opencl_ecm_addsub_path_name(sub_path);
     ecm_ts_fprintf(stdout,
@@ -999,7 +1081,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     fflush(stdout);
 
     if (!ckpt_loaded) {
-        stage1_curves_to_montgomery(data, curves, limbs, N, BITS, use_i24_384);
+        stage1_curves_to_montgomery(data, curves, limbs, N, BITS, use_i24);
         err = clEnqueueWriteBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data, 0, nullptr,
                                    nullptr);
         if (err != CL_SUCCESS) {
@@ -1027,7 +1109,11 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         if (g_dump_ctx.enabled) {
             size_t words_total = data_size / sizeof(uint32_t);
             std::vector<uint32_t> dump_rows(data, data + words_total);
-            ecm_curves_from_montgomery(dump_rows.data(), curves, limbs, N, np0);
+            if (use_i24) {
+                stage1_curves_from_montgomery(dump_rows.data(), curves, limbs, N, np0, true);
+            } else {
+                ecm_curves_from_montgomery(dump_rows.data(), curves, limbs, N, np0);
+            }
             dump_opencl_state_rows(g_dump_ctx, "begin", batches_complete, s_partial, this_batch,
                                    sigma, curves, BITS, tpi, dump_rows.data(), limbs);
         }
@@ -1078,12 +1164,16 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             err = clEnqueueReadBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data, 0,
                                       nullptr, nullptr);
             if (err == CL_SUCCESS) {
-                ecm_curves_from_montgomery(data, curves, limbs, N, np0);
+                if (use_i24) {
+                    stage1_curves_from_montgomery(data, curves, limbs, N, np0, true);
+                } else {
+                    ecm_curves_from_montgomery(data, curves, limbs, N, np0);
+                }
                 dump_opencl_state_rows(g_dump_ctx, "end", batches_complete + 1,
                                        s_partial + this_batch, this_batch, sigma, curves, BITS,
                                        tpi, data, limbs);
                 if (s_partial + this_batch < s_num_bits) {
-                    stage1_curves_to_montgomery(data, curves, limbs, N, BITS, use_i24_384);
+                    stage1_curves_to_montgomery(data, curves, limbs, N, BITS, use_i24);
                     err = clEnqueueWriteBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data,
                                                0, nullptr, nullptr);
                 }
@@ -1169,7 +1259,11 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         err = clEnqueueReadBuffer(g_ctx.queue, gpu_data, CL_TRUE, 0, data_size, data, 0,
                                   nullptr, nullptr);
         if (err == CL_SUCCESS) {
-            ecm_curves_from_montgomery(data, curves, limbs, N, np0);
+            if (use_i24) {
+                stage1_curves_from_montgomery(data, curves, limbs, N, np0, true);
+            } else {
+                ecm_curves_from_montgomery(data, curves, limbs, N, np0);
+            }
         } else {
             ecm_ts_fprintf(stderr, "final GPU readback failed (%d)\n", err);
         }
@@ -1190,8 +1284,8 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
 
     int youpi = ECM_NO_FACTOR_FOUND;
     if (err == CL_SUCCESS) {
-        youpi = process_results(factors, array_found, N, data, BITS, (int)curves, sigma, verbose,
-                                 use_i24_384);
+        youpi = process_results(factors, array_found, N, data, limbs, (int)curves, sigma, verbose,
+                                use_i24);
     } else {
         youpi = ECM_ERROR;
     }

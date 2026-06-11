@@ -32,6 +32,14 @@
 #define ECM_STAGE1_USE_I24_384 0
 #endif
 
+#ifndef ECM_STAGE1_I24_U32_BLSUB
+#define ECM_STAGE1_I24_U32_BLSUB 1
+#endif
+
+#ifndef ECM_STAGE1_FORCE_UNROLL32
+#define ECM_STAGE1_FORCE_UNROLL32 0
+#endif
+
 // Path ids: 0=unroll64_4096, 1=unroll64_4096_mt2, 2=fips4096, 3=fips4096_mt8, 4=fips4096_mt16
 #if ECM_STAGE1_COOP_WG > 1
 #define ECM_STAGE1_USE_COOP_WG 1
@@ -316,13 +324,21 @@ static inline void mont_mul_stage1_unroll32(uint *out, const uint *a, const uint
 }
 
 #if ECM_STAGE1_USE_I24_384
-static inline void mont_mul_stage1_i24_384(uint *out, const uint *a, const uint *b, const uint *N,
-                                           uint np0) {
-    mont_mul_priv_i24_u32_blsub_body(out, a, b, N, np0);
+static inline void mont_mul_stage1_i24(uint *out, const uint *a, const uint *b, const uint *N,
+                                       uint np0) {
+#if ECM_STAGE1_I24_U32_BLSUB
+    mont_mul_unroll_i24_u32_blsub_priv_body(out, a, b, N, np0);
+#else
+    mont_mul_unroll_i24_u32_priv_body(out, a, b, N, np0);
+#endif
 }
 
-static inline void mont_sqr_stage1_i24_384(uint *out, const uint *a, const uint *N, uint np0) {
-    mont_sqr_priv_i24_u32_blsub_body(out, a, N, np0);
+static inline void mont_sqr_stage1_i24(uint *out, const uint *a, const uint *N, uint np0) {
+#if ECM_STAGE1_I24_U32_BLSUB
+    mont_sqr_unroll_i24_u32_blsub_priv_body(out, a, N, np0);
+#else
+    mont_sqr_unroll_i24_u32_priv_body(out, a, N, np0);
+#endif
 }
 #endif
 
@@ -332,12 +348,18 @@ static inline void mont_sqr_stage1_i24_384(uint *out, const uint *a, const uint 
 // - others: use generic unroll32 path
 static inline void mont_mul_stage1(uint *out, const uint *a, const uint *b,
                                    const uint *N, uint np0, uint limbs) {
-    if (limbs == 16u) {
 #if ECM_STAGE1_USE_I24_384
-        mont_mul_stage1_i24_384(out, a, b, N, np0);
-#else
-        mont_mul_stage1_unroll_only_512(out, a, b, N, np0);
+    if (limbs == MAX_LIMBS) {
+        mont_mul_stage1_i24(out, a, b, N, np0);
+        return;
+    }
 #endif
+#if ECM_STAGE1_FORCE_UNROLL32
+    mont_mul_stage1_unroll32(out, a, b, N, np0, limbs);
+    return;
+#endif
+    if (limbs == 16u) {
+        mont_mul_stage1_unroll_only_512(out, a, b, N, np0);
     } else if (limbs == 128u) {
 #if ECM_STAGE1_MUL_PATH == 2
         mont_mul_stage1_fips4096(out, a, b, N, np0);
@@ -352,8 +374,8 @@ static inline void mont_mul_stage1(uint *out, const uint *a, const uint *b,
 static inline void mont_sqr_stage1(uint *out, const uint *a,
                                    const uint *N, uint np0, uint limbs) {
 #if ECM_STAGE1_USE_I24_384
-    if (limbs == 16u) {
-        mont_sqr_stage1_i24_384(out, a, N, np0);
+    if (limbs == MAX_LIMBS) {
+        mont_sqr_stage1_i24(out, a, N, np0);
         return;
     }
 #endif
@@ -706,7 +728,7 @@ static inline void mp_add_mod_asm_b16_512(uint *r, const uint *a, const uint *b,
 
 static inline void mp_add_mod(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
 #if ECM_STAGE1_USE_I24_384
-    if (limbs == 16u) {
+    if (limbs == MAX_LIMBS) {
         mp_add_mod_fused_unroll_i24(r, a, b, N);
         return;
     }
@@ -796,7 +818,7 @@ static inline void mp_add_mod(uint *r, const uint *a, const uint *b, const uint 
 // Returns 1 if borrow (a < b)
 static inline int mp_sub_mod(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
 #if ECM_STAGE1_USE_I24_384
-    if (limbs == 16u) {
+    if (limbs == MAX_LIMBS) {
         return mp_sub_mod_fused_unroll_i24(r, a, b, N);
     }
 #endif
@@ -851,7 +873,7 @@ static inline void mp_shift_left_1_mod(uint *r, const uint *a, const uint *N, ui
 
 static inline void mont_normalize(uint *r, const uint *N, uint limbs) {
 #if ECM_STAGE1_USE_I24_384
-    if (limbs == 16u) {
+    if (limbs == MAX_LIMBS) {
         if (mp_ge_i24(r, N, limbs)) {
             mp_sub_n_i24(r, r, N, limbs);
         }

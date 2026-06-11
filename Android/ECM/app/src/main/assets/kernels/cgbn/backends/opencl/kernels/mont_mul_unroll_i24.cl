@@ -6,9 +6,9 @@
 //   - Do NOT put #pragma unroll inside macros (BC compiler rejects it).
 //   - Keep t/B/N/D as locals inside each body; CIOS inlined per body.
 //
-// Bodies:
-//   mont_mul_priv_i24_u32_body         — stage1 private ABI, u32 MAC + branchy final sub
-//   mont_mul_priv_i24_u32_blsub_body   — stage1 private ABI, u32 MAC + branchless final sub
+// Bodies (global bench use __global + base; stage1 uses *_priv with same CIOS logic):
+//   mont_mul_unroll_i24_u32_priv_body       — private ABI of mont_mul_unroll_i24_u32_body
+//   mont_mul_unroll_i24_u32_blsub_priv_body — private ABI of mont_mul_unroll_i24_u32_blsub_body
 //   mont_mul_unroll_i24_body           — L1: ulong CIOS + branchy final sub
 //   mont_mul_unroll_i24_u32_body       — L2: u32 MAC + branchy final sub (global bench)
 //   mont_mul_unroll_i24_blsub_body     — L4: ulong CIOS + branchless final sub
@@ -85,9 +85,9 @@ static inline uint mont_i24_cios_mac_shift_u32(uint tj, uint mi, uint nj, uint c
     return prod.y + hi_carry;
 }
 
-// Private-pointer ABI (stage1 curve state). No base offset.
-static inline void mont_mul_priv_i24_u32_body(uint *out, const uint *a, const uint *b,
-                                              const uint *n, uint np0) {
+// Private-pointer ABI (stage1 curve state). Same algorithm as mont_mul_unroll_i24_u32_body.
+static inline void mont_mul_unroll_i24_u32_priv_body(uint *out, const uint *a, const uint *b,
+                                                     const uint *n, uint np0) {
     uint t[MONT_I24_LIMBS + 2u];
     uint B[MONT_I24_LIMBS];
     uint N[MONT_I24_LIMBS];
@@ -148,8 +148,9 @@ static inline void mont_mul_priv_i24_u32_body(uint *out, const uint *a, const ui
     }
 }
 
-static inline void mont_mul_priv_i24_u32_blsub_body(uint *out, const uint *a, const uint *b,
-                                                    const uint *n, uint np0) {
+// Private-pointer ABI (stage1 curve state). Same algorithm as mont_mul_unroll_i24_u32_blsub_body.
+static inline void mont_mul_unroll_i24_u32_blsub_priv_body(uint *out, const uint *a, const uint *b,
+                                                          const uint *n, uint np0) {
     uint t[MONT_I24_LIMBS + 2u];
     uint B[MONT_I24_LIMBS];
     uint N[MONT_I24_LIMBS];
@@ -210,13 +211,14 @@ static inline void mont_mul_priv_i24_u32_blsub_body(uint *out, const uint *a, co
     }
 }
 
-static inline void mont_sqr_priv_i24_u32_body(uint *out, const uint *a, const uint *n, uint np0) {
-    mont_mul_priv_i24_u32_body(out, a, a, n, np0);
+static inline void mont_sqr_unroll_i24_u32_priv_body(uint *out, const uint *a, const uint *n,
+                                                   uint np0) {
+    mont_mul_unroll_i24_u32_priv_body(out, a, a, n, np0);
 }
 
-static inline void mont_sqr_priv_i24_u32_blsub_body(uint *out, const uint *a, const uint *n,
-                                                    uint np0) {
-    mont_mul_priv_i24_u32_blsub_body(out, a, a, n, np0);
+static inline void mont_sqr_unroll_i24_u32_blsub_priv_body(uint *out, const uint *a, const uint *n,
+                                                           uint np0) {
+    mont_mul_unroll_i24_u32_blsub_priv_body(out, a, a, n, np0);
 }
 
 static inline void mont_mul_unroll_i24_body(

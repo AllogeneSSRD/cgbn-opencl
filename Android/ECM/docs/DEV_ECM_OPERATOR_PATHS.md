@@ -86,7 +86,8 @@ const uint32_t limbs = BITS / 32;      // 16, 32, …, 128
 | UI / CLI 字符串 | `opencl_ecm_parse_mont4096_path` | 用途 |
 |-----------------|-----------------------------------|------|
 | `""`, `auto`, `default` | `0` (UNROLL64) | 4096 默认 unroll64 |
-| `i24_384_manual` | `0`（非 4096 id） | 见 §4.2 |
+| `i24_u32`, `i24_u32_blsub` | `0`（非 4096 id） | 见 §4.2 |
+| `i24_384_manual`（CLI 遗留） | `0` | 等同 `i24_u32_blsub` |
 | `unroll_only_512` | `0` | 见 §4.2 |
 | `unroll64_4096` | `0` | 4096 默认 |
 | `unroll64_4096_mt2` | `1` | 4096 + coop WG=2 |
@@ -96,26 +97,35 @@ const uint32_t limbs = BITS / 32;      // 16, 32, …, 128
 
 ### 4.2 Stage-1 模式（&lt;4096-bit，尤其 512 容器）
 
-`opencl_ecm_resolve_stage1_mont_mode(mul, sqr, n_bit_size)` 在 **编译 kernel 之前** 决定 `use_i24_384`：
+`opencl_ecm_resolve_stage1_mont_mode(mul, sqr, n_bit_size)` 在 **编译 kernel 之前** 决定 i24 变体：
 
-| 条件 | 模式 | 日志中的 mul 名 |
+| 条件 | 模式 | 日志 mul / sqr |
 |------|------|----------------|
 | mul 或 sqr 为 `unroll_only_512` | `UNROLL512` | `mont_mul_priv_unroll_only_512` |
-| mul 或 sqr 为 `i24_384_manual` | `I24_384` | `mont_mul_priv_i24_u32_blsub` |
-| mul **与** sqr 均为 auto，且 `n_bit_size < 384` | `I24_384` | 同上 |
-| 其它 | `UNROLL512` | `mont_mul_priv_unroll_only_512` |
+| mul 或 sqr 为 `unroll32` | `UNROLL32` | `mont_mul_stage1_unroll32` / `mont_sqr_stage1_unroll32` |
+| mul/sqr 为 `i24_u32_blsub`，或 mul/sqr 均为 auto 且 `n_bit_size < 384` | `I24_U32_BLSUB` | `mont_mul_unroll_i24_u32_blsub` / `mont_sqr_unroll_i24_u32_blsub` |
+| mul 或 sqr 为 `i24_u32` | `I24_U32` | `mont_mul_unroll_i24_u32` / `mont_sqr_unroll_i24_u32` |
+| 其它 | `UNROLL512` | 见 §4.3 按 limbs 分发 |
 
-`use_i24_384 = (mode == I24_384 && limbs == 16)`。
+i24 是否启用由 `opencl_ecm_stage1_should_use_i24(mode, n_bit_size)` 决定（与 32-bit `select_bits` 无关）。i24 使用独立 limb 计数：
 
-**说明：** UI 里的 `i24_384_manual` 表示「强制 i24 384 容器逻辑」，Stage-1 **实际**使用的是 `mont_mul_priv_i24_u32_blsub_body`（`mont_mul_unroll_i24.cl` 内 private u32 实现）。  
-完全手动展开的 `mont_mul_unroll_i24_384_manual_generated.cl` 仅用于 App 内 **Montgomery bench**，不会拼进 Stage-1 的 `ecm_stage1.cl` 编译（避免 Adreno 编译超时/失败）。
+```text
+i24_limbs = ceil((n_bit_size + CARRY_BITS) / 24)   // 991-bit → 42 limbs
+mont_bits = i24_limbs × 24                           // 991-bit → 1008-bit Montgomery
+```
+
+32-bit 路径仍用 `select_bits(n) → limbs = BITS/32`（991-bit → 1024-bit / 32 limbs）。
+
+Stage-1 内调用 `mont_mul_unroll_i24_u32_*_priv_body`（private 指针 ABI，算法与 global bench 的 `mont_mul_unroll_i24_u32_*_body` 相同）。
+
+**与 bench 区分：** `mont_mul_unroll_i24_384_manual_generated.cl` 是 Montgomery **bench 专用**全展开内核，**不会**编入 Stage-1。
 
 i24 启用时 host 还会：
 
--  prepend `mont_mul_unroll_i24.cl`（去掉 `#pragma once` 与 `__global`/`__constant`，仅 helper 段）
+- prepend `mont_mul_unroll_i24.cl`（局部去掉 `#pragma once` / `__global` / `__constant`）
 - 用 `ecm_limb24_from_mpz` 编码 N 与曲线数据
-- 编译加 `-DECM_STAGE1_USE_I24_384=1 -DMP_LIMB_BITS=24`
-- 内核内 add/sub 走 24-bit radix 版本（`mp_*_i24`）
+- 编译加 `-DMAX_LIMBS=<i24_limbs>`（非 `BITS/32`）、`-DECM_STAGE1_USE_I24_384=1`、`-DMP_LIMB_BITS=24`
+- Checkpoint：`header.BITS = mont_bits`（如 1008），`data_size = 5×curves×i24_limbs×4`；可用 `ecm_checkpoint_is_i24_layout(bits, limbs)` 识别
 
 ### 4.3 编译宏 → `ecm_stage1.cl` 内联函数
 
@@ -126,6 +136,8 @@ i24 启用时 host 还会：
 -DECM_STAGE1_MUL_PATH=<mul_path>      // 0..4，4096 专用
 -DECM_STAGE1_SQR_PATH=<sqr_path>
 -DECM_STAGE1_USE_I24_384=<0|1>
+-DECM_STAGE1_I24_U32_BLSUB=<0|1>     // 1=blsub, 0=branchy u32
+-DECM_STAGE1_FORCE_UNROLL32=<0|1>    // 显式 unroll32 路径
 -DECM_STAGE1_COOP_WG=<1|2|8|16>       // limbs==128 且 mt* 路径
 -DECM_STAGE1_HAS_FIPS4096=<0|1>       // 是否链接 ecm_stage1_mont4096_paths.cl
 ```
@@ -134,7 +146,9 @@ i24 启用时 host 还会：
 
 | limbs | 条件 | OpenCL 实现 |
 |-------|------|-------------|
-| 16 | `ECM_STAGE1_USE_I24_384` | `mont_mul_priv_i24_u32_blsub_body` |
+| `MAX_LIMBS` | `ECM_STAGE1_USE_I24_384` + `I24_U32_BLSUB` | `mont_mul_unroll_i24_u32_blsub_priv_body` |
+| `MAX_LIMBS` | `ECM_STAGE1_USE_I24_384` + branchy u32 | `mont_mul_unroll_i24_u32_priv_body` |
+| 任意 | `ECM_STAGE1_FORCE_UNROLL32` | `mont_mul_stage1_unroll32` |
 | 16 | 否则 | `mont_mul_stage1_unroll_only_512`（内联 512 CIOS） |
 | 128 | `ECM_STAGE1_MUL_PATH == 2` | `mont_mul_stage1_fips4096` |
 | 128 | 否则 | `mont_mul_stage1_unroll64_4096` |
@@ -197,9 +211,10 @@ sub 下拉无 `asm_b16`（与 desktop CLI 一致）。
 
 | 显示 label（arrays.xml） | value → native | Host 解析 | 实际 OpenCL（典型：301-bit N） | 实际 OpenCL（4096-bit N） |
 |--------------------------|----------------|-----------|--------------------------------|---------------------------|
-| 自动 (&lt;384b → i24 u32) | `auto` → `""` | auto + N&lt;384 → i24 | `mont_mul_priv_i24_u32_blsub` | N/A（limbs≠16 时不启用 i24） |
-| 自动（N≥384） | `auto` → `""` | auto → unroll512 | `mont_mul_priv_unroll_only_512` | 若 BITS=4096：`unroll64_4096` |
-| `i24_384_manual` | 同左 | 强制 i24 | `mont_mul_priv_i24_u32_blsub` | i24 不启用（limbs=128） |
+| 自动 (&lt;384b → i24_u32_blsub) | `auto` → `""` | auto + N&lt;384 | `mont_mul_unroll_i24_u32_blsub` | N/A |
+| 自动（N≥384） | `auto` → `""` | auto → unroll512 | `mont_mul_priv_unroll_only_512` | `unroll64_4096` |
+| `i24_u32_blsub` | 同左 | 强制 blsub | `mont_mul_unroll_i24_u32_blsub` | i24 不启用 |
+| `i24_u32` | 同左 | 强制 branchy u32 | `mont_mul_unroll_i24_u32` | i24 不启用 |
 | `unroll_only_512` | 同左 | 强制 512 | `mont_mul_priv_unroll_only_512` | 512 路径（若 limbs=16） |
 | `unroll64_4096 (4096-bit)` | `unroll64_4096` | path id 0 | 被 ignore（warning） | `mont_mul_stage1_unroll64_4096` |
 | `unroll64_4096_mt2` | `unroll64_4096_mt2` | path id 1 | ignore | unroll64 + coop WG=2 |
@@ -247,7 +262,7 @@ Program 缓存 key 含 **完整源码 + build options**；更改 path 或 N 位�
 | i24 未启用 | N 是否 ≥384；mul/sqr 是否都为 auto；BITS 是否为 512（limbs=16） |
 | 4096 path 无效 | `Parsed N bit-size` 是否达到 4096 容器；是否出现 `4096 paths ignored` |
 | 编译失败 | 日志 `OpenCL build log:`；确认未对整文件 `#define __global` 空宏 |
-| bench 与 stage1 混淆 | `i24_384_manual` bench kernel 在 `mont_mul_unroll_i24_bench.cl`；stage1 用 `mont_mul_priv_i24_u32_blsub` |
+| bench 与 stage1 混淆 | Stage-1 用 `mont_mul_unroll_i24_u32_*`；bench manual 在 `mont_mul_unroll_i24_bench.cl` |
 
 环境变量（与 desktop 相同，可选）：
 

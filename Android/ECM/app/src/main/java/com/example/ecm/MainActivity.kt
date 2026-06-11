@@ -186,8 +186,15 @@ class MainActivity : AppCompatActivity() {
         dropdown.setAdapter(
             ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels),
         )
+        dropdown.threshold = 0
         dropdown.setText(labels[defaultIndex], false)
         dropdown.tag = values
+        dropdown.setOnClickListener { dropdown.showDropDown() }
+        dropdown.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                dropdown.showDropDown()
+            }
+        }
     }
 
     private fun selectedPathValue(dropdown: AutoCompleteTextView): String {
