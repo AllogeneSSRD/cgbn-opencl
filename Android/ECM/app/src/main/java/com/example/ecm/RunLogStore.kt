@@ -1,7 +1,6 @@
 package com.example.ecm
 
 import android.content.Context
-import android.os.Environment
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -15,10 +14,7 @@ class RunLogStore(context: Context) {
         BENCH,
     }
 
-    private val logDir: File = run {
-        val base = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS) ?: context.filesDir
-        File(base, LOG_DIR_NAME).also { it.mkdirs() }
-    }
+    private val logDir: File = AppStoragePaths.logsDir(context.applicationContext)
 
     private val stampFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
     private val lock = Any()
@@ -59,7 +55,6 @@ class RunLogStore(context: Context) {
     }
 
     companion object {
-        private const val LOG_DIR_NAME = "logs"
         private const val ECM_FILE_NAME = "ecm.log"
         private const val BENCH_FILE_NAME = "bench.log"
     }

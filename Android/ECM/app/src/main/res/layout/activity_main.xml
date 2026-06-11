@@ -15,10 +15,13 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:title="@string/app_name"
-            app:titleTextColor="@android:color/white"
+            android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar"
+            app:menu="@menu/toolbar_menu"
+            app:popupTheme="@style/ThemeOverlay.ECM.ToolbarPopup"
+            app:subtitleTextAppearance="@style/TextAppearance.ECM.Toolbar.Subtitle"
             app:subtitleTextColor="@color/white"
-            app:subtitleTextAppearance="@style/TextAppearance.ECM.Toolbar.Subtitle" />
+            app:title="@string/app_name"
+            app:titleTextColor="@android:color/white" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <LinearLayout

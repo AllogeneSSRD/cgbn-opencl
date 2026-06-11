@@ -64,12 +64,12 @@ opencl_ecm_montsqr.exe --bits 512 <kernel_iterations> <instances> <launch_repeat
 
 与 Windows `cgbn::opencl::build_program_from_source` 一致：
 
-- 缓存目录：`{Context.codeCacheDir}/opencl_cache/opencl_{fnv1a64}.bin`
+- 缓存目录：`/sdcard/Android/data/com.example.ecm/opencl_cache/opencl_{fnv1a64}.bin`（外部应用目录，便于文件管理器 / adb 查看）
 - 缓存键：GPU 名称/厂商/驱动版本 + `build_opts` + 完整拼接源码
 - 命中时：`clCreateProgramWithBinary` + `clBuildProgram`（通常远快于全量编译）
 - 输出含 `compile: cache hit ... ms` 与 `cache: ...` 路径
 
-桌面可通过 `CGBN_OPENCL_CACHE_DIR` / `CGBN_OPENCL_CACHE_DISABLE` 控制；Android 默认启用（`nativeInitAssets` 传入 `codeCacheDir`）。
+桌面可通过 `CGBN_OPENCL_CACHE_DIR` / `CGBN_OPENCL_CACHE_DISABLE` 控制；Android 默认启用（`nativeInitAssets` 传入 `AppStoragePaths.openClCacheRoot()`）。
 
 部分手机 GPU 驱动**不支持导出** OpenCL program binary（`CL_PROGRAM_BINARIES` 恒失败）。此时自动改用 **live program cache**：在同一 App 进程内保留已编译的 `cl_program` + 持久 `cl_context`，第二次跑相同 bench 跳过 `clBuildProgram`（**杀进程后仍需重编译**）。
 

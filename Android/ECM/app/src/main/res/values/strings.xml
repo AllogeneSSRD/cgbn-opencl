@@ -67,4 +67,21 @@
     <string name="invalid_params">请填写有效的正整数参数</string>
     <string name="toast_bits_multiple">bits 必须是 %1$d 的倍数</string>
     <string name="toast_mont_i24_bits">24-bit Mont: bits 须为 512 或 24 的倍数</string>
+    <string name="menu_settings">设置</string>
+    <string name="menu_about">关于</string>
+    <string name="settings_title">设置</string>
+    <string name="settings_section_appearance">外观</string>
+    <string name="settings_section_log">日志</string>
+    <string name="settings_follow_system">跟随系统</string>
+    <string name="settings_follow_system_summary">与系统浅色/深色设置保持一致</string>
+    <string name="settings_dark_mode">深色模式</string>
+    <string name="settings_dark_mode_summary">关闭「跟随系统」后生效</string>
+    <string name="settings_log_to_file">日志追加到文件</string>
+    <string name="settings_log_to_file_summary">分别写入 ecm.log 与 bench.log</string>
+    <string name="settings_log_toast">日志写入时弹出提示</string>
+    <string name="settings_log_toast_summary">每次运行结束显示 Toast</string>
+    <string name="log_path_disabled">文件日志已关闭（可在设置中开启）</string>
+    <string name="about_title">关于</string>
+    <string name="about_version_fmt">版本 %1$s</string>
+    <string name="about_body">基于 OpenCL 的 ECM Stage-1 GPU 分解与算子微基准。\n\n使用设备厂商 OpenCL 驱动在 GPU 上运行；ECM 分解需配置 GMP（见项目文档）。</string>
 </resources>

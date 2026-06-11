@@ -1,11 +1,13 @@
 package com.example.ecm
 
+import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import androidx.activity.result.contract.ActivityResultContracts
 import android.widget.ArrayAdapter
 import android.widget.AutoCompleteTextView
 import android.widget.LinearLayout
@@ -77,6 +79,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val settingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        refreshLogUi()
+        if (result.resultCode == RESULT_OK) {
+            recreate()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -84,6 +95,7 @@ class MainActivity : AppCompatActivity() {
         setupWindowInsets()
 
         toolbar = findViewById(R.id.toolbar)
+        setupToolbarMenu()
         panelEcm = findViewById(R.id.panel_ecm)
         panelBench = findViewById(R.id.panel_bench)
 
@@ -92,7 +104,7 @@ class MainActivity : AppCompatActivity() {
         outputTextBench = findViewById(R.id.output_bench)
         logPathEcm = findViewById(R.id.log_path_ecm)
         logPathBench = findViewById(R.id.log_path_bench)
-        updateLogPathLabels()
+        refreshLogUi()
         perfText = findViewById(R.id.perf_text)
         perfUpdated = findViewById(R.id.perf_updated)
         progressEcm = findViewById(R.id.progress_ecm)
@@ -117,7 +129,7 @@ class MainActivity : AppCompatActivity() {
         chkVerbose = findViewById(R.id.chk_verbose)
         ecmAdvancedPanel = findViewById(R.id.ecm_advanced_panel)
 
-        nativeInitAssets(assets, codeCacheDir.absolutePath)
+        nativeInitAssets(assets, AppStoragePaths.openClCacheRoot(applicationContext).absolutePath)
 
         setupEcmPresets()
         setupEcmPathDropdowns()
@@ -213,24 +225,62 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateLogPathLabels() {
-        logPathEcm.text = getString(R.string.log_path_label, logStore.displayPath(RunLogStore.Channel.ECM))
-        logPathBench.text = getString(R.string.log_path_label, logStore.displayPath(RunLogStore.Channel.BENCH))
+    private fun setupToolbarMenu() {
+        toolbar.setOnMenuItemClickListener { item ->
+            when (item.itemId) {
+                R.id.action_settings -> {
+                    settingsLauncher.launch(Intent(this, SettingsActivity::class.java))
+                    true
+                }
+                R.id.action_about -> {
+                    startActivity(Intent(this, AboutActivity::class.java))
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun refreshLogUi() {
+        if (AppSettings.isLogToFileEnabled(this)) {
+            logPathEcm.text = getString(
+                R.string.log_path_label,
+                logStore.displayPath(RunLogStore.Channel.ECM),
+            )
+            logPathBench.text = getString(
+                R.string.log_path_label,
+                logStore.displayPath(RunLogStore.Channel.BENCH),
+            )
+        } else {
+            val disabled = getString(R.string.log_path_disabled)
+            logPathEcm.text = disabled
+            logPathBench.text = disabled
+        }
     }
 
     private fun beginLoggedSession(tab: Tab, header: String? = null) {
+        if (!AppSettings.isLogToFileEnabled(this)) {
+            return
+        }
         logStore.beginSession(channelFor(tab), header)
     }
 
     private fun appendToLog(tab: Tab, text: String) {
-        if (text.isEmpty()) {
+        if (text.isEmpty() || !AppSettings.isLogToFileEnabled(this)) {
             return
         }
         logStore.append(channelFor(tab), text)
     }
 
     private fun notifyLogSaved(tab: Tab) {
-        val path = logStore.displayPath(channelFor(tab))
+        if (!AppSettings.isLogSavedToastEnabled(this)) {
+            return
+        }
+        val path = if (AppSettings.isLogToFileEnabled(this)) {
+            logStore.displayPath(channelFor(tab))
+        } else {
+            getString(R.string.log_path_disabled)
+        }
         Toast.makeText(this, getString(R.string.log_saved_toast, path), Toast.LENGTH_SHORT).show()
     }
 
@@ -459,7 +509,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 setBusy(false, Tab.ECM)
                 scrollToOutput(Tab.ECM)
-                notifyLogSaved(Tab.ECM)
+                if (AppSettings.isLogSavedToastEnabled(this)) {
+                    notifyLogSaved(Tab.ECM)
+                }
             }
         }
     }
@@ -570,7 +622,7 @@ class MainActivity : AppCompatActivity() {
                 output.text = result
                 setBusy(false, tab)
                 scrollToOutput(tab)
-                if (showSavedToast) {
+                if (showSavedToast && AppSettings.isLogSavedToastEnabled(this)) {
                     notifyLogSaved(tab)
                 }
             }

@@ -363,7 +363,7 @@ std::string get_opencl_cache_status() {
     if (!g_live_programs.empty()) {
         out << "note: live cache used when GPU driver cannot export OpenCL program binaries\n";
     }
-    out << "adb: adb shell run-as com.example.ecm ls -la code_cache/opencl_cache/\n";
+    out << "adb: adb shell ls -la /sdcard/Android/data/com.example.ecm/opencl_cache/\n";
     out << "logcat: adb logcat ECM-OpenCL:I *:S\n";
     return out.str();
 }
