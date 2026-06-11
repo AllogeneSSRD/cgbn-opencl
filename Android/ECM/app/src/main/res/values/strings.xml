@@ -5,13 +5,13 @@
     <string name="ecm_section_hint">对应桌面: echo \'N\' | ecm.exe -gpu -gpucurves … B1 B2</string>
     <string name="hint_n_expr">N 表达式 (stdin)</string>
     <string name="hint_n_preset">预设</string>
-    <string name="default_n_expr">(2^301-1)</string>
+    <string name="default_n_expr">(2^371-1)</string>
     <string name="hint_b1">B1</string>
     <string name="hint_b2">B2</string>
-    <string name="default_b1">1000</string>
+    <string name="default_b1">10000</string>
     <string name="default_b2">0</string>
     <string name="hint_gpu_curves">-gpucurves</string>
-    <string name="default_gpu_curves">64</string>
+    <string name="default_gpu_curves">1</string>
     <string name="hint_device_index">-d 设备序号</string>
     <string name="default_device_index">0</string>
     <string name="hint_gpu_ckpt">-gpuckpt (秒, 0=禁用)</string>

@@ -59,6 +59,17 @@ bool path_requests_unroll384(const char *path) {
 
 } // namespace
 
+bool opencl_ecm_stage1_n_fits_i24_container(size_t n_bit_size) {
+    return ecm_limb24_stage1_limbs(n_bit_size) <= OPENCL_ECM_MAX_LIMBS;
+}
+
+ecm_stage1_mont_mode opencl_ecm_stage1_compatible_mont_fallback(size_t n_bit_size) {
+    if (opencl_ecm_stage1_n_fits_i24_container(n_bit_size)) {
+        return ECM_STAGE1_MONT_I24_U32;
+    }
+    return ECM_STAGE1_MONT_PRIV_OPT;
+}
+
 bool opencl_ecm_stage1_should_use_i24(ecm_stage1_mont_mode mode, size_t n_bit_size, int verbose) {
     if (!opencl_ecm_stage1_mont_mode_uses_i24(mode)) {
         return false;
@@ -69,8 +80,10 @@ bool opencl_ecm_stage1_should_use_i24(ecm_stage1_mont_mode mode, size_t n_bit_si
     }
     ecm_ts_fprintf(stderr,
                    "Warning: i24 path needs %u limbs (N=%zu bits), host buffer limit is %u; "
-                   "using 32-bit mont\n",
-                   i24_limbs, n_bit_size, OPENCL_ECM_MAX_LIMBS);
+                   "using 32-bit mont (%s)\n",
+                   i24_limbs, n_bit_size, OPENCL_ECM_MAX_LIMBS,
+                   opencl_ecm_stage1_mont_mode_name(opencl_ecm_stage1_compatible_mont_fallback(
+                       n_bit_size)));
     (void)verbose;
     return false;
 }
@@ -177,11 +190,17 @@ ecm_stage1_mont_mode opencl_ecm_resolve_stage1_mont_mode(const char *gpu_mul_pat
             return ECM_STAGE1_MONT_UNROLL384;
         }
         ecm_ts_fprintf(stderr,
-                       "Warning: unroll_only_384 requires N+%zu<%zu bits (N<%zu), got %zu; "
-                       "using unroll512\n",
+                       "Warning: unroll_only_384 requires N+%zu<%zu bits (N<%zu), got %zu\n",
                        ECM_STAGE1_MONT_CARRY_BITS, ECM_STAGE1_UNROLL384_MAX_BITS,
                        ECM_STAGE1_UNROLL384_MAX_BITS - ECM_STAGE1_MONT_CARRY_BITS, n_bit_size);
-        return ECM_STAGE1_MONT_UNROLL512;
+        if (opencl_ecm_stage1_n_fits_unroll512_container(n_bit_size)) {
+            ecm_ts_fprintf(stderr, "Warning: falling back to unroll512\n");
+            return ECM_STAGE1_MONT_UNROLL512;
+        }
+        const ecm_stage1_mont_mode fb = opencl_ecm_stage1_compatible_mont_fallback(n_bit_size);
+        ecm_ts_fprintf(stderr, "Warning: falling back to %s\n",
+                       opencl_ecm_stage1_mont_mode_name(fb));
+        return fb;
     }
 
     const bool mul_blsub = path_requests_i24_u32_blsub(gpu_mul_path);
@@ -189,10 +208,14 @@ ecm_stage1_mont_mode opencl_ecm_resolve_stage1_mont_mode(const char *gpu_mul_pat
     const bool mul_u32 = path_requests_i24_u32_branchy(gpu_mul_path);
     const bool sqr_u32 = path_requests_i24_u32_branchy(gpu_sqr_path);
     const bool both_auto = path_is_auto(gpu_mul_path) && path_is_auto(gpu_sqr_path);
-    const bool auto_blsub = both_auto && n_bit_size < ECM_STAGE1_AUTO_I24_MAX_BITS;
+    const bool auto_blsub =
+        both_auto && n_bit_size < ECM_STAGE1_AUTO_I24_BLSUB_MAX_BITS;
     const bool auto_unroll384 =
-        both_auto && n_bit_size >= ECM_STAGE1_AUTO_I24_MAX_BITS &&
+        both_auto && n_bit_size >= ECM_STAGE1_AUTO_I24_BLSUB_MAX_BITS &&
         opencl_ecm_stage1_n_fits_unroll384(n_bit_size);
+    const bool auto_unroll512 =
+        both_auto && !opencl_ecm_stage1_n_fits_unroll384(n_bit_size) &&
+        opencl_ecm_stage1_n_fits_unroll512_container(n_bit_size);
 
     if (mul_blsub || sqr_blsub || auto_blsub) {
         return ECM_STAGE1_MONT_I24_U32_BLSUB;
@@ -200,8 +223,14 @@ ecm_stage1_mont_mode opencl_ecm_resolve_stage1_mont_mode(const char *gpu_mul_pat
     if (auto_unroll384) {
         return ECM_STAGE1_MONT_UNROLL384;
     }
+    if (auto_unroll512) {
+        return ECM_STAGE1_MONT_UNROLL512;
+    }
     if (mul_u32 || sqr_u32) {
         return ECM_STAGE1_MONT_I24_U32;
+    }
+    if (both_auto) {
+        return opencl_ecm_stage1_compatible_mont_fallback(n_bit_size);
     }
     return ECM_STAGE1_MONT_UNROLL512;
 }

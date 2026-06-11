@@ -1083,28 +1083,12 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         ocl_log_verbose(verbose, "GPU: i24 container: %u limbs (%u-bit mont, R=2^%u)\n", limbs, BITS,
                         BITS);
     }
-    const char *mont_mul_op =
-        use_i24 ? opencl_ecm_stage1_mont_mode_name(mont_mode)
-                : mont_mode == ECM_STAGE1_MONT_UNROLL32
-                      ? opencl_ecm_stage1_mont_mode_name(mont_mode)
-                : mont_mode == ECM_STAGE1_MONT_PRIV_OPT
-                      ? opencl_ecm_stage1_mont_mode_name(mont_mode)
-                : mont_mode == ECM_STAGE1_MONT_UNROLL384 && limbs == 16u
-                      ? opencl_ecm_stage1_mont_mode_name(mont_mode)
-                : (limbs == 16u) ? "mont_mul_priv_unroll_only_512"
-                : (limbs == 128u) ? opencl_ecm_mont4096_path_name(mul_path)
-                                  : "mont_mul_stage1_priv_opt";
-    const char *mont_sqr_op =
-        use_i24 ? opencl_ecm_stage1_mont_sqr_mode_name(mont_mode)
-                : mont_mode == ECM_STAGE1_MONT_UNROLL32
-                      ? opencl_ecm_stage1_mont_sqr_mode_name(mont_mode)
-                : mont_mode == ECM_STAGE1_MONT_PRIV_OPT
-                      ? opencl_ecm_stage1_mont_sqr_mode_name(mont_mode)
-                : mont_mode == ECM_STAGE1_MONT_UNROLL384 && limbs == 16u
-                      ? opencl_ecm_stage1_mont_sqr_mode_name(mont_mode)
-                : (limbs == 16u) ? "mont_sqr_priv_unroll_only_512"
-                : (limbs == 128u) ? opencl_ecm_mont4096_path_name(sqr_path)
-                                  : "mont_sqr_stage1_priv_opt";
+    const char *mont_mul_op = opencl_ecm_stage1_mont_mode_name(mont_mode);
+    const char *mont_sqr_op = opencl_ecm_stage1_mont_sqr_mode_name(mont_mode);
+    if (!use_i24 && limbs == 128u) {
+        mont_mul_op = opencl_ecm_mont4096_path_name(mul_path);
+        mont_sqr_op = opencl_ecm_mont4096_path_name(sqr_path);
+    }
     const char *addmod_op = opencl_ecm_addsub_path_name(add_path);
     const char *submod_op = opencl_ecm_addsub_path_name(sub_path);
     ecm_ts_fprintf(stdout,

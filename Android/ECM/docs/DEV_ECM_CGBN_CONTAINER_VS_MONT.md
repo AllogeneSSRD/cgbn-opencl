@@ -111,33 +111,58 @@ Warning: unroll_only_384 requires N+6<384 bits (N<378), got 421; using unroll512
 
 常量（`opencl_ecm_mont_path.h`）：
 
-- `ECM_STAGE1_AUTO_I24_MAX_BITS = 288`
+- `ECM_STAGE1_AUTO_I24_BLSUB_MAX_BITS = 264`（i24 blsub 相对 unroll384 有性能优势的区间上界）
 - `ECM_STAGE1_UNROLL384_MAX_BITS = 384`
 - `ECM_STAGE1_MONT_CARRY_BITS = 6`
 
 **mul 与 sqr 均为 auto** 时（优先级见 `opencl_ecm_resolve_stage1_mont_mode()`）：
 
-| N 位数（约） | Montgomery 模式 | 典型日志 mul/sqr | 容器 BITS（32-bit 路径） |
-|-------------|-----------------|------------------|-------------------------|
-| `< 288` | `I24_U32_BLSUB` | `mont_mul_unroll_i24_u32_blsub` | i24 独立 `limbs×24` |
-| `288 … 377` | `UNROLL384` | `mont_mul_priv_unroll_only_384` | **512** / 16 limb |
+| N 位数（约） | Montgomery 模式 | 典型日志 mul/sqr | 容器 |
+|-------------|-----------------|------------------|------|
+| `< 264` | `I24_U32_BLSUB` | `mont_mul_unroll_i24_u32_blsub` | i24 `limbs×24` |
+| `264 … 377` | `UNROLL384` | `mont_mul_priv_unroll_only_384` | **512** / 16 limb（32-bit 布局） |
 | `378 … 506` | `UNROLL512` | `mont_mul_priv_unroll_only_512` | 512 / 16 limb |
-| `> 506`（仍在更大档） | `UNROLL512` 或 generic | `priv_opt` 等（见 §6） | 1024+ / 32+ limb |
+| `> 506` 或无固定 32-bit 路径 | **`I24_U32`**（兼容回退） | `mont_mul_unroll_i24_u32` | i24 `limbs×24` |
+| i24 limb 数 > `OPENCL_ECM_MAX_LIMBS` | `PRIV_OPT`（最后手段） | `mont_mul_stage1_priv_opt` | 32-bit `select_bits` 容器 |
 
-UI 文案（`arrays.xml`）：`自动 (<288b→i24; 288–377b→unroll384; 378–506b→unroll512)`。
+UI 文案（`arrays.xml`）：`自动 (<264b→i24 blsub; 264–377b→unroll384; 378–506b→unroll512; 更大→i24)`。
 
 显式 path（`unroll512`、`priv_opt`、`unroll32` 等）**优先于** 上表 Auto 规则。
 
+**371-bit auto 预期：** `unroll384` + `CGBN<512,*>`（不是 i24，也不是 priv_opt/unroll32）。
+
 ---
 
-## 6. `limbs == 16` 以外的 generic fallback
+## 6. 兼容回退路径（无固定 bit 特化时）
 
-当 `BITS > 512`（如 991-bit → 1024-bit 容器，`limbs=32`）时，同一 `UNROLL512` mode 在 `mont_mul_stage1()` 里 **不会** 走 512 CIOS，而是：
+固定路径（unroll384 / unroll512 / 4096 特化）只覆盖有限 N 区间。**Auto 在无法命中固定路径时**，不再使用 `unroll32` / `priv_opt` 作为默认回退（Adreno 上实测 ~8.5s vs i24 ~2.9s @371-bit）。
 
-- `limbs == 128` → 4096 专用路径；
-- **其它** → **`mont_mul_stage1_priv_opt`**（generic，运行时 `limbs` 循环）。
+当前兼容回退链（`opencl_ecm_stage1_compatible_mont_fallback()`）：
 
-因此 **`UNROLL512` 模式名 ≠ 始终调用 512 特化内核**；以 `GPU: stage1 operators:` 行为准。
+1. **`mont_mul_unroll_i24_u32`** — 任意 N（在 `OPENCL_ECM_MAX_LIMBS` 内）均可；Stage-1 切换 i24 容器与 `-DECM_STAGE1_USE_I24_384=1`。
+2. **`mont_mul_stage1_priv_opt`** — 仅当 i24 limb 数超过 host 缓冲上限时的最后手段。
+
+`unroll32` / 显式 `priv_opt` 仍可在 UI 中手动选择（bench / 对照），**不会**再作为 auto 默认。
+
+### 6.1 i24 相对 unroll384 的性能区间
+
+bench 结论（见 `Android/性能测试mulsqr.md`）：**i24 仅在与 384-bit 固定路径对比时，在 `< 11 limb`（约 `< 264-bit` N）才有优势**。因此：
+
+- **`< 264` auto → i24 blsub**（小 N 最快）
+- **`264 … 377` auto → unroll384**（固定 12-limb CIOS，优于 i24 @371-bit）
+- **`≥ 378` 且仍在 512 容器 → unroll512**
+
+### 6.2 未来：固定路径阶梯 vs 兼容路径
+
+若按约 **1.5× bit** 间隔部署全展开固定路径（384 → 512 → 768 → 1152 → …），且每个档位覆盖对应 N 区间，则 **兼容回退（i24 / priv_opt）可逐步淘汰**。当前尚未铺满阶梯，故保留 **i24_u32** 作为通用回退。
+
+候选兼容路径（手动 / 应急，非 auto 默认）：
+
+| 路径 | 适用 | 备注 |
+|------|------|------|
+| `i24_u32` / `i24_u32_blsub` | 任意 N（limb 上限内） | **当前 auto 大 N 默认** |
+| `priv_opt` | i24 放不下时 | 32-bit 容器 + 运行时 limbs |
+| `unroll32` | bench 对照 | 性能差，勿作 auto 回退 |
 
 ---
 
@@ -147,7 +172,7 @@ UI 文案（`arrays.xml`）：`自动 (<288b→i24; 288–377b→unroll384; 378�
 2. **`XXX-bit N`** → 问：模数真实位数？（Auto 阈值看这个）
 3. **`stage1 operators: mul=...`** → 问：Montgomery 实际用哪段 CL？
 4. 若 **`CGBN<512,*>` + `unroll384`** 且 **`N ≤ 377`** → **正常**
-5. 若 **`unroll384`** 且 **`N ≥ 378`** → **应查 host 是否漏校验**（当前代码应已拒绝）
+5. 若 **`> 506` auto** → 应见 **`mont_mul_unroll_i24_u32`** 与 **`CGBN<limbs×24,*>`**，不是 priv_opt
 
 ---
 
@@ -155,7 +180,7 @@ UI 文案（`arrays.xml`）：`自动 (<288b→i24; 288–377b→unroll384; 378�
 
 | 文件 | 内容 |
 |------|------|
-| `src/opencl_ecm_mont_path.h` | `opencl_ecm_stage1_n_fits_unroll384()`、阈值常量 |
+| `src/opencl_ecm_mont_path.h` | 阈值、`opencl_ecm_stage1_compatible_mont_fallback()` |
 | `src/opencl_ecm_mont_path.cpp` | Auto / 显式 path 解析 |
 | `src/cgbn_stage1_opencl.cpp` | `select_bits`、`GPU: CGBN<...>` 打印、`ensure_ecm_kernel` |
 | `cgbn/backends/opencl/kernels/ecm_stage1.cl` | `mont_mul_stage1_unroll_only_384`、`mont_mul_stage1()` 分发 |
@@ -170,4 +195,4 @@ UI 文案（`arrays.xml`）：`自动 (<288b→i24; 288–377b→unroll384; 378�
 | 「Auto 384–506 用 unroll384」 | **错误**。506 是 512 **容器**上限；unroll384 仅 **N+CARRY < 384** |
 | 「12 limb = 可表示 506-bit N」 | **错误**。12×32=384 bit 是 CIOS 宽度；506 来自 512−CARRY |
 | 「见 unroll384 就应显示 CGBN<384,*>`」 | **错误**。容器仍为 512；384 只在 operators 行体现 |
-| 「371-bit 应用 unroll512 才安全」 | **在 N≤377 内 unroll384 数学上正确**；378+ 才必须 unroll512 |
+| 「371-bit auto 应走 priv_opt」 | **错误**。264–377 应 **unroll384**；991-bit 等应 **i24_u32** 回退 |

@@ -82,10 +82,10 @@ BITS  = ecm_limb24_mont_bits(limbs);        // limbs × 24
 
 | N 位数（约） | 32-bit 容器 BITS / limbs | mul/sqr **auto** Montgomery | 说明 |
 |-------------|--------------------------|----------------------------|------|
-| `< 288` | i24：`limbs×24` mont bits | `i24_u32_blsub` | 见 `ecm_limb24_stage1_limbs()` |
-| `288 … 377` | **512 / 16** | `unroll_only_384`（12-limb CIOS） | 容器仍 512；算子 384 宽 — 见 [容器 vs 算子](DEV_ECM_CGBN_CONTAINER_VS_MONT.md) |
-| `378 … 506` | 512 / 16 | `unroll_only_512` | `N + CARRY ≤ 512` |
-| `507 …` | 1024 … | `priv_opt` 或 4096 路径 | `select_bits` 升档 |
+| `< 264` | i24：`limbs×24` mont bits | `i24_u32_blsub` | i24 相对 unroll384 有优势 |
+| `264 … 377` | **512 / 16** | `unroll_only_384` | 见 [容器 vs 算子](DEV_ECM_CGBN_CONTAINER_VS_MONT.md) |
+| `378 … 506` | 512 / 16 | `unroll_only_512` | |
+| `> 506` | i24 或 1024+… | **`i24_u32` 兼容回退** | 不再默认 priv_opt/unroll32 |
 
 **4096 专用 path**（`unroll64_4096`、`fips4096` 等）仅在 `limbs == 128` 时使用；否则 host 打印 warning 并清零 `mul_path`/`sqr_path`。
 
@@ -122,10 +122,12 @@ BITS  = ecm_limb24_mont_bits(limbs);        // limbs × 24
 | mul 或 sqr 为 `priv_opt` | `PRIV_OPT` | `mont_mul_stage1_priv_opt` |
 | mul 或 sqr 为 `unroll_only_384` 且 `N+CARRY<384` | `UNROLL384` | `mont_mul_priv_unroll_only_384` |
 | mul 或 sqr 为 `unroll_only_384` 但 N 过大 | `UNROLL512` | warning 后回落 unroll512 |
-| mul/sqr 均为 auto 且 `n < 288` | `I24_U32_BLSUB` | `mont_mul_unroll_i24_u32_blsub` |
-| mul/sqr 均为 auto 且 `288 ≤ n ≤ 377` | `UNROLL384` | `mont_mul_priv_unroll_only_384` |
+| mul/sqr 均为 auto 且 `n < 264` | `I24_U32_BLSUB` | `mont_mul_unroll_i24_u32_blsub` |
+| mul/sqr 均为 auto 且 `264 ≤ n ≤ 377` | `UNROLL384` | `mont_mul_priv_unroll_only_384` |
 | mul 或 sqr 为 `i24_u32` | `I24_U32` | `mont_mul_unroll_i24_u32` |
-| 其它 auto（如 `378 … 506`） | `UNROLL512` | `mont_mul_priv_unroll_only_512`（limbs=16） |
+| mul/sqr 均为 auto 且 `378 … 506` | `UNROLL512` | `mont_mul_priv_unroll_only_512` |
+| mul/sqr 均为 auto 且 `> 506` 等无固定路径 | `I24_U32` | `mont_mul_unroll_i24_u32`（兼容回退） |
+| i24 超 `OPENCL_ECM_MAX_LIMBS` | `PRIV_OPT` | `mont_mul_stage1_priv_opt` |
 
 i24 是否启用由 `opencl_ecm_stage1_should_use_i24(mode, n_bit_size)` 决定（与 32-bit `select_bits` 无关）。i24 使用独立 limb 计数：
 
@@ -297,18 +299,20 @@ Auto **不会**再向下传递具体 path 名；host 在运行 ECM 前根据 **N
 
 入口：`opencl_ecm_resolve_stage1_mont_mode()`（`opencl_ecm_mont_path.cpp`）。
 
-**完整分档表、371-bit 日志示例、unroll384 数学上界** 见 **[`DEV_ECM_CGBN_CONTAINER_VS_MONT.md`](DEV_ECM_CGBN_CONTAINER_VS_MONT.md) §5–§7**。
+**完整分档表、371-bit 日志示例、兼容回退** 见 **[`DEV_ECM_CGBN_CONTAINER_VS_MONT.md`](DEV_ECM_CGBN_CONTAINER_VS_MONT.md) §5–§7**。
 
 概要（显式 path 优先于 Auto）：
 
 1. `unroll_only_512` → UNROLL512  
 2. `unroll32` → UNROLL32  
 3. `priv_opt` → PRIV_OPT  
-4. `unroll_only_384` → UNROLL384（须 `N+CARRY<384`，否则 warning + UNROLL512）  
-5. Auto 且 `N < 288` → i24 blsub  
-6. Auto 且 `288 ≤ N ≤ 377` → UNROLL384  
-7. 显式 `i24_u32` → I24_U32  
-8. 其它 → UNROLL512（`limbs>16` 时 kernel 内走 priv_opt，见容器文档 §6）
+4. `unroll_only_384` → UNROLL384（须 `N+CARRY<384`；否则 unroll512 / i24 / priv_opt 链式回退）  
+5. Auto 且 `N < 264` → i24 blsub  
+6. Auto 且 `264 ≤ N ≤ 377` → UNROLL384  
+7. Auto 且 `378 … 506` → UNROLL512  
+8. 显式 `i24_u32` → I24_U32  
+9. Auto 且无固定路径 → **`I24_U32` 兼容回退**（非 priv_opt/unroll32）  
+10. i24 超 limb 上限 → PRIV_OPT  
 
 对应源码（简化，以 repo 为准）：
 
@@ -317,23 +321,22 @@ Auto **不会**再向下传递具体 path 名；host 在运行 ECM 前根据 **N
 if (path_requests_unroll512(...)) return ECM_STAGE1_MONT_UNROLL512;
 if (path_requests_unroll32(...))   return ECM_STAGE1_MONT_UNROLL32;
 if (path_requests_priv_opt(...))   return ECM_STAGE1_MONT_PRIV_OPT;
-if (path_requests_unroll384(...)) {
-    if (opencl_ecm_stage1_n_fits_unroll384(n_bit_size))
-        return ECM_STAGE1_MONT_UNROLL384;
-    // warning → UNROLL512
-}
-const bool auto_blsub = both_auto && n_bit_size < ECM_STAGE1_AUTO_I24_MAX_BITS;  // 288
-const bool auto_unroll384 = both_auto && n_bit_size >= 288 &&
-    opencl_ecm_stage1_n_fits_unroll384(n_bit_size);  // N+CARRY < 384
+// unroll384 explicit + fit checks …
+const bool auto_blsub = both_auto && n_bit_size < 264;
+const bool auto_unroll384 = both_auto && n_bit_size >= 264 &&
+    opencl_ecm_stage1_n_fits_unroll384(n_bit_size);
+const bool auto_unroll512 = both_auto && !fits_unroll384 && fits_unroll512_container;
+// … blsub / unroll384 / unroll512 / explicit i24_u32 …
+if (both_auto) return opencl_ecm_stage1_compatible_mont_fallback(n_bit_size);
 ```
 
 **要点：**
 
 1. **显式 path 优先于 Auto** — 任一侧指定 `unroll_only_512` 会覆盖 Auto 的 i24 规则。
 2. **i24 Auto 要求 mul 与 sqr 都是 auto** — 只改一侧下拉框即走显式规则。
-3. **阈值用的是 `n_bit_size`，不是容器 `BITS`** — 371-bit N 在 512-bit 容器里仍可用 unroll384（因 `371+6<384`）。
-4. **`CGBN<512,*>` 不表示 mul 一定是 512 CIOS** — operators 行才是 Montgomery 实现名。
-5. **`UNROLL512` 在 limbs>16 时 kernel 走 priv_opt**，不是 unroll512 特化 — 见 [`DEV_ECM_CGBN_CONTAINER_VS_MONT.md`](DEV_ECM_CGBN_CONTAINER_VS_MONT.md)。
+3. **371-bit auto → unroll384**（264–377 区间），日志 `CGBN<512,*>` + `mul=...unroll_only_384`。
+4. **991-bit auto → i24_u32**，不再默认 priv_opt（~8.5s vs ~2.9s @371-bit 量级）。
+5. **兼容回退候选与固定路径阶梯规划** — 见容器文档 §6.2。
 
 解析完成后：
 
