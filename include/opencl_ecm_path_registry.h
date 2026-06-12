@@ -6,60 +6,79 @@
 
 #include "opencl_ecm_mont_path.h"
 
-/** Limb / vendor context for add-mod or sub-mod path selection. */
-struct EcmAddSubPathContext {
-    uint32_t limbs;
-    bool is_amd;
+/** Host OS bitmask (runtime ∩ descriptor must be non-empty when descriptor mask ≠ ANY). */
+enum EcmPathOs : uint32_t {
+    ECM_OS_WINDOWS = 1u << 0,
+    ECM_OS_ANDROID = 1u << 1,
+    ECM_OS_LINUX = 1u << 2,
+    ECM_OS_MACOS = 1u << 3,
+};
+constexpr uint32_t ECM_OS_ANY = 0xFFFFFFFFu;
+
+/** OpenCL GPU vendor bitmask. */
+enum EcmPathGpuVendor : uint32_t {
+    ECM_GPU_AMD = 1u << 0,
+    ECM_GPU_NVIDIA = 1u << 1,
+    ECM_GPU_INTEL = 1u << 2,
+    ECM_GPU_QUALCOMM = 1u << 3,
+    ECM_GPU_HUAWEI = 1u << 4,
+    ECM_GPU_APPLE = 1u << 5,
+};
+constexpr uint32_t ECM_GPU_ANY = 0xFFFFFFFFu;
+
+/** Extra OpenCL translation units prepended at kernel build. */
+enum EcmKernelInclude : uint32_t {
+    ECM_KERNEL_INC_NONE = 0,
+    ECM_KERNEL_INC_MONT_EXTENDED = 1u << 0,
+    ECM_KERNEL_INC_MP_ASM_U32 = 1u << 1,
+    ECM_KERNEL_INC_MP_ASM_U16 = 1u << 2,
 };
 
-enum EcmMontPathKind : uint8_t {
-    ECM_MONT_PATH_STAGE1 = 0,
-    ECM_MONT_PATH_4096 = 1,
+/** Runtime platform + container context for path selection. */
+struct EcmPathContext {
+    size_t n_bit_size;
+    uint32_t container_limbs;
+    uint32_t os_mask;
+    uint32_t gpu_vendor_mask;
 };
 
-enum EcmPathVendorFilter : int8_t {
-    ECM_PATH_VENDOR_ANY = -1,
-    ECM_PATH_VENDOR_NON_AMD = 0,
-    ECM_PATH_VENDOR_AMD = 1,
-};
-
-/** Montgomery mul/sqr path entry; mul and sqr use separate registries. */
+/**
+ * Montgomery mul/sqr path (separate mul/sqr registries).
+ * dedicated: fixed operator width = max_n_bits/32 (e.g. unroll384 → 12 limbs).
+ * !dedicated: compatible; container must hold N+CARRY.
+ */
 struct EcmMontPathDescriptor {
-    EcmMontPathKind kind;
-    int variant_id;
     const char *id;
-    const char *display_name;
     const char *cl_name;
-    bool dedicated;
-    int auto_priority;
     const char *const *aliases;
+    int8_t auto_priority;
+
     uint16_t min_n_bits;
     uint16_t max_n_bits;
     bool max_n_strict;
-    uint16_t required_container_limbs;
-    int coop_wg_size;
-    int coop_scratch_u32;
-    bool needs_fips4096_cl;
-    const char *stage1_force_macro;
-    bool stage1_use_i24;
-    bool stage1_i24_blsub;
+    bool dedicated;
+
+    uint8_t coop_work_group_size;
+    uint16_t local_scratch_u32;
+    uint8_t cl_dispatch_id;
+    uint32_t kernel_includes;
+    const char *force_macro;
 };
 
-/** Add-mod / sub-mod path entry; add and sub use separate registries. */
 struct EcmAddSubPathDescriptor {
-    int path_id;
+    int cl_dispatch_id;
     const char *id;
-    const char *display_name;
     const char *cl_name;
-    int auto_priority;
     const char *const *aliases;
-    uint32_t required_limbs;
-    EcmPathVendorFilter vendor;
-    bool needs_asm_b32;
-    bool needs_asm_b16;
+    int8_t auto_priority;
+
+    uint16_t max_container_bits;
+    uint32_t os_mask;
+    uint32_t gpu_vendor_mask;
+    uint32_t gpu_vendor_exclude_mask;
+    uint32_t kernel_includes;
 };
 
-/** Resolved stage-1 kernel build plan: resolve() outputs feed this directly. */
 struct EcmStage1KernelBuildPlan {
     uint32_t limbs;
     uint32_t tpi;
@@ -67,8 +86,6 @@ struct EcmStage1KernelBuildPlan {
     int add_mod_fused_unroll;
     const EcmMontPathDescriptor *mul;
     const EcmMontPathDescriptor *sqr;
-    const EcmMontPathDescriptor *mul_4096;
-    const EcmMontPathDescriptor *sqr_4096;
     const EcmAddSubPathDescriptor *add;
     const EcmAddSubPathDescriptor *sub;
     bool use_i24;
@@ -80,51 +97,51 @@ constexpr size_t ECM_PATH_4096_CONTAINER_BITS = 4096u;
 bool ecm_path_n_bit_fits(uint16_t min_n_bits, uint16_t max_n_bits, bool max_n_strict,
                          size_t n_bit_size);
 
-bool ecm_mont_path_n_fits(const EcmMontPathDescriptor *desc, size_t n_bit_size);
-bool ecm_mont_path_container_fits(const EcmMontPathDescriptor *desc, uint32_t limbs,
-                                  size_t n_bit_size);
-bool ecm_addsub_path_fits(const EcmAddSubPathDescriptor *desc, const EcmAddSubPathContext &ctx);
+uint32_t ecm_path_host_os_mask();
+uint32_t ecm_path_gpu_vendor_from_cl_vendor_string(const char *vendor_lower);
+
+uint32_t ecm_mont_operator_limbs(const EcmMontPathDescriptor *desc);
+bool ecm_mont_path_is_4096_dedicated(const EcmMontPathDescriptor *desc);
+bool ecm_mont_path_is_i24(const EcmMontPathDescriptor *desc);
+bool ecm_mont_path_fits(const EcmMontPathDescriptor *desc, size_t n_bit_size,
+                        uint32_t container_limbs);
+bool ecm_addsub_path_fits(const EcmAddSubPathDescriptor *desc, const EcmPathContext &ctx);
 
 bool opencl_ecm_path_is_auto(const char *path);
 
-int ecm_mont_4096_path_id(const EcmMontPathDescriptor *desc);
+const char *ecm_kernel_include_path(EcmKernelInclude include_bit);
+uint32_t opencl_ecm_stage1_collect_kernel_includes(const EcmStage1KernelBuildPlan &plan);
 
 size_t opencl_ecm_mont_mul_registry_count();
 const EcmMontPathDescriptor *opencl_ecm_mont_mul_registry_entry(size_t index);
 const EcmMontPathDescriptor *opencl_ecm_mont_mul_descriptor(ecm_stage1_mont_mode mode);
-const EcmMontPathDescriptor *opencl_ecm_mont4096_mul_descriptor(int path_id);
 
 size_t opencl_ecm_mont_sqr_registry_count();
 const EcmMontPathDescriptor *opencl_ecm_mont_sqr_registry_entry(size_t index);
 const EcmMontPathDescriptor *opencl_ecm_mont_sqr_descriptor(ecm_stage1_mont_mode mode);
-const EcmMontPathDescriptor *opencl_ecm_mont4096_sqr_descriptor(int path_id);
 
-const EcmMontPathDescriptor *opencl_ecm_resolve_stage1_mont_mul(const char *path,
-                                                              size_t n_bit_size);
-const EcmMontPathDescriptor *opencl_ecm_resolve_stage1_mont_sqr(const char *path,
-                                                                size_t n_bit_size);
-
-const EcmMontPathDescriptor *opencl_ecm_resolve_mont4096_mul(const char *path, size_t n_bit_size,
-                                                             bool *unknown_path);
-const EcmMontPathDescriptor *opencl_ecm_resolve_mont4096_sqr(const char *path, size_t n_bit_size,
-                                                             bool *unknown_path);
+const EcmMontPathDescriptor *opencl_ecm_resolve_mont_mul(const char *path, size_t n_bit_size,
+                                                         uint32_t container_limbs,
+                                                         bool *unknown_path);
+const EcmMontPathDescriptor *opencl_ecm_resolve_mont_sqr(const char *path, size_t n_bit_size,
+                                                         uint32_t container_limbs,
+                                                         bool *unknown_path);
 
 size_t opencl_ecm_addmod_registry_count();
 const EcmAddSubPathDescriptor *opencl_ecm_addmod_registry_entry(size_t index);
 const EcmAddSubPathDescriptor *opencl_ecm_addmod_path_descriptor(int path_id);
-const EcmAddSubPathDescriptor *opencl_ecm_resolve_addmod_path(const char *path, uint32_t limbs,
-                                                              bool is_amd);
+const EcmAddSubPathDescriptor *opencl_ecm_resolve_addmod_path(const char *path,
+                                                              const EcmPathContext &ctx);
 
 size_t opencl_ecm_submod_registry_count();
 const EcmAddSubPathDescriptor *opencl_ecm_submod_registry_entry(size_t index);
 const EcmAddSubPathDescriptor *opencl_ecm_submod_path_descriptor(int path_id);
-const EcmAddSubPathDescriptor *opencl_ecm_resolve_submod_path(const char *path, uint32_t limbs,
-                                                              bool is_amd);
+const EcmAddSubPathDescriptor *opencl_ecm_resolve_submod_path(const char *path,
+                                                              const EcmPathContext &ctx);
 
 EcmStage1KernelBuildPlan opencl_ecm_stage1_make_build_plan(
     uint32_t limbs, uint32_t tpi, const EcmMontPathDescriptor *mul,
-    const EcmMontPathDescriptor *sqr, const EcmMontPathDescriptor *mul_4096,
-    const EcmMontPathDescriptor *sqr_4096, const EcmAddSubPathDescriptor *add,
+    const EcmMontPathDescriptor *sqr, const EcmAddSubPathDescriptor *add,
     const EcmAddSubPathDescriptor *sub, bool use_i24, int stage1_force_normalize,
     int add_mod_fused_unroll);
 

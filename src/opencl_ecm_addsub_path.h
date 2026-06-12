@@ -17,10 +17,11 @@ const char *opencl_ecm_addsub_path_name(int path_id);
 bool opencl_ecm_addsub_path_needs_asm_b32(int path_id);
 bool opencl_ecm_addsub_path_needs_asm_b16(int path_id);
 
+struct EcmPathContext;
 struct EcmAddSubPathDescriptor;
-const EcmAddSubPathDescriptor *opencl_ecm_resolve_addsub_add_path(const char *path, uint32_t limbs,
-                                                                bool is_amd);
-const EcmAddSubPathDescriptor *opencl_ecm_resolve_addsub_sub_path(const char *path, uint32_t limbs,
-                                                                  bool is_amd);
+const EcmAddSubPathDescriptor *opencl_ecm_resolve_addsub_add_path(const char *path,
+                                                                  const EcmPathContext &ctx);
+const EcmAddSubPathDescriptor *opencl_ecm_resolve_addsub_sub_path(const char *path,
+                                                                  const EcmPathContext &ctx);
 
 void opencl_ecm_print_available_kernels(FILE *out);

@@ -27,13 +27,13 @@ int opencl_ecm_parse_addsub_path(const char *path) {
     for (size_t i = 0; i < opencl_ecm_addmod_registry_count(); ++i) {
         const EcmAddSubPathDescriptor *desc = opencl_ecm_addmod_registry_entry(i);
         if (desc != nullptr && aliases_contain(desc->aliases, path)) {
-            return desc->path_id;
+            return desc->cl_dispatch_id;
         }
     }
     for (size_t i = 0; i < opencl_ecm_submod_registry_count(); ++i) {
         const EcmAddSubPathDescriptor *desc = opencl_ecm_submod_registry_entry(i);
         if (desc != nullptr && aliases_contain(desc->aliases, path)) {
-            return desc->path_id;
+            return desc->cl_dispatch_id;
         }
     }
     return -2;
@@ -53,30 +53,30 @@ const char *opencl_ecm_addsub_path_name(int path_id) {
 
 bool opencl_ecm_addsub_path_needs_asm_b32(int path_id) {
     const EcmAddSubPathDescriptor *add_d = opencl_ecm_addmod_path_descriptor(path_id);
-    if (add_d != nullptr && add_d->needs_asm_b32) {
+    if (add_d != nullptr && (add_d->kernel_includes & ECM_KERNEL_INC_MP_ASM_U32) != 0) {
         return true;
     }
     const EcmAddSubPathDescriptor *sub_d = opencl_ecm_submod_path_descriptor(path_id);
-    return sub_d != nullptr && sub_d->needs_asm_b32;
+    return sub_d != nullptr && (sub_d->kernel_includes & ECM_KERNEL_INC_MP_ASM_U32) != 0;
 }
 
 bool opencl_ecm_addsub_path_needs_asm_b16(int path_id) {
     const EcmAddSubPathDescriptor *add_d = opencl_ecm_addmod_path_descriptor(path_id);
-    if (add_d != nullptr && add_d->needs_asm_b16) {
+    if (add_d != nullptr && (add_d->kernel_includes & ECM_KERNEL_INC_MP_ASM_U16) != 0) {
         return true;
     }
     const EcmAddSubPathDescriptor *sub_d = opencl_ecm_submod_path_descriptor(path_id);
-    return sub_d != nullptr && sub_d->needs_asm_b16;
+    return sub_d != nullptr && (sub_d->kernel_includes & ECM_KERNEL_INC_MP_ASM_U16) != 0;
 }
 
-const EcmAddSubPathDescriptor *opencl_ecm_resolve_addsub_add_path(const char *path, uint32_t limbs,
-                                                                  bool is_amd) {
-    return opencl_ecm_resolve_addmod_path(path, limbs, is_amd);
+const EcmAddSubPathDescriptor *opencl_ecm_resolve_addsub_add_path(const char *path,
+                                                                  const EcmPathContext &ctx) {
+    return opencl_ecm_resolve_addmod_path(path, ctx);
 }
 
-const EcmAddSubPathDescriptor *opencl_ecm_resolve_addsub_sub_path(const char *path, uint32_t limbs,
-                                                                  bool is_amd) {
-    return opencl_ecm_resolve_submod_path(path, limbs, is_amd);
+const EcmAddSubPathDescriptor *opencl_ecm_resolve_addsub_sub_path(const char *path,
+                                                                    const EcmPathContext &ctx) {
+    return opencl_ecm_resolve_submod_path(path, ctx);
 }
 
 void opencl_ecm_print_available_kernels(FILE *out) {
