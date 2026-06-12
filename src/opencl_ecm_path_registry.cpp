@@ -27,66 +27,16 @@ bool aliases_contain(const char *const *aliases, const char *path) {
     return false;
 }
 
-EcmPathContext make_n_ctx(size_t n_bit_size) {
-    EcmPathContext ctx{};
-    ctx.n_bit_size = n_bit_size;
-    return ctx;
-}
+constexpr uint16_t kMontNoMinN = 0;
+constexpr uint16_t kMontNoMaxN = 0;
+constexpr uint16_t kMontUnroll384MaxN = 384;
+constexpr uint16_t kMontUnroll512MaxN = 512;
+constexpr uint16_t kMont4096MinN = static_cast<uint16_t>(ECM_PATH_4096_AUTO_MIN_BITS);
+constexpr uint16_t kMont4096MaxN = static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS);
+constexpr uint16_t kMontContainer512Limbs = 16;
 
-bool n_fits_unroll384_ctx(const EcmPathContext &ctx) {
-    return ecm_path_n_fits_unroll384(ctx.n_bit_size);
-}
-
-bool n_fits_unroll512_ctx(const EcmPathContext &ctx) {
-    return ecm_path_n_fits_unroll512_container(ctx.n_bit_size);
-}
-
-bool n_fits_4096_dedicated_ctx(const EcmPathContext &ctx) {
-    return ecm_path_n_fits_4096_dedicated(ctx.n_bit_size);
-}
-
-bool n_fits_always_ctx(const EcmPathContext & /*ctx*/) {
-    return true;
-}
-
-bool addmod_limbs_128_amd(const EcmAddSubPathContext &ctx) {
-    return ctx.limbs == 128u && ctx.is_amd;
-}
-
-bool addmod_limbs_128_non_amd(const EcmAddSubPathContext &ctx) {
-    return ctx.limbs == 128u && !ctx.is_amd;
-}
-
-bool addmod_limbs_16_amd(const EcmAddSubPathContext &ctx) {
-    return ctx.limbs == 16u && ctx.is_amd;
-}
-
-bool addmod_limbs_16_non_amd(const EcmAddSubPathContext &ctx) {
-    return ctx.limbs == 16u && !ctx.is_amd;
-}
-
-bool addmod_limbs_always(const EcmAddSubPathContext & /*ctx*/) {
-    return true;
-}
-
-bool submod_limbs_128_amd(const EcmAddSubPathContext &ctx) {
-    return ctx.limbs == 128u && ctx.is_amd;
-}
-
-bool submod_limbs_128_non_amd(const EcmAddSubPathContext &ctx) {
-    return ctx.limbs == 128u && !ctx.is_amd;
-}
-
-bool submod_limbs_16_amd(const EcmAddSubPathContext &ctx) {
-    return ctx.limbs == 16u && ctx.is_amd;
-}
-
-bool submod_limbs_16_non_amd(const EcmAddSubPathContext &ctx) {
-    return ctx.limbs == 16u && !ctx.is_amd;
-}
-
-bool submod_limbs_always(const EcmAddSubPathContext & /*ctx*/) {
-    return true;
+bool mont_path_is_4096_auto_priv_opt(size_t n_bit_size) {
+    return ecm_path_n_bit_fits(kMont4096MinN, kMont4096MaxN, false, n_bit_size);
 }
 
 /* --- mul aliases --- */
@@ -108,40 +58,41 @@ static const char *const kMulAliases_i24_blsub[] = {
     "mont_mul_unroll_i24_384_manual", nullptr};
 static const char *const kMulAliases_i24_u32[] = {"i24_u32", "mont_mul_unroll_i24_u32", nullptr};
 
-constexpr EcmMontMulPathDescriptor kMontMulRegistry[] = {
+constexpr EcmMontPathDescriptor kMontMulRegistry[] = {
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_UNROLL384, "unroll_only_384", "Unroll 384 mul",
-     "mont_mul_priv_unroll_only_384", true, 10, kMulAliases_unroll384, n_fits_unroll384_ctx, 1, 0,
-     false, "ECM_STAGE1_MUL_FORCE_UNROLL384", false, false},
+     "mont_mul_priv_unroll_only_384", true, 10, kMulAliases_unroll384, kMontNoMinN,
+     kMontUnroll384MaxN, true, kMontContainer512Limbs, 1, 0, false,
+     "ECM_STAGE1_MUL_FORCE_UNROLL384", false, false},
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_UNROLL512, "unroll_only_512", "Unroll 512 mul",
-     "mont_mul_priv_unroll_only_512", true, 20, kMulAliases_unroll512, n_fits_unroll512_ctx, 1, 0,
-     false, nullptr, false, false},
+     "mont_mul_priv_unroll_only_512", true, 20, kMulAliases_unroll512, kMontNoMinN,
+     kMontUnroll512MaxN, false, 0, 1, 0, false, nullptr, false, false},
     {ECM_MONT_PATH_4096, ECM_MONT4096_PATH_UNROLL64, "unroll64_4096", "Unroll64 4096 mul",
-     "mont_mul_stage1_unroll64_4096", true, 21, kMulAliases_unroll64_4096, n_fits_4096_dedicated_ctx,
-     1, 0, false, nullptr, false, false},
+     "mont_mul_stage1_unroll64_4096", true, 21, kMulAliases_unroll64_4096, kMont4096MinN,
+     kMont4096MaxN, false, 0, 1, 0, false, nullptr, false, false},
     {ECM_MONT_PATH_4096, ECM_MONT4096_PATH_UNROLL64_MT2, "unroll64_4096_mt2", "Unroll64 4096 MT2 mul",
-     "mont_mul_stage1_unroll64_4096_mt2", true, 22, kMulAliases_unroll64_4096_mt2,
-     n_fits_4096_dedicated_ctx, 2, 389, false, nullptr, false, false},
+     "mont_mul_stage1_unroll64_4096_mt2", true, 22, kMulAliases_unroll64_4096_mt2, kMont4096MinN,
+     kMont4096MaxN, false, 0, 2, 389, false, nullptr, false, false},
     {ECM_MONT_PATH_4096, ECM_MONT4096_PATH_FIPS4096, "fips4096", "FIPS4096 mul",
-     "mont_mul_stage1_fips4096", true, 23, kMulAliases_fips4096, n_fits_4096_dedicated_ctx, 1, 0,
-     true, nullptr, false, false},
+     "mont_mul_stage1_fips4096", true, 23, kMulAliases_fips4096, kMont4096MinN, kMont4096MaxN,
+     false, 0, 1, 0, true, nullptr, false, false},
     {ECM_MONT_PATH_4096, ECM_MONT4096_PATH_FIPS4096_MT8, "fips4096_mt8", "FIPS4096 MT8 mul",
-     "mont_mul_stage1_fips4096_mt8", true, 24, kMulAliases_fips4096_mt8, n_fits_4096_dedicated_ctx,
-     8, 897, true, nullptr, false, false},
+     "mont_mul_stage1_fips4096_mt8", true, 24, kMulAliases_fips4096_mt8, kMont4096MinN,
+     kMont4096MaxN, false, 0, 8, 897, true, nullptr, false, false},
     {ECM_MONT_PATH_4096, ECM_MONT4096_PATH_FIPS4096_MT16, "fips4096_mt16", "FIPS4096 MT16 mul",
-     "mont_mul_stage1_fips4096_mt16", true, 25, kMulAliases_fips4096_mt16,
-     n_fits_4096_dedicated_ctx, 16, 897, true, nullptr, false, false},
+     "mont_mul_stage1_fips4096_mt16", true, 25, kMulAliases_fips4096_mt16, kMont4096MinN,
+     kMont4096MaxN, false, 0, 16, 897, true, nullptr, false, false},
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_UNROLL32, "unroll32", "Generic unroll32 mul",
-     "mont_mul_stage1_unroll32", false, -1, kMulAliases_unroll32, n_fits_always_ctx, 1, 0, false,
-     "ECM_STAGE1_MUL_FORCE_UNROLL32", false, false},
+     "mont_mul_stage1_unroll32", false, -1, kMulAliases_unroll32, kMontNoMinN, kMontNoMaxN, false,
+     0, 1, 0, false, "ECM_STAGE1_MUL_FORCE_UNROLL32", false, false},
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_PRIV_OPT, "priv_opt", "Private opt mul",
-     "mont_mul_stage1_priv_opt", false, 30, kMulAliases_priv_opt, n_fits_always_ctx, 1, 0, false,
-     "ECM_STAGE1_MUL_FORCE_PRIV_OPT", false, false},
+     "mont_mul_stage1_priv_opt", false, 30, kMulAliases_priv_opt, kMontNoMinN, kMontNoMaxN, false,
+     0, 1, 0, false, "ECM_STAGE1_MUL_FORCE_PRIV_OPT", false, false},
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_I24_U32_BLSUB, "i24_u32_blsub", "i24 blsub mul",
-     "mont_mul_unroll_i24_u32_blsub", true, -1, kMulAliases_i24_blsub, n_fits_always_ctx, 1, 0,
-     false, nullptr, true, true},
+     "mont_mul_unroll_i24_u32_blsub", true, -1, kMulAliases_i24_blsub, kMontNoMinN, kMontNoMaxN,
+     false, 0, 1, 0, false, nullptr, true, true},
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_I24_U32, "i24_u32", "i24 u32 mul",
-     "mont_mul_unroll_i24_u32", true, -1, kMulAliases_i24_u32, n_fits_always_ctx, 1, 0, false,
-     nullptr, true, false},
+     "mont_mul_unroll_i24_u32", true, -1, kMulAliases_i24_u32, kMontNoMinN, kMontNoMaxN, false, 0,
+     1, 0, false, nullptr, true, false},
 };
 
 /* --- sqr aliases --- */
@@ -162,40 +113,41 @@ static const char *const kSqrAliases_i24_blsub[] = {"i24_u32_blsub", "mont_sqr_u
                                                     nullptr};
 static const char *const kSqrAliases_i24_u32[] = {"i24_u32", "mont_sqr_unroll_i24_u32", nullptr};
 
-constexpr EcmMontSqrPathDescriptor kMontSqrRegistry[] = {
+constexpr EcmMontPathDescriptor kMontSqrRegistry[] = {
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_UNROLL384, "unroll_only_384", "Unroll 384 sqr",
-     "mont_sqr_priv_unroll_only_384", true, 10, kSqrAliases_unroll384, n_fits_unroll384_ctx, 1, 0,
-     false, "ECM_STAGE1_SQR_FORCE_UNROLL384", false, false},
+     "mont_sqr_priv_unroll_only_384", true, 10, kSqrAliases_unroll384, kMontNoMinN,
+     kMontUnroll384MaxN, true, kMontContainer512Limbs, 1, 0, false,
+     "ECM_STAGE1_SQR_FORCE_UNROLL384", false, false},
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_UNROLL512, "unroll_only_512", "Unroll 512 sqr",
-     "mont_sqr_priv_unroll_only_512", true, 20, kSqrAliases_unroll512, n_fits_unroll512_ctx, 1, 0,
-     false, nullptr, false, false},
+     "mont_sqr_priv_unroll_only_512", true, 20, kSqrAliases_unroll512, kMontNoMinN,
+     kMontUnroll512MaxN, false, 0, 1, 0, false, nullptr, false, false},
     {ECM_MONT_PATH_4096, ECM_MONT4096_PATH_UNROLL64, "unroll64_4096", "Unroll64 4096 sqr",
-     "mont_sqr_stage1_unroll64_4096", true, 21, kSqrAliases_unroll64_4096, n_fits_4096_dedicated_ctx,
-     1, 0, false, nullptr, false, false},
+     "mont_sqr_stage1_unroll64_4096", true, 21, kSqrAliases_unroll64_4096, kMont4096MinN,
+     kMont4096MaxN, false, 0, 1, 0, false, nullptr, false, false},
     {ECM_MONT_PATH_4096, ECM_MONT4096_PATH_UNROLL64_MT2, "unroll64_4096_mt2", "Unroll64 4096 MT2 sqr",
-     "mont_sqr_stage1_unroll64_4096_mt2", true, 22, kSqrAliases_unroll64_4096_mt2,
-     n_fits_4096_dedicated_ctx, 2, 389, false, nullptr, false, false},
+     "mont_sqr_stage1_unroll64_4096_mt2", true, 22, kSqrAliases_unroll64_4096_mt2, kMont4096MinN,
+     kMont4096MaxN, false, 0, 2, 389, false, nullptr, false, false},
     {ECM_MONT_PATH_4096, ECM_MONT4096_PATH_FIPS4096, "fips4096", "FIPS4096 sqr",
-     "mont_sqr_stage1_fips4096", true, 23, kSqrAliases_fips4096, n_fits_4096_dedicated_ctx, 1, 0,
-     true, nullptr, false, false},
+     "mont_sqr_stage1_fips4096", true, 23, kSqrAliases_fips4096, kMont4096MinN, kMont4096MaxN,
+     false, 0, 1, 0, true, nullptr, false, false},
     {ECM_MONT_PATH_4096, ECM_MONT4096_PATH_FIPS4096_MT8, "fips4096_mt8", "FIPS4096 MT8 sqr",
-     "mont_sqr_stage1_fips4096_mt8", true, 24, kSqrAliases_fips4096_mt8, n_fits_4096_dedicated_ctx,
-     8, 897, true, nullptr, false, false},
+     "mont_sqr_stage1_fips4096_mt8", true, 24, kSqrAliases_fips4096_mt8, kMont4096MinN,
+     kMont4096MaxN, false, 0, 8, 897, true, nullptr, false, false},
     {ECM_MONT_PATH_4096, ECM_MONT4096_PATH_FIPS4096_MT16, "fips4096_mt16", "FIPS4096 MT16 sqr",
-     "mont_sqr_stage1_fips4096_mt16", true, 25, kSqrAliases_fips4096_mt16,
-     n_fits_4096_dedicated_ctx, 16, 897, true, nullptr, false, false},
+     "mont_sqr_stage1_fips4096_mt16", true, 25, kSqrAliases_fips4096_mt16, kMont4096MinN,
+     kMont4096MaxN, false, 0, 16, 897, true, nullptr, false, false},
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_UNROLL32, "unroll32", "Generic unroll32 sqr",
-     "mont_sqr_stage1_unroll32", false, -1, kSqrAliases_unroll32, n_fits_always_ctx, 1, 0, false,
-     "ECM_STAGE1_SQR_FORCE_UNROLL32", false, false},
+     "mont_sqr_stage1_unroll32", false, -1, kSqrAliases_unroll32, kMontNoMinN, kMontNoMaxN, false,
+     0, 1, 0, false, "ECM_STAGE1_SQR_FORCE_UNROLL32", false, false},
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_PRIV_OPT, "priv_opt", "Private opt sqr",
-     "mont_sqr_stage1_priv_opt", false, 30, kSqrAliases_priv_opt, n_fits_always_ctx, 1, 0, false,
-     "ECM_STAGE1_SQR_FORCE_PRIV_OPT", false, false},
+     "mont_sqr_stage1_priv_opt", false, 30, kSqrAliases_priv_opt, kMontNoMinN, kMontNoMaxN, false,
+     0, 1, 0, false, "ECM_STAGE1_SQR_FORCE_PRIV_OPT", false, false},
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_I24_U32_BLSUB, "i24_u32_blsub", "i24 blsub sqr",
-     "mont_sqr_unroll_i24_u32_blsub", true, -1, kSqrAliases_i24_blsub, n_fits_always_ctx, 1, 0,
-     false, nullptr, true, true},
+     "mont_sqr_unroll_i24_u32_blsub", true, -1, kSqrAliases_i24_blsub, kMontNoMinN, kMontNoMaxN,
+     false, 0, 1, 0, false, nullptr, true, true},
     {ECM_MONT_PATH_STAGE1, ECM_STAGE1_MONT_I24_U32, "i24_u32", "i24 u32 sqr",
-     "mont_sqr_unroll_i24_u32", true, -1, kSqrAliases_i24_u32, n_fits_always_ctx, 1, 0, false,
-     nullptr, true, false},
+     "mont_sqr_unroll_i24_u32", true, -1, kSqrAliases_i24_u32, kMontNoMinN, kMontNoMaxN, false, 0,
+     1, 0, false, nullptr, true, false},
 };
 
 static const char *const kAddAliases_fused[] = {"fused", nullptr};
@@ -213,66 +165,70 @@ static const char *const kSubAliases_asm_b32[] = {"asm_b32", nullptr};
 static const char *const kSubAliases_fused_unroll_b16[] = {"fused_unroll_b16", "fused_unroll_auto",
                                                            nullptr};
 
-constexpr EcmAddModPathDescriptor kAddModRegistry[] = {
+constexpr EcmAddSubPathDescriptor kAddModRegistry[] = {
     {ECM_ADDSUB_PATH_ASM_B32, "asm_b32", "ASM b32 add (4096 AMD)", "asm_b32", 10, kAddAliases_asm_b32,
-     addmod_limbs_128_amd, true, false},
-    {ECM_ADDSUB_PATH_FUSED_UNROLL_B32, "fused_unroll_b32", "Fused unroll b32 add (4096)", "fused_unroll_b32",
-     11, kAddAliases_fused_unroll_b32, addmod_limbs_128_non_amd, false, false},
+     128u, ECM_PATH_VENDOR_AMD, true, false},
+    {ECM_ADDSUB_PATH_FUSED_UNROLL_B32, "fused_unroll_b32", "Fused unroll b32 add (4096)",
+     "fused_unroll_b32", 11, kAddAliases_fused_unroll_b32, 128u, ECM_PATH_VENDOR_NON_AMD, false,
+     false},
     {ECM_ADDSUB_PATH_ASM_B16, "asm_b16", "ASM b16 add (512 AMD)", "asm_b16", 20, kAddAliases_asm_b16,
-     addmod_limbs_16_amd, false, true},
-    {ECM_ADDSUB_PATH_FUSED, "fused", "Fused add (512 Adreno)", "fused", 21, kAddAliases_fused,
-     addmod_limbs_16_non_amd, false, false},
+     16u, ECM_PATH_VENDOR_AMD, false, true},
+    {ECM_ADDSUB_PATH_FUSED, "fused", "Fused add (512 Adreno)", "fused", 21, kAddAliases_fused, 16u,
+     ECM_PATH_VENDOR_NON_AMD, false, false},
     {ECM_ADDSUB_PATH_FUSED_UNROLL_B16, "fused_unroll_b16", "Fused unroll b16 add (512 AMD)",
-     "fused_unroll_b16", 22, kAddAliases_fused_unroll_b16, addmod_limbs_16_amd, false, false},
+     "fused_unroll_b16", 22, kAddAliases_fused_unroll_b16, 16u, ECM_PATH_VENDOR_AMD, false, false},
     {ECM_ADDSUB_PATH_FUSED_UNROLL, "fused_unroll", "Fused unroll add (generic)", "fused_unroll", 30,
-     kAddAliases_fused_unroll, addmod_limbs_always, false, false},
+     kAddAliases_fused_unroll, 0u, ECM_PATH_VENDOR_ANY, false, false},
 };
 
-constexpr EcmSubModPathDescriptor kSubModRegistry[] = {
+constexpr EcmAddSubPathDescriptor kSubModRegistry[] = {
     {ECM_ADDSUB_PATH_FUSED_UNROLL_B32, "fused_unroll_b32", "Fused unroll b32 sub (4096 AMD)",
-     "fused_unroll_b32", 10, kSubAliases_fused_unroll_b32, submod_limbs_128_amd, false, false},
-    {ECM_ADDSUB_PATH_FUSED_UNROLL_B32, "fused_unroll_b32", "Fused unroll b32 sub (4096)", "fused_unroll_b32",
-     11, kSubAliases_fused_unroll_b32, submod_limbs_128_non_amd, false, false},
-    {ECM_ADDSUB_PATH_FUSED, "fused", "Fused sub (512 Adreno)", "fused", 20, kSubAliases_fused,
-     submod_limbs_16_non_amd, false, false},
+     "fused_unroll_b32", 10, kSubAliases_fused_unroll_b32, 128u, ECM_PATH_VENDOR_AMD, false, false},
+    {ECM_ADDSUB_PATH_FUSED_UNROLL_B32, "fused_unroll_b32", "Fused unroll b32 sub (4096)",
+     "fused_unroll_b32", 11, kSubAliases_fused_unroll_b32, 128u, ECM_PATH_VENDOR_NON_AMD, false,
+     false},
+    {ECM_ADDSUB_PATH_FUSED, "fused", "Fused sub (512 Adreno)", "fused", 20, kSubAliases_fused, 16u,
+     ECM_PATH_VENDOR_NON_AMD, false, false},
     {ECM_ADDSUB_PATH_FUSED_UNROLL_B16, "fused_unroll_b16", "Fused unroll b16 sub (512 AMD)",
-     "fused_unroll_b16", 21, kSubAliases_fused_unroll_b16, submod_limbs_16_amd, false, false},
+     "fused_unroll_b16", 21, kSubAliases_fused_unroll_b16, 16u, ECM_PATH_VENDOR_AMD, false, false},
     {ECM_ADDSUB_PATH_FUSED_UNROLL, "fused_unroll", "Fused unroll sub (generic)", "fused_unroll", 30,
-     kSubAliases_fused_unroll, submod_limbs_always, false, false},
+     kSubAliases_fused_unroll, 0u, ECM_PATH_VENDOR_ANY, false, false},
 };
 
-template <typename Desc>
-std::vector<const Desc *> auto_sorted_stage1(const Desc *registry, size_t count) {
-    std::vector<const Desc *> out;
+std::vector<const EcmMontPathDescriptor *> auto_sorted_stage1(const EcmMontPathDescriptor *registry,
+                                                              size_t count) {
+    std::vector<const EcmMontPathDescriptor *> out;
     for (size_t i = 0; i < count; ++i) {
         if (registry[i].kind != ECM_MONT_PATH_STAGE1 || registry[i].auto_priority < 0) {
             continue;
         }
         out.push_back(&registry[i]);
     }
-    std::sort(out.begin(), out.end(), [](const Desc *a, const Desc *b) {
-        return a->auto_priority < b->auto_priority;
-    });
+    std::sort(out.begin(), out.end(),
+              [](const EcmMontPathDescriptor *a, const EcmMontPathDescriptor *b) {
+                  return a->auto_priority < b->auto_priority;
+              });
     return out;
 }
 
-template <typename Desc>
-std::vector<const Desc *> auto_sorted_4096(const Desc *registry, size_t count) {
-    std::vector<const Desc *> out;
+std::vector<const EcmMontPathDescriptor *> auto_sorted_4096(const EcmMontPathDescriptor *registry,
+                                                            size_t count) {
+    std::vector<const EcmMontPathDescriptor *> out;
     for (size_t i = 0; i < count; ++i) {
         if (registry[i].kind != ECM_MONT_PATH_4096 || registry[i].auto_priority < 0) {
             continue;
         }
         out.push_back(&registry[i]);
     }
-    std::sort(out.begin(), out.end(), [](const Desc *a, const Desc *b) {
-        return a->auto_priority < b->auto_priority;
-    });
+    std::sort(out.begin(), out.end(),
+              [](const EcmMontPathDescriptor *a, const EcmMontPathDescriptor *b) {
+                  return a->auto_priority < b->auto_priority;
+              });
     return out;
 }
 
-template <typename Desc>
-const Desc *find_4096(const Desc *registry, size_t count, int path_id) {
+const EcmMontPathDescriptor *find_4096(const EcmMontPathDescriptor *registry, size_t count,
+                                       int path_id) {
     for (size_t i = 0; i < count; ++i) {
         if (registry[i].kind == ECM_MONT_PATH_4096 && registry[i].variant_id == path_id) {
             return &registry[i];
@@ -281,8 +237,8 @@ const Desc *find_4096(const Desc *registry, size_t count, int path_id) {
     return nullptr;
 }
 
-template <typename Desc>
-const Desc *find_stage1(const Desc *registry, size_t count, ecm_stage1_mont_mode mode) {
+const EcmMontPathDescriptor *find_stage1(const EcmMontPathDescriptor *registry, size_t count,
+                                         ecm_stage1_mont_mode mode) {
     for (size_t i = 0; i < count; ++i) {
         if (registry[i].kind == ECM_MONT_PATH_STAGE1 &&
             registry[i].variant_id == static_cast<int>(mode)) {
@@ -292,38 +248,38 @@ const Desc *find_stage1(const Desc *registry, size_t count, ecm_stage1_mont_mode
     return nullptr;
 }
 
-template <typename Desc>
-const Desc *resolve_stage1_side(const Desc *registry, size_t count, const char *path,
-                                size_t n_bit_size, const Desc *priv_opt_fallback) {
-    const EcmPathContext ctx = make_n_ctx(n_bit_size);
-    const Desc *unroll512_fallback =
+const EcmMontPathDescriptor *resolve_stage1_side(const EcmMontPathDescriptor *registry,
+                                                 size_t count, const char *path,
+                                                 size_t n_bit_size,
+                                                 const EcmMontPathDescriptor *priv_opt_fallback) {
+    const EcmMontPathDescriptor *unroll512_fallback =
         find_stage1(registry, count, ECM_STAGE1_MONT_UNROLL512);
     if (opencl_ecm_path_is_auto(path)) {
-        if (ecm_path_n_fits_4096_dedicated(n_bit_size)) {
+        if (mont_path_is_4096_auto_priv_opt(n_bit_size)) {
             return priv_opt_fallback;
         }
-        for (const Desc *desc : auto_sorted_stage1(registry, count)) {
-            if (desc->n_fits != nullptr && desc->n_fits(ctx)) {
+        for (const EcmMontPathDescriptor *desc : auto_sorted_stage1(registry, count)) {
+            if (ecm_mont_path_n_fits(desc, n_bit_size)) {
                 return desc;
             }
         }
         return priv_opt_fallback;
     }
     for (size_t i = 0; i < count; ++i) {
-        const Desc &desc = registry[i];
+        const EcmMontPathDescriptor &desc = registry[i];
         if (desc.kind != ECM_MONT_PATH_STAGE1) {
             continue;
         }
         if (!aliases_contain(desc.aliases, path)) {
             continue;
         }
-        if (desc.n_fits != nullptr && !desc.n_fits(ctx)) {
+        if (!ecm_mont_path_n_fits(&desc, n_bit_size)) {
             const int min_pri = desc.auto_priority >= 0 ? desc.auto_priority + 1 : 0;
-            for (const Desc *fb : auto_sorted_stage1(registry, count)) {
+            for (const EcmMontPathDescriptor *fb : auto_sorted_stage1(registry, count)) {
                 if (fb->auto_priority < min_pri) {
                     continue;
                 }
-                if (fb->n_fits != nullptr && fb->n_fits(ctx)) {
+                if (ecm_mont_path_n_fits(fb, n_bit_size)) {
                     return fb;
                 }
             }
@@ -334,47 +290,47 @@ const Desc *resolve_stage1_side(const Desc *registry, size_t count, const char *
     return unroll512_fallback != nullptr ? unroll512_fallback : priv_opt_fallback;
 }
 
-template <typename Desc>
-const Desc *resolve_4096_side(const Desc *registry, size_t count, const char *path,
-                               size_t n_bit_size, bool *unknown_path) {
+const EcmMontPathDescriptor *resolve_4096_side(const EcmMontPathDescriptor *registry, size_t count,
+                                               const char *path, size_t n_bit_size,
+                                               bool *unknown_path) {
     if (unknown_path != nullptr) {
         *unknown_path = false;
     }
-    const EcmPathContext ctx = make_n_ctx(n_bit_size);
-    const Desc *default_unroll64 = find_4096(registry, count, ECM_MONT4096_PATH_UNROLL64);
+    const EcmMontPathDescriptor *default_unroll64 =
+        find_4096(registry, count, ECM_MONT4096_PATH_UNROLL64);
     if (opencl_ecm_path_is_auto(path)) {
-        for (const Desc *desc : auto_sorted_4096(registry, count)) {
+        for (const EcmMontPathDescriptor *desc : auto_sorted_4096(registry, count)) {
             if (!desc->dedicated) {
                 continue;
             }
-            if (desc->n_fits != nullptr && desc->n_fits(ctx)) {
+            if (ecm_mont_path_n_fits(desc, n_bit_size)) {
                 return desc;
             }
         }
         return default_unroll64;
     }
     for (size_t i = 0; i < count; ++i) {
-        const Desc &stage1_desc = registry[i];
+        const EcmMontPathDescriptor &stage1_desc = registry[i];
         if (stage1_desc.kind == ECM_MONT_PATH_STAGE1 &&
             aliases_contain(stage1_desc.aliases, path)) {
             return nullptr;
         }
     }
     for (size_t i = 0; i < count; ++i) {
-        const Desc &desc = registry[i];
+        const EcmMontPathDescriptor &desc = registry[i];
         if (desc.kind != ECM_MONT_PATH_4096) {
             continue;
         }
         if (!aliases_contain(desc.aliases, path)) {
             continue;
         }
-        if (desc.n_fits != nullptr && !desc.n_fits(ctx)) {
+        if (!ecm_mont_path_n_fits(&desc, n_bit_size)) {
             const int min_pri = desc.auto_priority >= 0 ? desc.auto_priority + 1 : 21;
-            for (const Desc *fb : auto_sorted_4096(registry, count)) {
+            for (const EcmMontPathDescriptor *fb : auto_sorted_4096(registry, count)) {
                 if (fb->auto_priority < min_pri) {
                     continue;
                 }
-                if (fb->n_fits != nullptr && fb->n_fits(ctx)) {
+                if (ecm_mont_path_n_fits(fb, n_bit_size)) {
                     return fb;
                 }
             }
@@ -386,6 +342,45 @@ const Desc *resolve_4096_side(const Desc *registry, size_t count, const char *pa
         *unknown_path = true;
     }
     return nullptr;
+}
+
+const EcmAddSubPathDescriptor *find_addsub_path_id(const EcmAddSubPathDescriptor *registry,
+                                                   size_t count, int path_id) {
+    for (size_t i = 0; i < count; ++i) {
+        if (registry[i].path_id == path_id) {
+            return &registry[i];
+        }
+    }
+    return nullptr;
+}
+
+const EcmAddSubPathDescriptor *resolve_addsub_side(const EcmAddSubPathDescriptor *registry,
+                                                   size_t count, const char *path,
+                                                   const EcmAddSubPathContext &ctx,
+                                                   int default_path_id) {
+    if (!opencl_ecm_path_is_auto(path)) {
+        for (size_t i = 0; i < count; ++i) {
+            if (aliases_contain(registry[i].aliases, path)) {
+                return &registry[i];
+            }
+        }
+        return nullptr;
+    }
+    std::vector<const EcmAddSubPathDescriptor *> ordered;
+    ordered.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        ordered.push_back(&registry[i]);
+    }
+    std::sort(ordered.begin(), ordered.end(),
+              [](const EcmAddSubPathDescriptor *a, const EcmAddSubPathDescriptor *b) {
+                  return a->auto_priority < b->auto_priority;
+              });
+    for (const EcmAddSubPathDescriptor *desc : ordered) {
+        if (ecm_addsub_path_fits(desc, ctx)) {
+            return desc;
+        }
+    }
+    return find_addsub_path_id(registry, count, default_path_id);
 }
 
 void append_define(std::string &opts, const char *macro, int value) {
@@ -400,21 +395,47 @@ void append_define(std::string &opts, const char *macro, int value) {
 
 } // namespace
 
-bool ecm_path_n_fits_unroll384(size_t n_bit_size) {
-    return n_bit_size + ECM_STAGE1_MONT_CARRY_BITS < ECM_STAGE1_UNROLL384_MAX_BITS;
+bool ecm_path_n_bit_fits(uint16_t min_n_bits, uint16_t max_n_bits, bool max_n_strict,
+                         size_t n_bit_size) {
+    if (min_n_bits > 0 && n_bit_size < min_n_bits) {
+        return false;
+    }
+    if (max_n_bits == 0) {
+        return true;
+    }
+    const size_t n_eff = n_bit_size + ECM_STAGE1_MONT_CARRY_BITS;
+    return max_n_strict ? (n_eff < max_n_bits) : (n_eff <= max_n_bits);
 }
 
-bool ecm_path_n_fits_unroll512_container(size_t n_bit_size) {
-    return n_bit_size + ECM_STAGE1_MONT_CARRY_BITS <= ECM_STAGE1_UNROLL512_CONTAINER_BITS;
+bool ecm_mont_path_n_fits(const EcmMontPathDescriptor *desc, size_t n_bit_size) {
+    if (desc == nullptr) {
+        return false;
+    }
+    return ecm_path_n_bit_fits(desc->min_n_bits, desc->max_n_bits, desc->max_n_strict, n_bit_size);
 }
 
-bool ecm_path_n_fits_4096_dedicated(size_t n_bit_size) {
-    return n_bit_size >= ECM_PATH_4096_AUTO_MIN_BITS &&
-           n_bit_size + ECM_STAGE1_MONT_CARRY_BITS <= ECM_PATH_4096_CONTAINER_BITS;
+bool ecm_mont_path_container_fits(const EcmMontPathDescriptor *desc, uint32_t limbs,
+                                  size_t n_bit_size) {
+    if (!ecm_mont_path_n_fits(desc, n_bit_size)) {
+        return false;
+    }
+    return desc->required_container_limbs == 0 || limbs == desc->required_container_limbs;
 }
 
-bool ecm_path_n_fits_4096_container(size_t n_bit_size) {
-    return n_bit_size + ECM_STAGE1_MONT_CARRY_BITS <= ECM_PATH_4096_CONTAINER_BITS;
+bool ecm_addsub_path_fits(const EcmAddSubPathDescriptor *desc, const EcmAddSubPathContext &ctx) {
+    if (desc == nullptr) {
+        return false;
+    }
+    if (desc->required_limbs != 0 && ctx.limbs != desc->required_limbs) {
+        return false;
+    }
+    if (desc->vendor == ECM_PATH_VENDOR_AMD && !ctx.is_amd) {
+        return false;
+    }
+    if (desc->vendor == ECM_PATH_VENDOR_NON_AMD && ctx.is_amd) {
+        return false;
+    }
+    return true;
 }
 
 bool opencl_ecm_path_is_auto(const char *path) {
@@ -426,18 +447,18 @@ size_t opencl_ecm_mont_mul_registry_count() {
     return sizeof(kMontMulRegistry) / sizeof(kMontMulRegistry[0]);
 }
 
-const EcmMontMulPathDescriptor *opencl_ecm_mont_mul_registry_entry(size_t index) {
+const EcmMontPathDescriptor *opencl_ecm_mont_mul_registry_entry(size_t index) {
     if (index >= opencl_ecm_mont_mul_registry_count()) {
         return nullptr;
     }
     return &kMontMulRegistry[index];
 }
 
-const EcmMontMulPathDescriptor *opencl_ecm_mont_mul_descriptor(ecm_stage1_mont_mode mode) {
+const EcmMontPathDescriptor *opencl_ecm_mont_mul_descriptor(ecm_stage1_mont_mode mode) {
     return find_stage1(kMontMulRegistry, opencl_ecm_mont_mul_registry_count(), mode);
 }
 
-const EcmMontMulPathDescriptor *opencl_ecm_mont4096_mul_descriptor(int path_id) {
+const EcmMontPathDescriptor *opencl_ecm_mont4096_mul_descriptor(int path_id) {
     return find_4096(kMontMulRegistry, opencl_ecm_mont_mul_registry_count(), path_id);
 }
 
@@ -445,203 +466,100 @@ size_t opencl_ecm_mont_sqr_registry_count() {
     return sizeof(kMontSqrRegistry) / sizeof(kMontSqrRegistry[0]);
 }
 
-const EcmMontSqrPathDescriptor *opencl_ecm_mont_sqr_registry_entry(size_t index) {
+const EcmMontPathDescriptor *opencl_ecm_mont_sqr_registry_entry(size_t index) {
     if (index >= opencl_ecm_mont_sqr_registry_count()) {
         return nullptr;
     }
     return &kMontSqrRegistry[index];
 }
 
-const EcmMontSqrPathDescriptor *opencl_ecm_mont_sqr_descriptor(ecm_stage1_mont_mode mode) {
+const EcmMontPathDescriptor *opencl_ecm_mont_sqr_descriptor(ecm_stage1_mont_mode mode) {
     return find_stage1(kMontSqrRegistry, opencl_ecm_mont_sqr_registry_count(), mode);
 }
 
-const EcmMontSqrPathDescriptor *opencl_ecm_mont4096_sqr_descriptor(int path_id) {
+const EcmMontPathDescriptor *opencl_ecm_mont4096_sqr_descriptor(int path_id) {
     return find_4096(kMontSqrRegistry, opencl_ecm_mont_sqr_registry_count(), path_id);
 }
 
-int ecm_mont_mul_4096_path_id(const EcmMontMulPathDescriptor *desc) {
+int ecm_mont_4096_path_id(const EcmMontPathDescriptor *desc) {
     return (desc != nullptr && desc->kind == ECM_MONT_PATH_4096) ? desc->variant_id : 0;
 }
 
-int ecm_mont_sqr_4096_path_id(const EcmMontSqrPathDescriptor *desc) {
-    return (desc != nullptr && desc->kind == ECM_MONT_PATH_4096) ? desc->variant_id : 0;
-}
-
-const EcmMontMulPathDescriptor *opencl_ecm_resolve_stage1_mont_mul(const char *path,
-                                                                   size_t n_bit_size) {
-    const EcmMontMulPathDescriptor *priv_opt =
-        opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_PRIV_OPT);
+const EcmMontPathDescriptor *opencl_ecm_resolve_stage1_mont_mul(const char *path,
+                                                                size_t n_bit_size) {
     return resolve_stage1_side(kMontMulRegistry, opencl_ecm_mont_mul_registry_count(), path,
-                               n_bit_size, priv_opt);
+                               n_bit_size,
+                               opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_PRIV_OPT));
 }
 
-const EcmMontSqrPathDescriptor *opencl_ecm_resolve_stage1_mont_sqr(const char *path,
-                                                                     size_t n_bit_size) {
-    const EcmMontSqrPathDescriptor *priv_opt =
-        opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_PRIV_OPT);
+const EcmMontPathDescriptor *opencl_ecm_resolve_stage1_mont_sqr(const char *path,
+                                                              size_t n_bit_size) {
     return resolve_stage1_side(kMontSqrRegistry, opencl_ecm_mont_sqr_registry_count(), path,
-                               n_bit_size, priv_opt);
+                               n_bit_size,
+                               opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_PRIV_OPT));
 }
 
-const EcmMontMulPathDescriptor *opencl_ecm_resolve_mont4096_mul(const char *path,
-                                                               size_t n_bit_size,
-                                                               bool *unknown_path) {
+const EcmMontPathDescriptor *opencl_ecm_resolve_mont4096_mul(const char *path, size_t n_bit_size,
+                                                             bool *unknown_path) {
     return resolve_4096_side(kMontMulRegistry, opencl_ecm_mont_mul_registry_count(), path,
                              n_bit_size, unknown_path);
 }
 
-const EcmMontSqrPathDescriptor *opencl_ecm_resolve_mont4096_sqr(const char *path,
-                                                                size_t n_bit_size,
-                                                                bool *unknown_path) {
+const EcmMontPathDescriptor *opencl_ecm_resolve_mont4096_sqr(const char *path, size_t n_bit_size,
+                                                           bool *unknown_path) {
     return resolve_4096_side(kMontSqrRegistry, opencl_ecm_mont_sqr_registry_count(), path,
                              n_bit_size, unknown_path);
-}
-
-int opencl_ecm_mont4096_coop_wg_size(int path_id) {
-    const EcmMontMulPathDescriptor *d = opencl_ecm_mont4096_mul_descriptor(path_id);
-    if (d != nullptr) {
-        return d->coop_wg_size;
-    }
-    const EcmMontSqrPathDescriptor *s = opencl_ecm_mont4096_sqr_descriptor(path_id);
-    return s != nullptr ? s->coop_wg_size : 1;
-}
-
-int opencl_ecm_mont4096_coop_scratch_u32(int mul_path, int sqr_path) {
-    int scratch = 0;
-    const EcmMontMulPathDescriptor *mul_d = opencl_ecm_mont4096_mul_descriptor(mul_path);
-    const EcmMontSqrPathDescriptor *sqr_d = opencl_ecm_mont4096_sqr_descriptor(sqr_path);
-    if (mul_d != nullptr && mul_d->coop_scratch_u32 > scratch) {
-        scratch = mul_d->coop_scratch_u32;
-    }
-    if (sqr_d != nullptr && sqr_d->coop_scratch_u32 > scratch) {
-        scratch = sqr_d->coop_scratch_u32;
-    }
-    return scratch;
-}
-
-bool opencl_ecm_mont4096_needs_fips4096(int mul_path, int sqr_path) {
-    const EcmMontMulPathDescriptor *mul_d = opencl_ecm_mont4096_mul_descriptor(mul_path);
-    const EcmMontSqrPathDescriptor *sqr_d = opencl_ecm_mont4096_sqr_descriptor(sqr_path);
-    return (mul_d != nullptr && mul_d->needs_fips4096_cl) ||
-           (sqr_d != nullptr && sqr_d->needs_fips4096_cl);
-}
-
-const char *opencl_ecm_mont4096_mul_path_name(int path_id) {
-    const EcmMontMulPathDescriptor *d = opencl_ecm_mont4096_mul_descriptor(path_id);
-    return d != nullptr && d->id != nullptr ? d->id : "unknown";
-}
-
-const char *opencl_ecm_mont4096_sqr_path_name(int path_id) {
-    const EcmMontSqrPathDescriptor *d = opencl_ecm_mont4096_sqr_descriptor(path_id);
-    return d != nullptr && d->id != nullptr ? d->id : "unknown";
 }
 
 size_t opencl_ecm_addmod_registry_count() {
     return sizeof(kAddModRegistry) / sizeof(kAddModRegistry[0]);
 }
 
-const EcmAddModPathDescriptor *opencl_ecm_addmod_registry_entry(size_t index) {
+const EcmAddSubPathDescriptor *opencl_ecm_addmod_registry_entry(size_t index) {
     if (index >= opencl_ecm_addmod_registry_count()) {
         return nullptr;
     }
     return &kAddModRegistry[index];
 }
 
-const EcmAddModPathDescriptor *opencl_ecm_addmod_path_descriptor(int path_id) {
-    for (const EcmAddModPathDescriptor &d : kAddModRegistry) {
-        if (d.path_id == path_id) {
-            return &d;
-        }
-    }
-    return nullptr;
+const EcmAddSubPathDescriptor *opencl_ecm_addmod_path_descriptor(int path_id) {
+    return find_addsub_path_id(kAddModRegistry, opencl_ecm_addmod_registry_count(), path_id);
 }
 
-const EcmAddModPathDescriptor *opencl_ecm_resolve_addmod_path(const char *path, uint32_t limbs,
+const EcmAddSubPathDescriptor *opencl_ecm_resolve_addmod_path(const char *path, uint32_t limbs,
                                                               bool is_amd) {
-    EcmAddSubPathContext ctx{};
-    ctx.limbs = limbs;
-    ctx.is_amd = is_amd;
-    if (!opencl_ecm_path_is_auto(path)) {
-        for (size_t i = 0; i < opencl_ecm_addmod_registry_count(); ++i) {
-            const EcmAddModPathDescriptor *desc = opencl_ecm_addmod_registry_entry(i);
-            if (desc != nullptr && aliases_contain(desc->aliases, path)) {
-                return desc;
-            }
-        }
-        return nullptr;
-    }
-    std::vector<const EcmAddModPathDescriptor *> ordered;
-    for (size_t i = 0; i < opencl_ecm_addmod_registry_count(); ++i) {
-        ordered.push_back(&kAddModRegistry[i]);
-    }
-    std::sort(ordered.begin(), ordered.end(),
-              [](const EcmAddModPathDescriptor *a, const EcmAddModPathDescriptor *b) {
-                  return a->auto_priority < b->auto_priority;
-              });
-    for (const EcmAddModPathDescriptor *desc : ordered) {
-        if (desc->limbs_fits != nullptr && desc->limbs_fits(ctx)) {
-            return desc;
-        }
-    }
-    return opencl_ecm_addmod_path_descriptor(ECM_ADDSUB_PATH_FUSED_UNROLL);
+    const EcmAddSubPathContext ctx{limbs, is_amd};
+    return resolve_addsub_side(kAddModRegistry, opencl_ecm_addmod_registry_count(), path, ctx,
+                               ECM_ADDSUB_PATH_FUSED_UNROLL);
 }
 
 size_t opencl_ecm_submod_registry_count() {
     return sizeof(kSubModRegistry) / sizeof(kSubModRegistry[0]);
 }
 
-const EcmSubModPathDescriptor *opencl_ecm_submod_registry_entry(size_t index) {
+const EcmAddSubPathDescriptor *opencl_ecm_submod_registry_entry(size_t index) {
     if (index >= opencl_ecm_submod_registry_count()) {
         return nullptr;
     }
     return &kSubModRegistry[index];
 }
 
-const EcmSubModPathDescriptor *opencl_ecm_submod_path_descriptor(int path_id) {
-    for (const EcmSubModPathDescriptor &d : kSubModRegistry) {
-        if (d.path_id == path_id) {
-            return &d;
-        }
-    }
-    return nullptr;
+const EcmAddSubPathDescriptor *opencl_ecm_submod_path_descriptor(int path_id) {
+    return find_addsub_path_id(kSubModRegistry, opencl_ecm_submod_registry_count(), path_id);
 }
 
-const EcmSubModPathDescriptor *opencl_ecm_resolve_submod_path(const char *path, uint32_t limbs,
-                                                            bool is_amd) {
-    EcmAddSubPathContext ctx{};
-    ctx.limbs = limbs;
-    ctx.is_amd = is_amd;
-    if (!opencl_ecm_path_is_auto(path)) {
-        for (size_t i = 0; i < opencl_ecm_submod_registry_count(); ++i) {
-            const EcmSubModPathDescriptor *desc = opencl_ecm_submod_registry_entry(i);
-            if (desc != nullptr && aliases_contain(desc->aliases, path)) {
-                return desc;
-            }
-        }
-        return nullptr;
-    }
-    std::vector<const EcmSubModPathDescriptor *> ordered;
-    for (size_t i = 0; i < opencl_ecm_submod_registry_count(); ++i) {
-        ordered.push_back(&kSubModRegistry[i]);
-    }
-    std::sort(ordered.begin(), ordered.end(),
-              [](const EcmSubModPathDescriptor *a, const EcmSubModPathDescriptor *b) {
-                  return a->auto_priority < b->auto_priority;
-              });
-    for (const EcmSubModPathDescriptor *desc : ordered) {
-        if (desc->limbs_fits != nullptr && desc->limbs_fits(ctx)) {
-            return desc;
-        }
-    }
-    return opencl_ecm_submod_path_descriptor(ECM_ADDSUB_PATH_FUSED_UNROLL);
+const EcmAddSubPathDescriptor *opencl_ecm_resolve_submod_path(const char *path, uint32_t limbs,
+                                                              bool is_amd) {
+    const EcmAddSubPathContext ctx{limbs, is_amd};
+    return resolve_addsub_side(kSubModRegistry, opencl_ecm_submod_registry_count(), path, ctx,
+                               ECM_ADDSUB_PATH_FUSED_UNROLL);
 }
 
 EcmStage1KernelBuildPlan opencl_ecm_stage1_make_build_plan(
-    uint32_t limbs, uint32_t tpi, const EcmMontMulPathDescriptor *mul,
-    const EcmMontSqrPathDescriptor *sqr, const EcmMontMulPathDescriptor *mul_4096,
-    const EcmMontSqrPathDescriptor *sqr_4096, const EcmAddModPathDescriptor *add,
-    const EcmSubModPathDescriptor *sub, bool use_i24, int stage1_force_normalize,
+    uint32_t limbs, uint32_t tpi, const EcmMontPathDescriptor *mul,
+    const EcmMontPathDescriptor *sqr, const EcmMontPathDescriptor *mul_4096,
+    const EcmMontPathDescriptor *sqr_4096, const EcmAddSubPathDescriptor *add,
+    const EcmAddSubPathDescriptor *sub, bool use_i24, int stage1_force_normalize,
     int add_mod_fused_unroll) {
     EcmStage1KernelBuildPlan plan{};
     plan.limbs = limbs;
@@ -702,27 +620,27 @@ std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildP
         }
     }
 
-    const int mul_4096_id = ecm_mont_mul_4096_path_id(plan.mul_4096);
-    const int sqr_4096_id = ecm_mont_sqr_4096_path_id(plan.sqr_4096);
-    append_define(opts, "ECM_STAGE1_MUL_PATH", mul_4096_id);
-    append_define(opts, "ECM_STAGE1_SQR_PATH", sqr_4096_id);
+    append_define(opts, "ECM_STAGE1_MUL_PATH", ecm_mont_4096_path_id(plan.mul_4096));
+    append_define(opts, "ECM_STAGE1_SQR_PATH", ecm_mont_4096_path_id(plan.sqr_4096));
 
-    const int coop_wg =
-        (plan.limbs == 128u)
-            ? std::max(opencl_ecm_mont4096_coop_wg_size(mul_4096_id),
-                       opencl_ecm_mont4096_coop_wg_size(sqr_4096_id))
-            : 1;
-    const int coop_scratch =
-        (plan.limbs == 128u)
-            ? opencl_ecm_mont4096_coop_scratch_u32(mul_4096_id, sqr_4096_id)
-            : 0;
-    const int has_fips4096 =
-        (plan.limbs == 128u)
-            ? (opencl_ecm_mont4096_needs_fips4096(mul_4096_id, sqr_4096_id) ? 1 : 0)
-            : 0;
+    int coop_wg = 1;
+    int coop_scratch = 0;
+    bool has_fips4096 = false;
+    if (plan.limbs == 128u) {
+        if (plan.mul_4096 != nullptr) {
+            coop_wg = std::max(coop_wg, plan.mul_4096->coop_wg_size);
+            coop_scratch = std::max(coop_scratch, plan.mul_4096->coop_scratch_u32);
+            has_fips4096 = has_fips4096 || plan.mul_4096->needs_fips4096_cl;
+        }
+        if (plan.sqr_4096 != nullptr) {
+            coop_wg = std::max(coop_wg, plan.sqr_4096->coop_wg_size);
+            coop_scratch = std::max(coop_scratch, plan.sqr_4096->coop_scratch_u32);
+            has_fips4096 = has_fips4096 || plan.sqr_4096->needs_fips4096_cl;
+        }
+    }
     append_define(opts, "ECM_STAGE1_COOP_WG", coop_wg);
     append_define(opts, "ECM_STAGE1_COOP_SCRATCH_U32", coop_scratch);
-    append_define(opts, "ECM_STAGE1_HAS_FIPS4096", has_fips4096);
+    append_define(opts, "ECM_STAGE1_HAS_FIPS4096", has_fips4096 ? 1 : 0);
 
     if (plan.add != nullptr) {
         append_define(opts, "ECM_STAGE1_ADDMOD_PATH", plan.add->path_id);

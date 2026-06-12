@@ -13,34 +13,41 @@ Stage-1 **Montgomery mul/sqr** 与 **add/sub-mod** 路径集中在注册表中�
 | `src/opencl_ecm_mont_path.cpp` | resolve 薄封装、日志名 |
 | `src/opencl_ecm_addsub_path.cpp` | add/sub 薄封装 |
 
-## Montgomery mul 描述符
+## Montgomery 描述符（mul/sqr 共用）
 
 ```cpp
-struct EcmMontMulPathDescriptor {
-    EcmMontPathKind kind;      // STAGE1 或 4096
-    int variant_id;            // ecm_stage1_mont_mode 或 ECM_MONT4096_PATH_*
+struct EcmMontPathDescriptor {
+    EcmMontPathKind kind;
+    int variant_id;
     const char *id;
-    bool dedicated;
-    int auto_priority;         // 越小越优先；-1 = 仅显式
-    const char *const *aliases;
-    bool (*n_fits)(const EcmPathContext &ctx);
-    int coop_wg_size, coop_scratch_u32;
-    bool needs_fips4096_cl;
+    uint16_t min_n_bits, max_n_bits;
+    bool max_n_strict;
+    uint16_t required_container_limbs;
+    // coop_wg_size, stage1_force_macro, ...
 };
 ```
 
-`EcmMontSqrPathDescriptor` 结构相同，注册表与别名独立（`mont_sqr_*` CL 名）。
+`kMontMulRegistry[]` 与 `kMontSqrRegistry[]` 为两个独立常量数组，条目镜像但 CL 名/别名不同；resolve 仍分 `opencl_ecm_resolve_stage1_mont_mul` / `_sqr`，可独立组合。
 
-### 位宽判断（均在注册表内实现）
+add/sub 共用 `EcmAddSubPathDescriptor`，分别挂在 `kAddModRegistry[]` / `kSubModRegistry[]`。
 
-| 函数 | 条件 |
-|------|------|
-| `ecm_path_n_fits_unroll384` | `N + CARRY < 384` |
-| `ecm_path_n_fits_unroll512_container` | `N + CARRY ≤ 512` |
-| `ecm_path_n_fits_4096_dedicated` | `3072 ≤ N` 且 `N + CARRY ≤ 4096` |
-| `ecm_path_n_fits_4096_container` | `N + CARRY ≤ 4096` |
+### 位宽判断（统一函数）
 
-常量：`ECM_PATH_4096_AUTO_MIN_BITS = 3072`，`ECM_STAGE1_MONT_CARRY_BITS = 6`。
+```cpp
+bool ecm_path_n_bit_fits(min_n_bits, max_n_bits, max_n_strict, n_bit_size);
+bool ecm_mont_path_n_fits(desc, n_bit_size);
+bool ecm_mont_path_container_fits(desc, limbs, n_bit_size);
+bool ecm_addsub_path_fits(desc, ctx);
+```
+
+carry 固定为 `ECM_STAGE1_MONT_CARRY_BITS = 6`，由 `ecm_path_n_bit_fits` 内部加上。
+
+| 路径 | min_n | max_n | strict | container limbs |
+|------|-------|-------|--------|-----------------|
+| unroll_only_384 | 0 | 384 | yes | 16 |
+| unroll_only_512 | 0 | 512 | no | 0 |
+| 4096 专用 | 3072 | 4096 | no | 0 |
+| priv_opt / i24 | 0 | 0 | — | 0 |
 
 ### Auto 优先级（专用 → 兼容）
 
