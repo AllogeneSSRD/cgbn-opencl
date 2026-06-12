@@ -633,7 +633,8 @@ static void print_ecm_usage(const char *prog) {
               << "  echo '(2^4003-1)' | " << name << " -gpu -gpucurves 384 --add asm_b32 1e6 0\n"
               << "  " << name << " --showkernel\n\n"
               << "Add/sub path names (for --add / --sub): default, fused, fused_unroll,\n"
-              << "  fused_unroll_auto, fused_unroll_b16, fused_unroll_b32, asm_b32.\n"
+              << "  asm/unroll_128b, asm/unroll_192b, asm/unroll_256b, asm/unroll_384b,\n"
+              << "  asm/unroll_512b, asm/unroll_4096b (legacy: asm_b16, asm_b32, fused_unroll_b16).\n"
               << "Run with --showkernel for full Montgomery and add/sub path lists.\n";
 }
 

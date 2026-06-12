@@ -32,6 +32,7 @@ enum EcmKernelInclude : uint32_t {
     ECM_KERNEL_INC_MONT_EXTENDED = 1u << 0,
     ECM_KERNEL_INC_MP_ASM_U32 = 1u << 1,
     ECM_KERNEL_INC_MP_ASM_U16 = 1u << 2,
+    ECM_KERNEL_INC_ADDSUB_BITS = 1u << 3,
 };
 
 /** Runtime platform + container context for path selection. */
@@ -72,6 +73,8 @@ struct EcmAddSubPathDescriptor {
     const char *const *aliases;
     int8_t auto_priority;
 
+    uint16_t max_n_bits;
+    bool max_n_strict;
     uint16_t max_container_bits;
     uint32_t os_mask;
     uint32_t gpu_vendor_mask;
@@ -88,7 +91,6 @@ struct EcmStage1KernelBuildPlan {
     const EcmMontPathDescriptor *sqr;
     const EcmAddSubPathDescriptor *add;
     const EcmAddSubPathDescriptor *sub;
-    bool use_i24;
 };
 
 constexpr size_t ECM_PATH_4096_AUTO_MIN_BITS = 3072u;
@@ -102,7 +104,6 @@ uint32_t ecm_path_gpu_vendor_from_cl_vendor_string(const char *vendor_lower);
 
 uint32_t ecm_mont_operator_limbs(const EcmMontPathDescriptor *desc);
 bool ecm_mont_path_is_4096_dedicated(const EcmMontPathDescriptor *desc);
-bool ecm_mont_path_is_i24(const EcmMontPathDescriptor *desc);
 bool ecm_mont_path_fits(const EcmMontPathDescriptor *desc, size_t n_bit_size,
                         uint32_t container_limbs);
 bool ecm_addsub_path_fits(const EcmAddSubPathDescriptor *desc, const EcmPathContext &ctx);
@@ -142,12 +143,9 @@ const EcmAddSubPathDescriptor *opencl_ecm_resolve_submod_path(const char *path,
 EcmStage1KernelBuildPlan opencl_ecm_stage1_make_build_plan(
     uint32_t limbs, uint32_t tpi, const EcmMontPathDescriptor *mul,
     const EcmMontPathDescriptor *sqr, const EcmAddSubPathDescriptor *add,
-    const EcmAddSubPathDescriptor *sub, bool use_i24, int stage1_force_normalize,
-    int add_mod_fused_unroll);
+    const EcmAddSubPathDescriptor *sub, int stage1_force_normalize, int add_mod_fused_unroll);
 
 std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildPlan &plan);
 
 bool opencl_ecm_stage1_build_plan_equal(const EcmStage1KernelBuildPlan &a,
                                         const EcmStage1KernelBuildPlan &b);
-
-bool opencl_ecm_stage1_plan_use_i24_blsub(const EcmStage1KernelBuildPlan &plan);

@@ -2,102 +2,84 @@
 
 Stage-1 **Montgomery mul/sqr** 与 **add/sub-mod** 路径集中在注册表中定义、选择与编译宏推导。桌面与 Android 共用 `src/opencl_ecm_path_registry.cpp`。
 
-**mul/sqr 与 add/sub 各自独立解析**，可自由组合（例如 `--mul unroll_only_384 --sqr unroll64_4096`）。
+**mul/sqr 与 add/sub 各自独立解析**，可自由组合（例如 `--mul unroll_only_384 --add asm_384b`）。
 
 ## 文件
 
 | 文件 | 内容 |
 |------|------|
 | `include/opencl_ecm_path_registry.h` | 描述符、`EcmStage1KernelBuildPlan`、`generate_build_options` |
-| `src/opencl_ecm_path_registry.cpp` | `kMontMulRegistry` / `kMontSqrRegistry` / `kAddModRegistry` / `kSubModRegistry` |
+| `src/opencl_ecm_path_registry.cpp` | 各注册表 |
+| `tools/gen_mp_addsub_bits_stage1.py` | 生成 `addsub_bits_stage1.cl`（128b–384b unroll + asm） |
 
 ## Montgomery 描述符
 
-固定算子（`dedicated=true`）：算子宽度 = `max_n_bits / 32`（如 unroll384 → **12 limbs**）。  
-兼容算子（`dedicated=false`）：容器须容纳 `N + CARRY`（由 `select_bits()` 选出的 CGBN 容器，可与算子宽度不同；见 `DEV_ECM_CGBN_CONTAINER_VS_MONT.md`）。
+见前文；固定算子 `dedicated=true`，算子宽度 = `max_n_bits/32`。
 
-```cpp
-struct EcmMontPathDescriptor {
-    const char *id;
-    const char *cl_name;
-    const char *const *aliases;
-    int8_t auto_priority;           // -1 = 仅显式指定
-
-    uint16_t min_n_bits, max_n_bits;
-    bool max_n_strict;
-    bool dedicated;                 // true: 固定算子; false: 兼容容器
-
-    uint8_t coop_work_group_size;
-    uint16_t local_scratch_u32;
-    uint8_t cl_dispatch_id;         // 4096 dedicated + 128-limb 容器时注入 ECM_STAGE1_*_PATH
-    uint32_t kernel_includes;       // EcmKernelInclude 掩码
-    const char *force_macro;
-};
-```
-
-**匹配规则**（`ecm_mont_path_fits`）：
-
-| 类型 | N 位宽 | 容器 |
-|------|--------|------|
-| dedicated | `ecm_path_n_bit_fits(min,max,strict,N)` | `container_bits >= max_n_bits` |
-| compatible | 同上（max=0 不限） | `(N+CARRY) <= container_bits` |
-
-i24 路径通过 `id` 前缀 `i24` 识别（无单独 `limb_bits` 字段）。
-
-## Add/Sub 描述符
+## Add/Sub 描述符（按 Bits 命名）
 
 ```cpp
 struct EcmAddSubPathDescriptor {
-  // ...
-  uint16_t max_container_bits;      // 0=任意, 512, 4096
-  uint32_t os_mask;                 // EcmPathOs 位掩码
-  uint32_t gpu_vendor_mask;         // 须命中（0 / ANY = 不限）
-  uint32_t gpu_vendor_exclude_mask; // 须未命中（如排除 AMD）
-  uint32_t kernel_includes;
+    int cl_dispatch_id;
+    const char *id;              // 如 asm_384b, unroll_512b
+    // ...
+    uint16_t max_n_bits;         // 0=不限；128/192/256/378 等
+    bool max_n_strict;
+    uint16_t max_container_bits; // 最小容器位宽：512 或 4096
+    uint32_t os_mask;
+    uint32_t gpu_vendor_mask;
+    uint32_t gpu_vendor_exclude_mask;
+    uint32_t kernel_includes;
 };
 ```
 
-**平台 / GPU 掩码**（`EcmPathContext` 携带运行时 `os_mask` + `gpu_vendor_mask`）：
+### 位宽专用路径（512-bit 容器内）
 
-| 掩码 | 含义 |
+| ID / CLI | 算子位宽 | Limbs | 适用 N (约) | AMD asm | 全平台 unroll |
+|----------|----------|-------|-------------|---------|---------------|
+| `asm_128b` / `unroll_128b` | 128 | 4 | N ≤ 128 | ✓ | ✓ |
+| `asm_192b` / `unroll_192b` | 192 | 6 | N ≤ 192 | ✓ | ✓ |
+| `asm_256b` / `unroll_256b` | 256 | 8 | N ≤ 256 | ✓ | ✓ |
+| `asm_384b` / `unroll_384b` | 384 | 12 | N ≤ 378 | ✓ | ✓ |
+
+OpenCL 函数：`mp_add_mod_asm_384b` / `mp_add_mod_unroll_384b`（sub 同理）。
+
+### 容器级路径（重命名）
+
+| 新名 | 旧名 | 容器 | 说明 |
+|------|------|------|------|
+| `asm_512b` | `asm_b16` | 512-bit (16 limbs) | 全 16-limb AMD asm |
+| `unroll_512b` | `fused_unroll_b16` | 512-bit | 全 16-limb 静态展开 |
+| `asm_4096b` | `asm_b32` | 4096-bit (128 limbs) | 4×32-limb AMD asm |
+| `unroll_4096b` | `fused_unroll_b32` | 4096-bit | 4×32-limb 静态展开 |
+
+旧 CLI 名仍作 **alias** 保留。
+
+### `ECM_ADDSUB_PATH_*` 枚举（与 `ecm_stage1.cl` 同步）
+
+```
+0 fused, 1 fused_unroll, 2 unroll_4096b, 3 asm_4096b,
+4 unroll_512b, 5 asm_512b,
+6 unroll_128b, 7 asm_128b, … 12 unroll_384b, 13 asm_384b
+```
+
+### Kernel includes
+
+| 掩码 | 文件 |
 |------|------|
-| `ECM_OS_WINDOWS` / `ANDROID` / `LINUX` / `MACOS` | 宿主 OS |
-| `ECM_GPU_AMD` / `NVIDIA` / `INTEL` / `QUALCOMM` / `HUAWEI` / `APPLE` | OpenCL 设备厂商 |
-
-**Kernel 附加源**（`EcmKernelInclude`）：
-
-| 位 | 文件 |
-|----|------|
-| `MONT_EXTENDED` | `ecm_stage1_mont4096_paths.cl` |
-| `MP_ASM_U32` | `asm_block32_stage1.cl` |
-| `MP_ASM_U16` | `asm_block16_stage1.cl` |
+| `ECM_KERNEL_INC_ADDSUB_BITS` | `mp_addsub/stage1/addsub_bits_stage1.cl` |
+| `ECM_KERNEL_INC_MP_ASM_U16` | `asm_block16_stage1.cl` (512b asm) |
+| `ECM_KERNEL_INC_MP_ASM_U32` | `asm_block32_stage1.cl` (4096b asm) |
 
 ## 解析
 
 ```cpp
-opencl_ecm_resolve_mont_mul(path, n_bit_size, container_limbs, &unknown);
-opencl_ecm_resolve_mont_sqr(path, n_bit_size, container_limbs, &unknown);
-EcmPathContext ctx{n, limbs, ecm_path_host_os_mask(), gpu_vendor_mask};
+EcmPathContext ctx{n_bit_size, limbs, os_mask, gpu_vendor_mask};
 opencl_ecm_resolve_addmod_path(path, ctx);
 ```
 
-- `container_limbs==0`：仅按 N 位宽匹配（i24 探测）
-- auto：按 `auto_priority` 升序取第一个 `ecm_mont_path_fits` / `ecm_addsub_path_fits` 的项
-
-## Auto 优先级（约）
-
-| priority | 路径 | dedicated | 算子 limbs | N（约） |
-|----------|------|-----------|------------|---------|
-| 10 | unroll_only_384 | yes | 12 | N+6 &lt; 384 |
-| 20 | unroll_only_512 | yes | 16 | 378…506 |
-| 21–25 | unroll64/fips 系列 | yes | 128 | 3072…4090 |
-| 30 | priv_opt | no | 随容器 | 兜底 |
-
-容器由 `select_bits(N)` 决定（如 M151 → 512-bit / 16 limbs）；unroll384 不要求 `container_limbs==16`。
+Auto：按 `auto_priority` 升序，结合 `max_n_bits`、容器、GPU 掩码选首项。
 
 ## 编译计划
 
-1. resolve → 描述符指针
-2. `opencl_ecm_stage1_make_build_plan(...)`
-3. `opencl_ecm_stage1_collect_kernel_includes(plan)` → prepend 哪些 `.cl`
-4. `opencl_ecm_stage1_generate_build_options(plan)` → `-D` 宏（`ECM_STAGE1_KERNEL_REV=7`）
+`ECM_STAGE1_KERNEL_REV=8`；`ECM_STAGE1_ADDMOD_PATH` / `SUBMOD_PATH` 注入 dispatch id。

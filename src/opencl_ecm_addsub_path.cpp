@@ -69,6 +69,15 @@ bool opencl_ecm_addsub_path_needs_asm_b16(int path_id) {
     return sub_d != nullptr && (sub_d->kernel_includes & ECM_KERNEL_INC_MP_ASM_U16) != 0;
 }
 
+bool opencl_ecm_addsub_path_needs_addsub_bits(int path_id) {
+    const EcmAddSubPathDescriptor *add_d = opencl_ecm_addmod_path_descriptor(path_id);
+    if (add_d != nullptr && (add_d->kernel_includes & ECM_KERNEL_INC_ADDSUB_BITS) != 0) {
+        return true;
+    }
+    const EcmAddSubPathDescriptor *sub_d = opencl_ecm_submod_path_descriptor(path_id);
+    return sub_d != nullptr && (sub_d->kernel_includes & ECM_KERNEL_INC_ADDSUB_BITS) != 0;
+}
+
 const EcmAddSubPathDescriptor *opencl_ecm_resolve_addsub_add_path(const char *path,
                                                                   const EcmPathContext &ctx) {
     return opencl_ecm_resolve_addmod_path(path, ctx);
