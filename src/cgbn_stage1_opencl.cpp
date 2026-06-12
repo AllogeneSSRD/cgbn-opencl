@@ -7,7 +7,6 @@
 #include "opencl_ecm_debug_utils.h"
 #include "opencl_ecm_log.h"
 #include "opencl_ecm_mont.h"
-#include "opencl_ecm_addsub_path.h"
 #include "opencl_ecm_mont_path.h"
 #include "opencl_ecm_path_registry.h"
 #include "opencl_ecm_selftest.h"
@@ -44,10 +43,6 @@ static cl_program g_ecm_program = nullptr;
 static cl_kernel g_ecm_kernel = nullptr;
 static uint32_t g_kernel_limbs = 0;
 static uint32_t g_kernel_tpi = 0;
-static int g_kernel_mul_path = 0;
-static int g_kernel_sqr_path = 0;
-static int g_kernel_add_path = ECM_ADDSUB_PATH_FUSED_UNROLL_B32;
-static int g_kernel_sub_path = ECM_ADDSUB_PATH_FUSED_UNROLL;
 static int g_kernel_coop_wg = 1;
 static bool g_kernel_use_coop_wg = false;
 static EcmStage1KernelBuildPlan g_kernel_build_plan{};
@@ -148,7 +143,7 @@ static int resolve_addsub_paths(const char *gpu_add_path, const char *gpu_sub_pa
     }
     EcmPathContext ctx = make_path_context(limbs, g_ctx.device);
     ctx.n_bit_size = n_bit_size;
-    const EcmAddSubPathDescriptor *add = opencl_ecm_resolve_addsub_add_path(gpu_add_path, ctx);
+    const EcmAddSubPathDescriptor *add = opencl_ecm_resolve_addmod_path(gpu_add_path, ctx);
     if (add == nullptr) {
         ecm_ts_fprintf(stderr,
                        "OpenCL: unknown --add path '%s' (fused, fused_unroll, fused_unroll_b16, "
@@ -156,7 +151,7 @@ static int resolve_addsub_paths(const char *gpu_add_path, const char *gpu_sub_pa
                        gpu_add_path ? gpu_add_path : "");
         return -1;
     }
-    const EcmAddSubPathDescriptor *sub = opencl_ecm_resolve_addsub_sub_path(gpu_sub_path, ctx);
+    const EcmAddSubPathDescriptor *sub = opencl_ecm_resolve_submod_path(gpu_sub_path, ctx);
     if (sub == nullptr) {
         ecm_ts_fprintf(stderr,
                        "OpenCL: unknown --sub path '%s' (fused, fused_unroll, fused_unroll_b16, "
@@ -551,7 +546,9 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
 static void stage1_clamp_mont_desc(const EcmMontPathDescriptor *&mul,
                                  const EcmMontPathDescriptor *&sqr, size_t n_bit_size,
                                  uint32_t limbs) {
-    if (mul != nullptr && !ecm_mont_path_fits(mul, n_bit_size, limbs)) {
+    EcmPathContext ctx = make_path_context(limbs, g_ctx.device);
+    ctx.n_bit_size = n_bit_size;
+    if (mul != nullptr && !ecm_mont_path_fits(mul, ctx)) {
         if (!ecm_path_n_bit_fits(mul->min_n_bits, mul->max_n_bits, mul->max_n_strict, n_bit_size)) {
             ecm_ts_fprintf(stderr,
                            "Warning: mul %s requires N+%u<%u bits, got %zu; using %s\n", mul->id,
@@ -559,7 +556,7 @@ static void stage1_clamp_mont_desc(const EcmMontPathDescriptor *&mul,
                            opencl_ecm_mont_mul_cl_name(
                                opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_UNROLL512)));
             mul = opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_UNROLL512);
-        } else if (!ecm_mont_path_fits(mul, n_bit_size, limbs)) {
+        } else if (!ecm_mont_path_fits(mul, ctx)) {
             ecm_ts_fprintf(stderr,
                            "Warning: mul %s does not fit %u-limb container for N=%zu bits; using %s\n",
                            mul->id, limbs, n_bit_size,
@@ -568,7 +565,7 @@ static void stage1_clamp_mont_desc(const EcmMontPathDescriptor *&mul,
             mul = opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_PRIV_OPT);
         }
     }
-    if (sqr != nullptr && !ecm_mont_path_fits(sqr, n_bit_size, limbs)) {
+    if (sqr != nullptr && !ecm_mont_path_fits(sqr, ctx)) {
         if (!ecm_path_n_bit_fits(sqr->min_n_bits, sqr->max_n_bits, sqr->max_n_strict, n_bit_size)) {
             ecm_ts_fprintf(stderr,
                            "Warning: sqr %s requires N+%u<%u bits, got %zu; using %s\n", sqr->id,
@@ -576,7 +573,7 @@ static void stage1_clamp_mont_desc(const EcmMontPathDescriptor *&mul,
                            opencl_ecm_mont_sqr_cl_name(
                                opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_UNROLL512)));
             sqr = opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_UNROLL512);
-        } else if (!ecm_mont_path_fits(sqr, n_bit_size, limbs)) {
+        } else if (!ecm_mont_path_fits(sqr, ctx)) {
             ecm_ts_fprintf(stderr,
                            "Warning: sqr %s does not fit %u-limb container for N=%zu bits; using %s\n",
                            sqr->id, limbs, n_bit_size,
@@ -603,7 +600,6 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
                              double *device_init_ms) {
     const uint32_t limbs = plan.limbs;
     const uint32_t tpi = plan.tpi;
-    const uint32_t kernel_includes = opencl_ecm_stage1_collect_kernel_includes(plan);
     int coop_wg = 1;
     if (limbs == 128u) {
         if (plan.mul != nullptr && ecm_mont_path_is_4096_dedicated(plan.mul)) {
@@ -640,51 +636,20 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
     }
     g_device_info_printed = false;
 
-    std::string ecm_src =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/ecm_stage1.cl");
-    if (ecm_src.empty()) {
-        ecm_ts_fprintf(stderr,
-                       "OpenCL: failed to load ecm_stage1.cl (set CGBN_KERNEL_ROOT or run from project root)\n");
-        return -1;
-    }
     std::string src;
-    if ((kernel_includes & ECM_KERNEL_INC_MONT_EXTENDED) != 0) {
-        const char *mont_ext = ecm_kernel_include_path(ECM_KERNEL_INC_MONT_EXTENDED);
-        std::string mont_src = cgbn::opencl::load_kernel_file(mont_ext);
-        if (mont_src.empty()) {
-            ecm_ts_fprintf(stderr, "OpenCL: failed to load %s\n", mont_ext);
+    const std::vector<const char *> kernel_paths = opencl_ecm_stage1_kernel_source_paths(plan);
+    for (const char *rel_path : kernel_paths) {
+        std::string chunk = cgbn::opencl::load_ecm_stage1_kernel_file(rel_path);
+        if (chunk.empty()) {
+            ecm_ts_fprintf(stderr,
+                           "OpenCL: failed to load %s (set ECM_KERNEL_ROOT or run from project root)\n",
+                           rel_path);
             return -1;
         }
-        src = mont_src + "\n" + ecm_src;
-    } else {
-        src = ecm_src;
-    }
-    if ((kernel_includes & ECM_KERNEL_INC_MP_ASM_U32) != 0) {
-        const char *asm_path = ecm_kernel_include_path(ECM_KERNEL_INC_MP_ASM_U32);
-        std::string asm_src = cgbn::opencl::load_kernel_file(asm_path);
-        if (asm_src.empty()) {
-            ecm_ts_fprintf(stderr, "OpenCL: failed to load %s\n", asm_path);
-            return -1;
+        if (!src.empty()) {
+            src += "\n";
         }
-        src = asm_src + "\n" + src;
-    }
-    if ((kernel_includes & ECM_KERNEL_INC_MP_ASM_U16) != 0) {
-        const char *asm_path = ecm_kernel_include_path(ECM_KERNEL_INC_MP_ASM_U16);
-        std::string asm_src = cgbn::opencl::load_kernel_file(asm_path);
-        if (asm_src.empty()) {
-            ecm_ts_fprintf(stderr, "OpenCL: failed to load %s\n", asm_path);
-            return -1;
-        }
-        src = asm_src + "\n" + src;
-    }
-    if ((kernel_includes & ECM_KERNEL_INC_ADDSUB_BITS) != 0) {
-        const char *bits_path = ecm_kernel_include_path(ECM_KERNEL_INC_ADDSUB_BITS);
-        std::string bits_src = cgbn::opencl::load_kernel_file(bits_path);
-        if (bits_src.empty()) {
-            ecm_ts_fprintf(stderr, "OpenCL: failed to load %s\n", bits_path);
-            return -1;
-        }
-        src = bits_src + "\n" + src;
+        src += chunk;
     }
     EcmStage1KernelBuildPlan build_plan = plan;
     if (const char *v = std::getenv("ECM_STAGE1_FORCE_NORMALIZE")) {
@@ -728,14 +693,6 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
     }
     g_kernel_limbs = limbs;
     g_kernel_tpi = tpi;
-    g_kernel_mul_path =
-        (plan.mul != nullptr && plan.limbs == 128u) ? plan.mul->cl_dispatch_id : 0;
-    g_kernel_sqr_path =
-        (plan.sqr != nullptr && plan.limbs == 128u) ? plan.sqr->cl_dispatch_id : 0;
-    g_kernel_add_path =
-        plan.add != nullptr ? plan.add->cl_dispatch_id : ECM_ADDSUB_PATH_FUSED_UNROLL;
-    g_kernel_sub_path =
-        plan.sub != nullptr ? plan.sub->cl_dispatch_id : ECM_ADDSUB_PATH_FUSED_UNROLL;
     g_kernel_coop_wg = coop_wg;
     g_kernel_use_coop_wg = use_coop_wg;
     g_kernel_build_plan = build_plan;
@@ -757,8 +714,18 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
                     plan.sqr != nullptr ? plan.sqr->id : "unknown",
                     plan.add != nullptr ? plan.add->id : "unknown",
                     plan.sub != nullptr ? plan.sub->id : "unknown",
-                    (kernel_includes & ECM_KERNEL_INC_MP_ASM_U32) != 0 ? 1 : 0,
-                    (kernel_includes & ECM_KERNEL_INC_MP_ASM_U16) != 0 ? 1 : 0,
+                    ((plan.add != nullptr && plan.add->kernel_path != nullptr &&
+                      strcmp(plan.add->kernel_path, "add_mod/asm_4096b.cl") == 0) ||
+                     (plan.sub != nullptr && plan.sub->kernel_path != nullptr &&
+                      strcmp(plan.sub->kernel_path, "sub_mod/asm_4096b.cl") == 0))
+                        ? 1
+                        : 0,
+                    ((plan.add != nullptr && plan.add->kernel_path != nullptr &&
+                      strcmp(plan.add->kernel_path, "add_mod/asm_512b.cl") == 0) ||
+                     (plan.sub != nullptr && plan.sub->kernel_path != nullptr &&
+                      strcmp(plan.sub->kernel_path, "sub_mod/asm_512b.cl") == 0))
+                        ? 1
+                        : 0,
                     use_coop_wg ? coop_wg : 1, init_ms);
     return 0;
 }
@@ -766,17 +733,17 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
 static int resolve_mont_paths(const char *gpu_mul_path, const char *gpu_sqr_path, size_t n_bit_size,
                             uint32_t container_limbs, const EcmMontPathDescriptor **mul_out,
                             const EcmMontPathDescriptor **sqr_out) {
+    EcmPathContext ctx = make_path_context(container_limbs, g_ctx.device);
+    ctx.n_bit_size = n_bit_size;
     bool unknown = false;
-    const EcmMontPathDescriptor *mul =
-        opencl_ecm_resolve_mont_mul(gpu_mul_path, n_bit_size, container_limbs, &unknown);
+    const EcmMontPathDescriptor *mul = opencl_ecm_resolve_mont_mul(gpu_mul_path, ctx, &unknown);
     if (unknown) {
         ecm_ts_fprintf(stderr, "OpenCL: unknown --mul path '%s'\n",
                        gpu_mul_path ? gpu_mul_path : "");
         return -1;
     }
     unknown = false;
-    const EcmMontPathDescriptor *sqr =
-        opencl_ecm_resolve_mont_sqr(gpu_sqr_path, n_bit_size, container_limbs, &unknown);
+    const EcmMontPathDescriptor *sqr = opencl_ecm_resolve_mont_sqr(gpu_sqr_path, ctx, &unknown);
     if (unknown) {
         ecm_ts_fprintf(stderr, "OpenCL: unknown --sqr path '%s'\n",
                        gpu_sqr_path ? gpu_sqr_path : "");

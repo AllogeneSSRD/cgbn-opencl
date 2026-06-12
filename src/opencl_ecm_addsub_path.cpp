@@ -27,24 +27,24 @@ int opencl_ecm_parse_addsub_path(const char *path) {
     for (size_t i = 0; i < opencl_ecm_addmod_registry_count(); ++i) {
         const EcmAddSubPathDescriptor *desc = opencl_ecm_addmod_registry_entry(i);
         if (desc != nullptr && aliases_contain(desc->aliases, path)) {
-            return desc->cl_dispatch_id;
+            return ecm_addsub_descriptor_kernel_path(desc);
         }
     }
     for (size_t i = 0; i < opencl_ecm_submod_registry_count(); ++i) {
         const EcmAddSubPathDescriptor *desc = opencl_ecm_submod_registry_entry(i);
         if (desc != nullptr && aliases_contain(desc->aliases, path)) {
-            return desc->cl_dispatch_id;
+            return ecm_addsub_descriptor_kernel_path(desc);
         }
     }
     return -2;
 }
 
 const char *opencl_ecm_addsub_path_name(int path_id) {
-    const EcmAddSubPathDescriptor *add_d = opencl_ecm_addmod_path_descriptor(path_id);
+    const EcmAddSubPathDescriptor *add_d = opencl_ecm_addmod_descriptor_by_kernel_path(path_id);
     if (add_d != nullptr && add_d->cl_name != nullptr) {
         return add_d->cl_name;
     }
-    const EcmAddSubPathDescriptor *sub_d = opencl_ecm_submod_path_descriptor(path_id);
+    const EcmAddSubPathDescriptor *sub_d = opencl_ecm_submod_descriptor_by_kernel_path(path_id);
     if (sub_d != nullptr && sub_d->cl_name != nullptr) {
         return sub_d->cl_name;
     }
@@ -52,30 +52,38 @@ const char *opencl_ecm_addsub_path_name(int path_id) {
 }
 
 bool opencl_ecm_addsub_path_needs_asm_b32(int path_id) {
-    const EcmAddSubPathDescriptor *add_d = opencl_ecm_addmod_path_descriptor(path_id);
-    if (add_d != nullptr && (add_d->kernel_includes & ECM_KERNEL_INC_MP_ASM_U32) != 0) {
+    const EcmAddSubPathDescriptor *add_d = opencl_ecm_addmod_descriptor_by_kernel_path(path_id);
+    if (add_d != nullptr && strcmp(add_d->id, "asm_4096b") == 0) {
         return true;
     }
-    const EcmAddSubPathDescriptor *sub_d = opencl_ecm_submod_path_descriptor(path_id);
-    return sub_d != nullptr && (sub_d->kernel_includes & ECM_KERNEL_INC_MP_ASM_U32) != 0;
+    const EcmAddSubPathDescriptor *sub_d = opencl_ecm_submod_descriptor_by_kernel_path(path_id);
+    return sub_d != nullptr && strcmp(sub_d->id, "asm_4096b") == 0;
 }
 
 bool opencl_ecm_addsub_path_needs_asm_b16(int path_id) {
-    const EcmAddSubPathDescriptor *add_d = opencl_ecm_addmod_path_descriptor(path_id);
-    if (add_d != nullptr && (add_d->kernel_includes & ECM_KERNEL_INC_MP_ASM_U16) != 0) {
+    const EcmAddSubPathDescriptor *add_d = opencl_ecm_addmod_descriptor_by_kernel_path(path_id);
+    if (add_d != nullptr && strcmp(add_d->id, "asm_512b") == 0) {
         return true;
     }
-    const EcmAddSubPathDescriptor *sub_d = opencl_ecm_submod_path_descriptor(path_id);
-    return sub_d != nullptr && (sub_d->kernel_includes & ECM_KERNEL_INC_MP_ASM_U16) != 0;
+    const EcmAddSubPathDescriptor *sub_d = opencl_ecm_submod_descriptor_by_kernel_path(path_id);
+    return sub_d != nullptr && strcmp(sub_d->id, "asm_512b") == 0;
 }
 
 bool opencl_ecm_addsub_path_needs_addsub_bits(int path_id) {
-    const EcmAddSubPathDescriptor *add_d = opencl_ecm_addmod_path_descriptor(path_id);
-    if (add_d != nullptr && (add_d->kernel_includes & ECM_KERNEL_INC_ADDSUB_BITS) != 0) {
+    const EcmAddSubPathDescriptor *add_d = opencl_ecm_addmod_descriptor_by_kernel_path(path_id);
+    if (add_d != nullptr && add_d->id != nullptr &&
+        (strcmp(add_d->id, "asm_128b") == 0 || strcmp(add_d->id, "unroll_128b") == 0 ||
+         strcmp(add_d->id, "asm_192b") == 0 || strcmp(add_d->id, "unroll_192b") == 0 ||
+         strcmp(add_d->id, "asm_256b") == 0 || strcmp(add_d->id, "unroll_256b") == 0 ||
+         strcmp(add_d->id, "asm_384b") == 0 || strcmp(add_d->id, "unroll_384b") == 0)) {
         return true;
     }
-    const EcmAddSubPathDescriptor *sub_d = opencl_ecm_submod_path_descriptor(path_id);
-    return sub_d != nullptr && (sub_d->kernel_includes & ECM_KERNEL_INC_ADDSUB_BITS) != 0;
+    const EcmAddSubPathDescriptor *sub_d = opencl_ecm_submod_descriptor_by_kernel_path(path_id);
+    return sub_d != nullptr && sub_d->id != nullptr &&
+           (strcmp(sub_d->id, "asm_128b") == 0 || strcmp(sub_d->id, "unroll_128b") == 0 ||
+            strcmp(sub_d->id, "asm_192b") == 0 || strcmp(sub_d->id, "unroll_192b") == 0 ||
+            strcmp(sub_d->id, "asm_256b") == 0 || strcmp(sub_d->id, "unroll_256b") == 0 ||
+            strcmp(sub_d->id, "asm_384b") == 0 || strcmp(sub_d->id, "unroll_384b") == 0);
 }
 
 const EcmAddSubPathDescriptor *opencl_ecm_resolve_addsub_add_path(const char *path,

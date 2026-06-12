@@ -325,6 +325,63 @@ std::string load_text_file(const char *path) {
 std::string android_load_kernel_asset(const char *rel_path);
 #endif
 
+static std::string kernel_root_with_slash(const char *root) {
+    std::string path(root);
+    if (!path.empty() && path.back() != '/' && path.back() != '\\') {
+        path += '/';
+    }
+    return path;
+}
+
+static std::string ecm_stage1_kernel_root() {
+    if (const char *root = std::getenv("ECM_KERNEL_ROOT")) {
+        if (*root) {
+            return kernel_root_with_slash(root);
+        }
+    }
+#ifdef ECM_KERNEL_ROOT_DEFAULT
+    return kernel_root_with_slash(ECM_KERNEL_ROOT_DEFAULT);
+#endif
+    return "kernels/opencl/";
+}
+
+static std::string load_kernel_at_roots(const char *rel_path) {
+    if (rel_path == nullptr || *rel_path == '\0') {
+        return std::string();
+    }
+    const char *prefixes[] = {"", "../", "../../", "../../../", "../../../../"};
+    for (const char *pfx : prefixes) {
+        std::string path = std::string(pfx) + rel_path;
+        std::string content = load_text_file(path.c_str());
+        if (!content.empty()) {
+            return content;
+        }
+    }
+    if (const char *root = std::getenv("ECM_KERNEL_ROOT")) {
+        if (*root) {
+            std::string content = load_text_file((kernel_root_with_slash(root) + rel_path).c_str());
+            if (!content.empty()) {
+                return content;
+            }
+        }
+    }
+#ifdef ECM_KERNEL_ROOT_DEFAULT
+    {
+        std::string content =
+            load_text_file((kernel_root_with_slash(ECM_KERNEL_ROOT_DEFAULT) + rel_path).c_str());
+        if (!content.empty()) {
+            return content;
+        }
+    }
+#endif
+    if (const char *root = std::getenv("CGBN_KERNEL_ROOT")) {
+        if (*root) {
+            return load_text_file((kernel_root_with_slash(root) + rel_path).c_str());
+        }
+    }
+    return std::string();
+}
+
 std::string load_kernel_file(const char *rel_path) {
     if (rel_path == nullptr || *rel_path == '\0') {
         return std::string();
@@ -337,25 +394,40 @@ std::string load_kernel_file(const char *rel_path) {
         }
     }
 #endif
+    return load_kernel_at_roots(rel_path);
+}
+
+std::string load_ecm_stage1_kernel_file(const char *rel_path) {
+    if (rel_path == nullptr || *rel_path == '\0') {
+        return std::string();
+    }
+#if defined(__ANDROID__)
+    {
+        std::string asset = android_load_kernel_asset(rel_path);
+        if (!asset.empty()) {
+            return asset;
+        }
+        asset = android_load_kernel_asset((std::string("kernels/opencl/") + rel_path).c_str());
+        if (!asset.empty()) {
+            return asset;
+        }
+    }
+#endif
+    const std::string ecm_root = ecm_stage1_kernel_root();
     const char *prefixes[] = {"", "../", "../../", "../../../", "../../../../"};
     for (const char *pfx : prefixes) {
-        std::string path = std::string(pfx) + rel_path;
+        std::string path = std::string(pfx) + ecm_root + rel_path;
         std::string content = load_text_file(path.c_str());
         if (!content.empty()) {
             return content;
         }
-    }
-    if (const char *root = std::getenv("CGBN_KERNEL_ROOT")) {
-        if (*root) {
-            std::string path = std::string(root);
-            if (path.back() != '/' && path.back() != '\\') {
-                path += '/';
-            }
-            path += rel_path;
-            return load_text_file(path.c_str());
+        path = std::string(pfx) + "kernels/opencl/" + rel_path;
+        content = load_text_file(path.c_str());
+        if (!content.empty()) {
+            return content;
         }
     }
-    return std::string();
+    return load_kernel_at_roots((ecm_root + rel_path).c_str());
 }
 
 } // namespace opencl

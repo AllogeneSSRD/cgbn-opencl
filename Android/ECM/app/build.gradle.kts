@@ -128,25 +128,26 @@ tasks.register<Copy>("syncMontsqrKernels") {
     into(layout.projectDirectory.dir("src/main/assets/kernels/cgbn/backends/opencl/kernels"))
 }
 
-val ecmStage1KernelIncludes = arrayOf(
-    "ecm_stage1.cl",
-    "ecm_stage1_mont4096_paths.cl",
-    "mont.cl",
-    "mont_mul_unroll_i24.cl",
-    "mont_mul_unroll_i24_384_manual_generated.cl",
-    "mp_addsub/stage1/asm_block32_stage1.cl",
-    "mp_addsub/stage1/asm_block16_stage1.cl",
-)
-
 tasks.register<Copy>("syncEcmStage1Kernels") {
+    from(mpaRoot.resolve("kernels/opencl"))
+    into(layout.projectDirectory.dir("src/main/assets/kernels/opencl"))
+}
+
+tasks.register<Copy>("syncEcmSelftestKernels") {
     from(mpaRoot.resolve("cgbn/backends/opencl/kernels")) {
-        ecmStage1KernelIncludes.forEach { include(it) }
+        include("mont.cl")
     }
     into(layout.projectDirectory.dir("src/main/assets/kernels/cgbn/backends/opencl/kernels"))
 }
 
 tasks.named("preBuild") {
-    dependsOn("syncAddsubKernels", "syncAddsubKernelsFlat", "syncMontsqrKernels", "syncEcmStage1Kernels")
+    dependsOn(
+        "syncAddsubKernels",
+        "syncAddsubKernelsFlat",
+        "syncMontsqrKernels",
+        "syncEcmStage1Kernels",
+        "syncEcmSelftestKernels",
+    )
 }
 
 if (ecmAndroidGmpRoot != null) {

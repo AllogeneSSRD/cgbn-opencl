@@ -45,6 +45,10 @@ target_link_libraries(cgbn_opencl PRIVATE
     OpenCL::OpenCL
 )
 
+target_compile_definitions(cgbn_opencl PRIVATE
+    "ECM_KERNEL_ROOT_DEFAULT=\"${CMAKE_SOURCE_DIR}/kernels/opencl\""
+)
+
 add_library(opencl_ecm_entry STATIC
     src/opencl_ecm_entry.cpp
 )

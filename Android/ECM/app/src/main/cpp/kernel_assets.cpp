@@ -11,6 +11,7 @@ namespace {
 AAssetManager* g_assets = nullptr;
 
 constexpr const char* kKernelAssetRoot = "cgbn/backends/opencl/kernels/";
+constexpr const char* kEcmStage1AssetRoot = "kernels/opencl/";
 
 void push_unique(std::vector<std::string>& paths, std::string path) {
     if (path.empty()) {
@@ -29,11 +30,17 @@ std::vector<std::string> kernel_asset_candidates(const char* rel_path) {
 
     std::string rel(rel_path);
     std::string tail = rel;
-    if (rel.rfind(kKernelAssetRoot, 0) == 0) {
+    if (rel.rfind(kEcmStage1AssetRoot, 0) == 0) {
+        push_unique(candidates, rel);
+        tail = rel.substr(std::strlen(kEcmStage1AssetRoot));
+    } else if (rel.rfind(kKernelAssetRoot, 0) == 0) {
         tail = rel.substr(std::strlen(kKernelAssetRoot));
         push_unique(candidates, std::string("kernels/") + rel);
+    } else {
+        push_unique(candidates, std::string(kEcmStage1AssetRoot) + rel);
     }
 
+    push_unique(candidates, std::string(kEcmStage1AssetRoot) + tail);
     push_unique(candidates, std::string("kernels/") + kKernelAssetRoot + tail);
     push_unique(candidates, std::string("kernels/") + tail);
 
