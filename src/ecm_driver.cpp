@@ -407,42 +407,82 @@ static std::string format_group_order_smooth(const std::vector<PrimePowerBound> 
     return oss.str();
 }
 
-static std::string get_gp_executable() {
-    auto normalize_cmd_path = [](std::string s) -> std::string {
+static std::string normalize_gp_path(std::string s) {
+    trim(s);
+    // Remove any outer single/double quotes repeatedly.
+    while (s.size() >= 2 &&
+           ((s.front() == '"' && s.back() == '"') ||
+            (s.front() == '\'' && s.back() == '\''))) {
+        s = s.substr(1, s.size() - 2);
         trim(s);
-        // Remove any outer single/double quotes repeatedly.
-        while (s.size() >= 2 &&
-               ((s.front() == '"' && s.back() == '"') ||
-                (s.front() == '\'' && s.back() == '\''))) {
-            s = s.substr(1, s.size() - 2);
-            trim(s);
-        }
-        // Also strip stray quote characters at either side.
-        while (!s.empty() && (s.front() == '"' || s.front() == '\'')) {
-            s.erase(s.begin());
-        }
-        while (!s.empty() && (s.back() == '"' || s.back() == '\'')) {
-            s.pop_back();
-        }
-        // gp path should not contain quote characters; strip any residual ones.
-        s.erase(std::remove(s.begin(), s.end(), '"'), s.end());
-        s.erase(std::remove(s.begin(), s.end(), '\''), s.end());
-        return s;
-    };
+    }
+    while (!s.empty() && (s.front() == '"' || s.front() == '\'')) {
+        s.erase(s.begin());
+    }
+    while (!s.empty() && (s.back() == '"' || s.back() == '\'')) {
+        s.pop_back();
+    }
+    s.erase(std::remove(s.begin(), s.end(), '"'), s.end());
+    s.erase(std::remove(s.begin(), s.end(), '\''), s.end());
+    return s;
+}
 
+static bool gp_executable_exists(const std::string &exe_path) {
+    const std::string cleaned = normalize_gp_path(exe_path);
+    if (cleaned.empty()) return false;
+#ifdef _WIN32
+    char found[MAX_PATH];
+    DWORD len = SearchPathA(nullptr, cleaned.c_str(), ".exe", MAX_PATH, found, nullptr);
+    return len > 0;
+#else
+    if (cleaned.find('/') != std::string::npos) {
+        return access(cleaned.c_str(), X_OK) == 0;
+    }
+    std::string cmd = "which \"" + cleaned + "\" > /dev/null 2>&1";
+    return system(cmd.c_str()) == 0;
+#endif
+}
+
+static std::string resolve_gp_path(const std::string &exe_path) {
+    const std::string cleaned = normalize_gp_path(exe_path);
+    if (cleaned.empty()) return cleaned;
+#ifdef _WIN32
+    // If the path contains a directory separator, use it as-is.
+    if (cleaned.find('\\') != std::string::npos ||
+        cleaned.find('/') != std::string::npos) {
+        return cleaned;
+    }
+    // Bare name → resolve via SearchPath.
+    char found[MAX_PATH];
+    DWORD len = SearchPathA(nullptr, cleaned.c_str(), ".exe", MAX_PATH, found, nullptr);
+    if (len > 0 && len < MAX_PATH) {
+        return std::string(found);
+    }
+#endif
+    return cleaned;
+}
+
+static std::string get_gp_executable(const std::string &explicit_path = "") {
+    // 1. Explicit --gp argument takes highest priority.
+    if (!explicit_path.empty()) {
+        return normalize_gp_path(explicit_path);
+    }
+    // 2. Try direct "gp" — works when gp is on PATH.
+    // 3. Fallback env vars for legacy compatibility.
     const char *ecm_gp = std::getenv("ECM_GP_BIN");
     if (ecm_gp && *ecm_gp) {
-        return normalize_cmd_path(std::string(ecm_gp));
+        return normalize_gp_path(std::string(ecm_gp));
     }
     const char *pari_gp = std::getenv("PARI_GP_BIN");
     if (pari_gp && *pari_gp) {
-        return normalize_cmd_path(std::string(pari_gp));
+        return normalize_gp_path(std::string(pari_gp));
     }
     return "gp";
 }
 
 static bool compute_group_order_pari_for_sigma3(mpz_t order_out, const mpz_t p,
-                                                uint32_t sigma, std::string *err) {
+                                                uint32_t sigma, const std::string &gp_path,
+                                                std::string *err) {
     char tmp_file[L_tmpnam];
     if (std::tmpnam(tmp_file) == nullptr) {
         if (err) *err = "failed to create temporary script path";
@@ -474,7 +514,7 @@ static bool compute_group_order_pari_for_sigma3(mpz_t order_out, const mpz_t p,
     gpfile.close();
 
     std::string output;
-    const std::string gp_exe = get_gp_executable();
+    const std::string gp_exe = get_gp_executable(gp_path);
 #ifdef _WIN32
     SECURITY_ATTRIBUTES sa;
     sa.nLength = sizeof(sa);
@@ -620,7 +660,8 @@ static void print_ecm_usage(const char *prog) {
               << "  -v                   Verbose output\n"
               << "  -save <file>         Append factorization lines to file\n"
               << "  -savea <file>        Same as -save (append mode)\n"
-              << "  --go                 Print group order diagnostics\n"
+              << "  --go                 Print group order diagnostics (requires gp/PARI)\n"
+              << "  --gp <path>          Path to gp executable (default: gp on PATH)\n"
               << "  --mul <path>         Montgomery mul kernel path (4096-bit)\n"
               << "  --sqr <path>         Montgomery sqr kernel path\n"
               << "  --add <path>         Modular add kernel path\n"
@@ -677,6 +718,7 @@ int main(int argc, char **argv){
     bool print_group_order = false;
     std::string savefilename;
     bool saveappend = false;
+    std::string gp_bin_path;
     std::string gpu_mul_path;
     std::string gpu_sqr_path;
     std::string gpu_add_path;
@@ -732,6 +774,10 @@ int main(int argc, char **argv){
         }
         if(a == "--go") {
             print_group_order = true;
+            continue;
+        }
+        if(a == "--gp" && i+1<argc) {
+            gp_bin_path = argv[++i];
             continue;
         }
         if(a == "--mul" && i+1<argc) {
@@ -790,6 +836,19 @@ int main(int argc, char **argv){
         }
     }
 
+    // Early check: when --go is requested, ensure gp/PARI is available before any GPU init.
+    std::string go_gp_exe;
+    if (print_group_order) {
+        go_gp_exe = resolve_gp_path(get_gp_executable(gp_bin_path));
+        if (!gp_executable_exists(go_gp_exe)) {
+            std::cerr << "gp executable not found: " << go_gp_exe << "\n"
+                      << "Please provide the gp path with: --gp <path/to/gp>\n"
+                      << "(If gp/PARI is installed, ensure 'gp' is on PATH, "
+                      << "or use --gp to specify the full path.)" << std::endl;
+            return 1;
+        }
+    }
+
     std::cout << "ecm driver starting" << std::endl;
     std::cout << "  mode: " << (use_gpu ? "gpu" : "cpu-stub")
               << ", gpucurves=" << gpucurves
@@ -807,6 +866,9 @@ int main(int argc, char **argv){
     }
     if (!gpu_sub_path.empty()) {
         std::cout << ", sub=" << gpu_sub_path;
+    }
+    if (!gp_bin_path.empty()) {
+        std::cout << ", gp=" << gp_bin_path;
     }
     std::cout << std::endl;
     if(!pos.empty()){
@@ -988,10 +1050,13 @@ int main(int argc, char **argv){
                 mpz_t go;
                 mpz_init(go);
                 std::string err;
-                if (!compute_group_order_pari_for_sigma3(go, factors[i], sigma_curve, &err)) {
-                    std::cout << "  go_factor[" << i << "]=[ ] (gp error: " << err << ")\n";
+                if (!compute_group_order_pari_for_sigma3(go, factors[i], sigma_curve,
+                                                         go_gp_exe, &err)) {
+                    std::cerr << "go_factor[" << i << "]: gp error: " << err << "\n"
+                              << "Please verify gp is working, or provide path with: --gp <path/to/gp>"
+                              << std::endl;
                     mpz_clear(go);
-                    continue;
+                    return 1;
                 }
                 auto go_parts = factor_by_small_primes(go, go_primes);
                 std::cout << "  go[" << i << "]=" << mpz_to_dec_string(go) << "\n";

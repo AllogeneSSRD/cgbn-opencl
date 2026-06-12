@@ -1,51 +1,49 @@
 # ECM Stage1 OpenCL kernels
 
-Stage1 sources live under `kernels/opencl/` (peer to `src/`). Host concatenates only the
-files required for the resolved operator paths; see `opencl_ecm_stage1_kernel_source_paths()`.
+Stage1 sources live under `kernels/opencl/`. Host assembles kernel source via
+`opencl_ecm_stage1_assemble_kernel_source()`: injects `ECM_STAGE1_*_IMPL` macros, then
+concatenates only the files from `opencl_ecm_stage1_kernel_source_paths()`.
 
 ## Directory layout
 
 | Directory | Role |
 |-----------|------|
-| `common/` | Shared config + limb primitives (`stage1_config.h.cl`, `mp_priv.h.cl`) |
-| `mont_mul/` | Montgomery multiplication implementations |
-| `mont_sqr/` | Montgomery square dispatch (reuses `ecm_stage1_mont_sqr` from mul operator file) |
-| `add_mod/` | Modular addition implementations |
-| `sub_mod/` | Modular subtraction implementations |
-| `ecm_stage1.cl` | Ladder + curve logic only (`double_add_v2`, `kernel_double_add`, coop glue) |
+| `common/` | Config, limb primitives, ladder helpers, operator interface |
+| `mont_mul/` | Montgomery mul + sqr implementations (paired in same file) |
+| `add_mod/` | Modular addition operators |
+| `sub_mod/` | Modular subtraction operators |
+| `ecm_stage1.cl` | Ladder logic only (`double_add_v2`, non-coop `kernel_double_add`) |
+| `ecm_stage1_coop.cl` | Optional 4096-bit cooperative WG supplement |
 
 ## Naming convention
 
-**Rule:** directory = operator family; filename = registry CLI `id` (or obvious width variant).
+**Rule:** `cl_name` == OpenCL function name == filename stem (bits suffix with `b`).
 
-| Family | Directory | File pattern | Registry `id` example |
-|--------|-----------|--------------|------------------------|
-| Montgomery mul | `mont_mul/` | `unroll_{bits}.cl`, `priv_opt.cl` | `unroll_only_384` → `unroll_384.cl` |
-| Montgomery 4096 | `mont_mul/4096/` | `unroll_64.cl`, `fips_4096.cl` | `unroll64_4096`, `fips4096` |
-| Montgomery sqr | `mont_sqr/` | `dispatch.cl` only | same kernel file as mul |
-| Add mod | `add_mod/` | `{variant}_{width}.cl` | `unroll_384b`, `asm_512b`, `fused_unroll` |
-| Sub mod | `sub_mod/` | `{variant}_{width}.cl` | mirrors `add_mod/` |
+| Family | Example `id` | `cl_name` | `kernel_path` |
+|--------|--------------|-----------|---------------|
+| Montgomery mul | `unroll_only_384` | `mont_mul_unroll_384b` | `mont_mul/mont_mul_unroll_384b.cl` |
+| Montgomery sqr | (paired) | `mont_sqr_unroll_384b` | same file as mul |
+| Add mod | `unroll_384b` | `add_mod_unroll_384b` | `add_mod/add_mod_unroll_384b.cl` |
+| Sub mod | `unroll_384b` | `sub_mod_unroll_384b` | `sub_mod/sub_mod_unroll_384b.cl` |
 
-**Variants:** `unroll`, `asm`, `fused`, `fused_unroll`, `priv_opt`, `fips`.
+## Operator ABI
 
-**Widths:** Montgomery fixed-operator sizes use bit width (`384`, `512`, `32`); add/sub use
-registry suffix (`128b`, `384b`, `512b`, `4096b`).
+Host injects before `common/operator_iface.h.cl`:
 
-## Operator file contract
+```c
+#define ECM_STAGE1_MUL_IMPL mont_mul_unroll_384b
+#define ECM_STAGE1_SQR_IMPL mont_sqr_unroll_384b
+#define ECM_STAGE1_ADD_IMPL add_mod_unroll_384b
+#define ECM_STAGE1_SUB_IMPL sub_mod_unroll_384b
+```
 
-Each loaded operator `.cl` defines one of:
-
-- `ecm_stage1_mont_mul` / `ecm_stage1_mont_sqr` (montgomery)
-- `ecm_stage1_add_mod` / `ecm_stage1_sub_mod` (modular add/sub)
-
-Dispatch shells (`*/dispatch.cl`) expose the legacy symbols used by the ladder:
-
-- `mont_mul_stage1`, `mont_sqr_stage1`, `mp_add_mod`, `mp_sub_mod`
+Ladder code calls `mont_mul`, `mont_sqr`, `add_mod`, `sub_mod` (macros alias to selected impl).
 
 ## Load order
 
-1. `common/stage1_config.h.cl`
-2. `common/mp_priv.h.cl`
-3. Selected operator files (mul, sqr, add, sub — deduped)
-4. `mont_mul/dispatch.cl`, `mont_sqr/dispatch.cl`, `add_mod/dispatch.cl`, `sub_mod/dispatch.cl`
-5. `ecm_stage1.cl`
+1. Injected `ECM_STAGE1_*_IMPL` macros
+2. `common/stage1_config.h.cl`, `common/mp_priv.h.cl`, `common/ladder_helpers.cl`
+3. Selected operator files (mul, sqr, add, sub — deduped by path)
+4. `common/operator_iface.h.cl`
+5. `ecm_stage1_coop.cl` (only when `ECM_STAGE1_COOP_WG > 1`)
+6. `ecm_stage1.cl`

@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -131,6 +132,10 @@ int ecm_addsub_descriptor_kernel_path(const EcmAddSubPathDescriptor *desc);
 int ecm_mont_descriptor_kernel_path(const EcmMontPathDescriptor *desc);
 
 std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(const EcmStage1KernelBuildPlan &plan);
+
+std::string opencl_ecm_stage1_assemble_kernel_source(
+    const EcmStage1KernelBuildPlan &plan,
+    const std::function<std::string(const char *rel_path)> &load_file);
 
 size_t opencl_ecm_mont_mul_registry_count();
 const EcmMontPathDescriptor *opencl_ecm_mont_mul_registry_entry(size_t index);

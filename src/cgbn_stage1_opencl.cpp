@@ -636,20 +636,20 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
     }
     g_device_info_printed = false;
 
-    std::string src;
     const std::vector<const char *> kernel_paths = opencl_ecm_stage1_kernel_source_paths(plan);
-    for (const char *rel_path : kernel_paths) {
-        std::string chunk = cgbn::opencl::load_ecm_stage1_kernel_file(rel_path);
-        if (chunk.empty()) {
-            ecm_ts_fprintf(stderr,
-                           "OpenCL: failed to load %s (set ECM_KERNEL_ROOT or run from project root)\n",
-                           rel_path);
-            return -1;
+    std::string src = opencl_ecm_stage1_assemble_kernel_source(
+        plan, [](const char *rel_path) { return cgbn::opencl::load_ecm_stage1_kernel_file(rel_path); });
+    if (src.empty()) {
+        for (const char *rel_path : kernel_paths) {
+            if (cgbn::opencl::load_ecm_stage1_kernel_file(rel_path).empty()) {
+                ecm_ts_fprintf(stderr,
+                               "OpenCL: failed to load %s (set ECM_KERNEL_ROOT or run from project root)\n",
+                               rel_path);
+                return -1;
+            }
         }
-        if (!src.empty()) {
-            src += "\n";
-        }
-        src += chunk;
+        ecm_ts_fprintf(stderr, "OpenCL: failed to assemble stage1 kernel source\n");
+        return -1;
     }
     EcmStage1KernelBuildPlan build_plan = plan;
     if (const char *v = std::getenv("ECM_STAGE1_FORCE_NORMALIZE")) {

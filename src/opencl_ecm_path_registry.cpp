@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstring>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -53,37 +54,36 @@ static const char *const kMulAliases_priv_opt[] = {"priv_opt", "mont_mul_priv_op
                                                    "mont_mul_stage1_priv_opt", nullptr};
 
 constexpr EcmMontPathDescriptor kMontMulRegistry[] = {
-    {"unroll_only_384", "mont_mul_priv_unroll_only_384", kMulAliases_unroll384,
-     "mont_mul/unroll_384.cl", 10, kMontNoMinN, kMontUnroll384MaxN, true, 0, ECM_OS_ANY,
+    {"unroll_only_384", "mont_mul_unroll_384b", kMulAliases_unroll384,
+     "mont_mul/mont_mul_unroll_384b.cl", 10, kMontNoMinN, kMontUnroll384MaxN, true, 0, ECM_OS_ANY,
      ECM_GPU_ANY, 0, true, 1, 0, nullptr},
-    {"unroll_only_512", "mont_mul_priv_unroll_only_512", kMulAliases_unroll512,
-     "mont_mul/unroll_512.cl", 20, kMontNoMinN, kMontUnroll512MaxN, false, 0, ECM_OS_ANY,
+    {"unroll_only_512", "mont_mul_unroll_512b", kMulAliases_unroll512,
+     "mont_mul/mont_mul_unroll_512b.cl", 20, kMontNoMinN, kMontUnroll512MaxN, false, 0, ECM_OS_ANY,
      ECM_GPU_ANY, 0, true, 1, 0, nullptr},
-    {"unroll64_4096", "mont_mul_stage1_unroll64_4096", kMulAliases_unroll64_4096,
-     "mont_mul/4096/unroll_64.cl", 21, kMont4096MinN, kMont4096MaxN, false,
+    {"unroll64_4096", "mont_mul_unroll_4096b", kMulAliases_unroll64_4096,
+     "mont_mul/mont_mul_unroll_4096b.cl", 21, kMont4096MinN, kMont4096MaxN, false,
      static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0,
      nullptr},
-    {"unroll64_4096_mt2", "mont_mul_stage1_unroll64_4096_mt2", kMulAliases_unroll64_4096_mt2,
-     "mont_mul/4096/unroll_64_mt2.cl", 22, kMont4096MinN, kMont4096MaxN, false,
+    {"unroll64_4096_mt2", "mont_mul_unroll_4096b_mt2", kMulAliases_unroll64_4096_mt2,
+     "mont_mul/mont_mul_unroll_4096b_mt2.cl", 22, kMont4096MinN, kMont4096MaxN, false,
      static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, ECM_GPU_ANY, 0, true, 2, 389,
      nullptr},
-    {"fips4096", "mont_mul_stage1_fips4096", kMulAliases_fips4096,
-     "mont_mul/4096/fips_4096.cl", 23, kMont4096MinN, kMont4096MaxN, false,
+    {"fips4096", "mont_mul_fips_4096b", kMulAliases_fips4096,
+     "mont_mul/mont_mul_fips_4096b.cl", 23, kMont4096MinN, kMont4096MaxN, false,
      static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0,
      nullptr},
-    {"fips4096_mt8", "mont_mul_stage1_fips4096_mt8", kMulAliases_fips4096_mt8,
-     "mont_mul/4096/fips_4096.cl", 24, kMont4096MinN, kMont4096MaxN, false,
+    {"fips4096_mt8", "mont_mul_fips_4096b", kMulAliases_fips4096_mt8,
+     "mont_mul/mont_mul_fips_4096b.cl", 24, kMont4096MinN, kMont4096MaxN, false,
      static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, ECM_GPU_ANY, 0, true, 8,
      897, nullptr},
-    {"fips4096_mt16", "mont_mul_stage1_fips4096_mt16", kMulAliases_fips4096_mt16,
-     "mont_mul/4096/fips_4096.cl", 25, kMont4096MinN, kMont4096MaxN, false,
+    {"fips4096_mt16", "mont_mul_fips_4096b", kMulAliases_fips4096_mt16,
+     "mont_mul/mont_mul_fips_4096b.cl", 25, kMont4096MinN, kMont4096MaxN, false,
      static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, ECM_GPU_ANY, 0, true, 16,
      897, nullptr},
-    {"unroll32", "mont_mul_stage1_unroll32", kMulAliases_unroll32, "mont_mul/unroll_32.cl", -1,
+    {"unroll32", "mont_mul_unroll_32", kMulAliases_unroll32, "mont_mul/mont_mul_unroll_32.cl", -1,
      kMontNoMinN, kMontNoMaxN, false, 0, ECM_OS_ANY, ECM_GPU_ANY, 0, false, 1, 0, nullptr},
-    {"priv_opt", "mont_mul_stage1_priv_opt", kMulAliases_priv_opt, "mont_mul/priv_opt.cl", 30,
-     kMontNoMinN, kMontNoMaxN, false, 0, ECM_OS_ANY, ECM_GPU_ANY, 0, false, 1, 0,
-     nullptr},
+    {"priv_opt", "mont_mul_priv_opt", kMulAliases_priv_opt, "mont_mul/mont_mul_priv_opt.cl", 30,
+     kMontNoMinN, kMontNoMaxN, false, 0, ECM_OS_ANY, ECM_GPU_ANY, 0, false, 1, 0, nullptr},
 };
 
 static const char *const kSqrAliases_unroll384[] = {"unroll_only_384", "mont_sqr_priv_unroll_only_384",
@@ -101,35 +101,35 @@ static const char *const kSqrAliases_priv_opt[] = {"priv_opt", "mont_sqr_priv_op
                                                    "mont_sqr_stage1_priv_opt", nullptr};
 
 constexpr EcmMontPathDescriptor kMontSqrRegistry[] = {
-    {"unroll_only_384", "mont_sqr_priv_unroll_only_384", kSqrAliases_unroll384,
-     "mont_mul/unroll_384.cl", 10, kMontNoMinN, kMontUnroll384MaxN, true, 0, ECM_OS_ANY,
+    {"unroll_only_384", "mont_sqr_unroll_384b", kSqrAliases_unroll384,
+     "mont_mul/mont_mul_unroll_384b.cl", 10, kMontNoMinN, kMontUnroll384MaxN, true, 0, ECM_OS_ANY,
      ECM_GPU_ANY, 0, true, 1, 0, nullptr},
-    {"unroll_only_512", "mont_sqr_priv_unroll_only_512", kSqrAliases_unroll512,
-     "mont_mul/unroll_512.cl", 20, kMontNoMinN, kMontUnroll512MaxN, false, 0, ECM_OS_ANY,
+    {"unroll_only_512", "mont_sqr_unroll_512b", kSqrAliases_unroll512,
+     "mont_mul/mont_mul_unroll_512b.cl", 20, kMontNoMinN, kMontUnroll512MaxN, false, 0, ECM_OS_ANY,
      ECM_GPU_ANY, 0, true, 1, 0, nullptr},
-    {"unroll64_4096", "mont_sqr_stage1_unroll64_4096", kSqrAliases_unroll64_4096,
-     "mont_mul/4096/unroll_64.cl", 21, kMont4096MinN, kMont4096MaxN, false,
+    {"unroll64_4096", "mont_sqr_unroll_4096b", kSqrAliases_unroll64_4096,
+     "mont_mul/mont_mul_unroll_4096b.cl", 21, kMont4096MinN, kMont4096MaxN, false,
      static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0,
      nullptr},
-    {"unroll64_4096_mt2", "mont_sqr_stage1_unroll64_4096_mt2", kSqrAliases_unroll64_4096_mt2,
-     "mont_mul/4096/unroll_64_mt2.cl", 22, kMont4096MinN, kMont4096MaxN, false,
+    {"unroll64_4096_mt2", "mont_sqr_unroll_4096b_mt2", kSqrAliases_unroll64_4096_mt2,
+     "mont_mul/mont_mul_unroll_4096b_mt2.cl", 22, kMont4096MinN, kMont4096MaxN, false,
      static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, ECM_GPU_ANY, 0, true, 2, 389,
      nullptr},
-    {"fips4096", "mont_sqr_stage1_fips4096", kSqrAliases_fips4096,
-     "mont_mul/4096/fips_4096.cl", 23, kMont4096MinN, kMont4096MaxN, false,
+    {"fips4096", "mont_sqr_fips_4096b", kSqrAliases_fips4096,
+     "mont_mul/mont_mul_fips_4096b.cl", 23, kMont4096MinN, kMont4096MaxN, false,
      static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0,
      nullptr},
-    {"fips4096_mt8", "mont_sqr_stage1_fips4096_mt8", kSqrAliases_fips4096_mt8,
-     "mont_mul/4096/fips_4096.cl", 24, kMont4096MinN, kMont4096MaxN, false,
+    {"fips4096_mt8", "mont_sqr_fips_4096b", kSqrAliases_fips4096_mt8,
+     "mont_mul/mont_mul_fips_4096b.cl", 24, kMont4096MinN, kMont4096MaxN, false,
      static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, ECM_GPU_ANY, 0, true, 8, 897,
      nullptr},
-    {"fips4096_mt16", "mont_sqr_stage1_fips4096_mt16", kSqrAliases_fips4096_mt16,
-     "mont_mul/4096/fips_4096.cl", 25, kMont4096MinN, kMont4096MaxN, false,
+    {"fips4096_mt16", "mont_sqr_fips_4096b", kSqrAliases_fips4096_mt16,
+     "mont_mul/mont_mul_fips_4096b.cl", 25, kMont4096MinN, kMont4096MaxN, false,
      static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, ECM_GPU_ANY, 0, true, 16,
      897, nullptr},
-    {"unroll32", "mont_sqr_stage1_unroll32", kSqrAliases_unroll32, "mont_mul/unroll_32.cl", -1,
+    {"unroll32", "mont_sqr_unroll_32", kSqrAliases_unroll32, "mont_mul/mont_mul_unroll_32.cl", -1,
      kMontNoMinN, kMontNoMaxN, false, 0, ECM_OS_ANY, ECM_GPU_ANY, 0, false, 1, 0, nullptr},
-    {"priv_opt", "mont_sqr_stage1_priv_opt", kSqrAliases_priv_opt, "mont_mul/priv_opt.cl", 30,
+    {"priv_opt", "mont_sqr_priv_opt", kSqrAliases_priv_opt, "mont_mul/mont_mul_priv_opt.cl", 30,
      kMontNoMinN, kMontNoMaxN, false, 0, ECM_OS_ANY, ECM_GPU_ANY, 0, false, 1, 0, nullptr},
 };
 
@@ -171,69 +171,69 @@ constexpr uint16_t kAddSub512Container = 512;
 constexpr uint16_t kAddSub384MaxN = 378;
 
 constexpr EcmAddSubPathDescriptor kAddModRegistry[] = {
-    {"asm_4096b", "asm_4096b", kAddAliases_asm_4096b, "add_mod/asm_4096b.cl", 10, kAddSubNoMinN,
-     kAddSubNoMaxN, false, static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY,
-     ECM_GPU_AMD, 0},
-    {"unroll_4096b", "unroll_4096b", kAddAliases_unroll_4096b, "add_mod/unroll_4096b.cl", 11,
+    {"asm_4096b", "add_mod_asm_4096b", kAddAliases_asm_4096b, "add_mod/add_mod_asm_4096b.cl", 10,
      kAddSubNoMinN, kAddSubNoMaxN, false, static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS),
-     ECM_OS_ANY, 0, ECM_GPU_AMD},
-    {"asm_128b", "asm_128b", kAddAliases_asm_128b, "add_mod/bits/asm_128b.cl", 20, kAddSubNoMinN,
-     128, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"unroll_128b", "unroll_128b", kAddAliases_unroll_128b, "add_mod/bits/unroll_128b.cl", 21,
-     kAddSubNoMinN, 128, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
-    {"asm_192b", "asm_192b", kAddAliases_asm_192b, "add_mod/bits/asm_192b.cl", 22, kAddSubNoMinN,
-     192, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"unroll_192b", "unroll_192b", kAddAliases_unroll_192b, "add_mod/bits/unroll_192b.cl", 23,
-     kAddSubNoMinN, 192, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
-    {"asm_256b", "asm_256b", kAddAliases_asm_256b, "add_mod/bits/asm_256b.cl", 24, kAddSubNoMinN,
-     256, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"unroll_256b", "unroll_256b", kAddAliases_unroll_256b, "add_mod/bits/unroll_256b.cl", 25,
-     kAddSubNoMinN, 256, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
-    {"asm_384b", "asm_384b", kAddAliases_asm_384b, "add_mod/bits/asm_384b.cl", 26, kAddSubNoMinN,
-     kAddSub384MaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"unroll_384b", "unroll_384b", kAddAliases_unroll_384b, "add_mod/bits/unroll_384b.cl", 27,
-     kAddSubNoMinN, kAddSub384MaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
-    {"asm_512b", "asm_512b", kAddAliases_asm_512b, "add_mod/asm_512b.cl", 30, kAddSubNoMinN,
-     kAddSubNoMaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"unroll_512b", "unroll_512b", kAddAliases_unroll_512b, "add_mod/unroll_512b.cl", 31,
+     ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"unroll_4096b", "add_mod_unroll_4096b", kAddAliases_unroll_4096b,
+     "add_mod/add_mod_unroll_4096b.cl", 11, kAddSubNoMinN, kAddSubNoMaxN, false,
+     static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, 0, ECM_GPU_AMD},
+    {"asm_128b", "add_mod_asm_128b", kAddAliases_asm_128b, "add_mod/add_mod_asm_128b.cl", 20,
+     kAddSubNoMinN, 128, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"unroll_128b", "add_mod_unroll_128b", kAddAliases_unroll_128b, "add_mod/add_mod_unroll_128b.cl",
+     21, kAddSubNoMinN, 128, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
+    {"asm_192b", "add_mod_asm_192b", kAddAliases_asm_192b, "add_mod/add_mod_asm_192b.cl", 22,
+     kAddSubNoMinN, 192, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"unroll_192b", "add_mod_unroll_192b", kAddAliases_unroll_192b, "add_mod/add_mod_unroll_192b.cl",
+     23, kAddSubNoMinN, 192, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
+    {"asm_256b", "add_mod_asm_256b", kAddAliases_asm_256b, "add_mod/add_mod_asm_256b.cl", 24,
+     kAddSubNoMinN, 256, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"unroll_256b", "add_mod_unroll_256b", kAddAliases_unroll_256b, "add_mod/add_mod_unroll_256b.cl",
+     25, kAddSubNoMinN, 256, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
+    {"asm_384b", "add_mod_asm_384b", kAddAliases_asm_384b, "add_mod/add_mod_asm_384b.cl", 26,
+     kAddSubNoMinN, kAddSub384MaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"unroll_384b", "add_mod_unroll_384b", kAddAliases_unroll_384b, "add_mod/add_mod_unroll_384b.cl",
+     27, kAddSubNoMinN, kAddSub384MaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
+    {"asm_512b", "add_mod_asm_512b", kAddAliases_asm_512b, "add_mod/add_mod_asm_512b.cl", 30,
      kAddSubNoMinN, kAddSubNoMaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"fused", "fused", kAddAliases_fused, "add_mod/fused.cl", 32, kAddSubNoMinN, kAddSubNoMaxN,
-     false, kAddSub512Container, ECM_OS_ANY, 0, ECM_GPU_AMD},
-    {"fused_unroll", "fused_unroll", kAddAliases_fused_unroll, "add_mod/fused_unroll.cl", 40,
-     kAddSubNoMinN, kAddSubNoMaxN, false, 0, ECM_OS_ANY, ECM_GPU_ANY, 0},
+    {"unroll_512b", "add_mod_unroll_512b", kAddAliases_unroll_512b, "add_mod/add_mod_unroll_512b.cl",
+     31, kAddSubNoMinN, kAddSubNoMaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"fused", "add_mod_fused", kAddAliases_fused, "add_mod/add_mod_fused.cl", 32, kAddSubNoMinN,
+     kAddSubNoMaxN, false, kAddSub512Container, ECM_OS_ANY, 0, ECM_GPU_AMD},
+    {"fused_unroll", "add_mod_fused_unroll", kAddAliases_fused_unroll, "add_mod/add_mod_fused_unroll.cl",
+     40, kAddSubNoMinN, kAddSubNoMaxN, false, 0, ECM_OS_ANY, ECM_GPU_ANY, 0},
 };
 
 constexpr EcmAddSubPathDescriptor kSubModRegistry[] = {
-    {"asm_4096b", "asm_4096b", kSubAliases_asm_4096b, "sub_mod/asm_4096b.cl", 10, kAddSubNoMinN,
-     kAddSubNoMaxN, false, static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY,
-     ECM_GPU_AMD, 0},
-    {"unroll_4096b", "unroll_4096b", kSubAliases_unroll_4096b, "sub_mod/unroll_4096b.cl", 11,
+    {"asm_4096b", "sub_mod_asm_4096b", kSubAliases_asm_4096b, "sub_mod/sub_mod_asm_4096b.cl", 10,
      kAddSubNoMinN, kAddSubNoMaxN, false, static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS),
-     ECM_OS_ANY, 0, ECM_GPU_AMD},
-    {"asm_128b", "asm_128b", kSubAliases_asm_128b, "sub_mod/bits/asm_128b.cl", 20, kAddSubNoMinN,
-     128, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"unroll_128b", "unroll_128b", kSubAliases_unroll_128b, "sub_mod/bits/unroll_128b.cl", 21,
-     kAddSubNoMinN, 128, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
-    {"asm_192b", "asm_192b", kSubAliases_asm_192b, "sub_mod/bits/asm_192b.cl", 22, kAddSubNoMinN,
-     192, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"unroll_192b", "unroll_192b", kSubAliases_unroll_192b, "sub_mod/bits/unroll_192b.cl", 23,
-     kAddSubNoMinN, 192, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
-    {"asm_256b", "asm_256b", kSubAliases_asm_256b, "sub_mod/bits/asm_256b.cl", 24, kAddSubNoMinN,
-     256, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"unroll_256b", "unroll_256b", kSubAliases_unroll_256b, "sub_mod/bits/unroll_256b.cl", 25,
-     kAddSubNoMinN, 256, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
-    {"asm_384b", "asm_384b", kSubAliases_asm_384b, "sub_mod/bits/asm_384b.cl", 26, kAddSubNoMinN,
-     kAddSub384MaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"unroll_384b", "unroll_384b", kSubAliases_unroll_384b, "sub_mod/bits/unroll_384b.cl", 27,
-     kAddSubNoMinN, kAddSub384MaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
-    {"asm_512b", "asm_512b", kSubAliases_asm_512b, "sub_mod/asm_512b.cl", 30, kAddSubNoMinN,
-     kAddSubNoMaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"unroll_512b", "unroll_512b", kSubAliases_unroll_512b, "sub_mod/unroll_512b.cl", 31,
+     ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"unroll_4096b", "sub_mod_unroll_4096b", kSubAliases_unroll_4096b,
+     "sub_mod/sub_mod_unroll_4096b.cl", 11, kAddSubNoMinN, kAddSubNoMaxN, false,
+     static_cast<uint16_t>(ECM_PATH_4096_CONTAINER_BITS), ECM_OS_ANY, 0, ECM_GPU_AMD},
+    {"asm_128b", "sub_mod_asm_128b", kSubAliases_asm_128b, "sub_mod/sub_mod_asm_128b.cl", 20,
+     kAddSubNoMinN, 128, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"unroll_128b", "sub_mod_unroll_128b", kSubAliases_unroll_128b, "sub_mod/sub_mod_unroll_128b.cl",
+     21, kAddSubNoMinN, 128, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
+    {"asm_192b", "sub_mod_asm_192b", kSubAliases_asm_192b, "sub_mod/sub_mod_asm_192b.cl", 22,
+     kAddSubNoMinN, 192, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"unroll_192b", "sub_mod_unroll_192b", kSubAliases_unroll_192b, "sub_mod/sub_mod_unroll_192b.cl",
+     23, kAddSubNoMinN, 192, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
+    {"asm_256b", "sub_mod_asm_256b", kSubAliases_asm_256b, "sub_mod/sub_mod_asm_256b.cl", 24,
+     kAddSubNoMinN, 256, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"unroll_256b", "sub_mod_unroll_256b", kSubAliases_unroll_256b, "sub_mod/sub_mod_unroll_256b.cl",
+     25, kAddSubNoMinN, 256, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
+    {"asm_384b", "sub_mod_asm_384b", kSubAliases_asm_384b, "sub_mod/sub_mod_asm_384b.cl", 26,
+     kAddSubNoMinN, kAddSub384MaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"unroll_384b", "sub_mod_unroll_384b", kSubAliases_unroll_384b, "sub_mod/sub_mod_unroll_384b.cl",
+     27, kAddSubNoMinN, kAddSub384MaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0},
+    {"asm_512b", "sub_mod_asm_512b", kSubAliases_asm_512b, "sub_mod/sub_mod_asm_512b.cl", 30,
      kAddSubNoMinN, kAddSubNoMaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
-    {"fused", "fused", kSubAliases_fused, "sub_mod/fused.cl", 32, kAddSubNoMinN, kAddSubNoMaxN,
-     false, kAddSub512Container, ECM_OS_ANY, 0, ECM_GPU_AMD},
-    {"fused_unroll", "fused_unroll", kSubAliases_fused_unroll, "sub_mod/fused_unroll.cl", 40,
-     kAddSubNoMinN, kAddSubNoMaxN, false, 0, ECM_OS_ANY, ECM_GPU_ANY, 0},
+    {"unroll_512b", "sub_mod_unroll_512b", kSubAliases_unroll_512b, "sub_mod/sub_mod_unroll_512b.cl",
+     31, kAddSubNoMinN, kAddSubNoMaxN, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_AMD, 0},
+    {"fused", "sub_mod_fused", kSubAliases_fused, "sub_mod/sub_mod_fused.cl", 32, kAddSubNoMinN,
+     kAddSubNoMaxN, false, kAddSub512Container, ECM_OS_ANY, 0, ECM_GPU_AMD},
+    {"fused_unroll", "sub_mod_fused_unroll", kSubAliases_fused_unroll, "sub_mod/sub_mod_fused_unroll.cl",
+     40, kAddSubNoMinN, kAddSubNoMaxN, false, 0, ECM_OS_ANY, ECM_GPU_ANY, 0},
 };
 
 bool ecm_path_mask_fits(uint32_t required_mask, uint32_t exclude_mask, uint32_t runtime_mask) {
@@ -250,23 +250,57 @@ bool ecm_path_mask_fits(uint32_t required_mask, uint32_t exclude_mask, uint32_t 
 
 static constexpr const char *kEcmStage1CommonConfig = "common/stage1_config.h.cl";
 static constexpr const char *kEcmStage1CommonMpPriv = "common/mp_priv.h.cl";
+static constexpr const char *kEcmStage1LadderHelpers = "common/ladder_helpers.cl";
+static constexpr const char *kEcmStage1AsmCommon = "common/asm_common.inc.cl";
+static constexpr const char *kEcmStage1OperatorIface = "common/operator_iface.h.cl";
+static constexpr const char *kEcmStage1Coop = "ecm_stage1_coop.cl";
 static constexpr const char *kEcmStage1Entry = "ecm_stage1.cl";
-static constexpr const char *kMontMulDispatch = "mont_mul/dispatch.cl";
-static constexpr const char *kMontSqrDispatch = "mont_sqr/dispatch.cl";
-static constexpr const char *kAddModDispatch = "add_mod/dispatch.cl";
-static constexpr const char *kSubModDispatch = "sub_mod/dispatch.cl";
-static constexpr const char *kMontFips4096Kernel = "mont_mul/4096/fips_4096.cl";
+static constexpr const char *kMontFips4096Kernel = "mont_mul/mont_mul_fips_4096b.cl";
 
 bool mont_kernel_path_needs_fips4096(const char *kernel_path) {
     return kernel_path != nullptr && strcmp(kernel_path, kMontFips4096Kernel) == 0;
 }
 
-bool addsub_kernel_path_is_asm_b32(const char *kernel_path) {
-    return kernel_path != nullptr && strcmp(kernel_path, "add_mod/asm_4096b.cl") == 0;
+bool addsub_kernel_path_needs_asm_base(const char *kernel_path) {
+    return kernel_path != nullptr && strstr(kernel_path, "_asm_") != nullptr;
 }
 
-bool addsub_kernel_path_is_asm_b16(const char *kernel_path) {
-    return kernel_path != nullptr && strcmp(kernel_path, "add_mod/asm_512b.cl") == 0;
+bool plan_needs_asm_common(const EcmStage1KernelBuildPlan &plan) {
+    return (plan.add != nullptr && addsub_kernel_path_needs_asm_base(plan.add->kernel_path)) ||
+           (plan.sub != nullptr && addsub_kernel_path_needs_asm_base(plan.sub->kernel_path));
+}
+
+int stage1_coop_wg_for_plan(const EcmStage1KernelBuildPlan &plan) {
+    int coop_wg = 1;
+    if (plan.limbs == kContainer4096Limbs) {
+        if (plan.mul != nullptr && ecm_mont_path_is_4096_dedicated(plan.mul)) {
+            coop_wg = std::max(coop_wg, static_cast<int>(plan.mul->coop_work_group_size));
+        }
+        if (plan.sqr != nullptr && ecm_mont_path_is_4096_dedicated(plan.sqr)) {
+            coop_wg = std::max(coop_wg, static_cast<int>(plan.sqr->coop_work_group_size));
+        }
+    }
+    return coop_wg;
+}
+
+void append_unique_kernel_path(std::vector<const char *> &paths, const char *kernel_path) {
+    if (kernel_path == nullptr || kernel_path[0] == '\0') {
+        return;
+    }
+    for (const char *existing : paths) {
+        if (strcmp(existing, kernel_path) == 0) {
+            return;
+        }
+    }
+    paths.push_back(kernel_path);
+}
+
+void append_impl_macro(std::string &out, const char *name, const char *symbol) {
+    out += "#define ";
+    out += name;
+    out += " ";
+    out += symbol;
+    out += "\n";
 }
 
 int addsub_id_kernel_path(const char *id) {
@@ -613,37 +647,61 @@ int ecm_mont_descriptor_kernel_path(const EcmMontPathDescriptor *desc) {
 
 std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(const EcmStage1KernelBuildPlan &plan) {
     std::vector<const char *> paths;
-    const auto append_unique = [&](const char *kernel_path) {
-        if (kernel_path == nullptr || kernel_path[0] == '\0') {
-            return;
-        }
-        for (const char *existing : paths) {
-            if (strcmp(existing, kernel_path) == 0) {
-                return;
-            }
-        }
-        paths.push_back(kernel_path);
-    };
-    append_unique(kEcmStage1CommonConfig);
-    append_unique(kEcmStage1CommonMpPriv);
+    append_unique_kernel_path(paths, kEcmStage1CommonConfig);
+    append_unique_kernel_path(paths, kEcmStage1CommonMpPriv);
+    append_unique_kernel_path(paths, kEcmStage1LadderHelpers);
+    if (plan_needs_asm_common(plan)) {
+        append_unique_kernel_path(paths, kEcmStage1AsmCommon);
+    }
     if (plan.mul != nullptr) {
-        append_unique(plan.mul->kernel_path);
+        append_unique_kernel_path(paths, plan.mul->kernel_path);
     }
     if (plan.sqr != nullptr) {
-        append_unique(plan.sqr->kernel_path);
+        append_unique_kernel_path(paths, plan.sqr->kernel_path);
     }
     if (plan.add != nullptr) {
-        append_unique(plan.add->kernel_path);
+        append_unique_kernel_path(paths, plan.add->kernel_path);
     }
     if (plan.sub != nullptr) {
-        append_unique(plan.sub->kernel_path);
+        append_unique_kernel_path(paths, plan.sub->kernel_path);
     }
-    append_unique(kMontMulDispatch);
-    append_unique(kMontSqrDispatch);
-    append_unique(kAddModDispatch);
-    append_unique(kSubModDispatch);
-    append_unique(kEcmStage1Entry);
+    append_unique_kernel_path(paths, kEcmStage1OperatorIface);
+    if (stage1_coop_wg_for_plan(plan) > 1) {
+        append_unique_kernel_path(paths, kEcmStage1Coop);
+    }
+    append_unique_kernel_path(paths, kEcmStage1Entry);
     return paths;
+}
+
+std::string opencl_ecm_stage1_assemble_kernel_source(
+    const EcmStage1KernelBuildPlan &plan,
+    const std::function<std::string(const char *rel_path)> &load_file) {
+    std::string source;
+    source.reserve(65536);
+    if (plan.mul == nullptr || plan.sqr == nullptr || plan.add == nullptr || plan.sub == nullptr) {
+        return source;
+    }
+    append_impl_macro(source, "ECM_STAGE1_MUL_IMPL", plan.mul->cl_name);
+    append_impl_macro(source, "ECM_STAGE1_SQR_IMPL", plan.sqr->cl_name);
+    append_impl_macro(source, "ECM_STAGE1_ADD_IMPL", plan.add->cl_name);
+    append_impl_macro(source, "ECM_STAGE1_SUB_IMPL", plan.sub->cl_name);
+    source += "\n";
+
+    const std::vector<const char *> paths = opencl_ecm_stage1_kernel_source_paths(plan);
+    for (const char *rel_path : paths) {
+        const std::string chunk = load_file(rel_path);
+        if (chunk.empty()) {
+            return std::string();
+        }
+        if (!source.empty() && source.back() != '\n') {
+            source += "\n";
+        }
+        source += chunk;
+        if (chunk.back() != '\n') {
+            source += "\n";
+        }
+    }
+    return source;
 }
 
 size_t opencl_ecm_mont_mul_registry_count() {
@@ -763,21 +821,19 @@ std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildP
     opts += std::to_string(plan.tpi);
     append_define(opts, "ECM_STAGE1_FORCE_NORMALIZE", plan.stage1_force_normalize);
     append_define(opts, "MP_ADD_MOD_FUSED_UNROLL", plan.add_mod_fused_unroll);
-    append_define(opts, "ECM_STAGE1_KERNEL_REV", 12);
+    append_define(opts, "ECM_STAGE1_KERNEL_REV", 14);
     append_define(opts, "MP_LIMB_BITS", 32);
 
     append_define(opts, "ECM_STAGE1_MUL_PATH", mont_kernel_path_for_plan(plan.mul, plan.limbs));
     append_define(opts, "ECM_STAGE1_SQR_PATH", mont_kernel_path_for_plan(plan.sqr, plan.limbs));
 
-    int coop_wg = 1;
+    const int coop_wg = stage1_coop_wg_for_plan(plan);
     int coop_scratch = 0;
     if (plan.limbs == kContainer4096Limbs) {
         if (plan.mul != nullptr && ecm_mont_path_is_4096_dedicated(plan.mul)) {
-            coop_wg = std::max(coop_wg, static_cast<int>(plan.mul->coop_work_group_size));
             coop_scratch = std::max(coop_scratch, static_cast<int>(plan.mul->local_scratch_u32));
         }
         if (plan.sqr != nullptr && ecm_mont_path_is_4096_dedicated(plan.sqr)) {
-            coop_wg = std::max(coop_wg, static_cast<int>(plan.sqr->coop_work_group_size));
             coop_scratch = std::max(coop_scratch, static_cast<int>(plan.sqr->local_scratch_u32));
         }
     }

@@ -1,0 +1,33 @@
+// Extracted stage1 sub_mod/unroll_4096b.cl
+static inline static inline int sub_mod_unroll_4096b_body(uint *r, const uint *a, const uint *b,
+                                                   const uint *N) {
+    ulong br = 0ul;
+    #pragma unroll
+    for (uint blk = 0u; blk < 4u; ++blk) {
+        uint off = blk * 32u;
+        #pragma unroll 32
+        for (uint j = 0u; j < 32u; ++j) {
+            uint i = off + j;
+            ulong av = (ulong)a[i];
+            ulong bv = (ulong)b[i];
+            ulong w = av - bv - br;
+            r[i] = (uint)w;
+            br = (av < bv + br) ? 1ul : 0ul;
+        }
+    }
+    if (br != 0ul) {
+        ulong c = 0ul;
+        #pragma unroll 32
+        for (uint i = 0u; i < 128u; ++i) {
+            ulong s = (ulong)r[i] + (ulong)N[i] + c;
+            r[i] = (uint)s;
+            c = s >> 32;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+static inline int sub_mod_unroll_4096b(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
+    return sub_mod_unroll_4096b_body(r, a, b, N, limbs);
+}
