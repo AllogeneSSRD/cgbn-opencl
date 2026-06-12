@@ -416,6 +416,10 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
 
     auto run_priv_local_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
                                      double &ms_out) -> bool {
+        if (WORDS != required_words) {
+            ms_out = 0.0;
+            return true;
+        }
         cl_int kerr = CL_SUCCESS;
         cl_kernel k = clCreateKernel(program, kname, &kerr);
         if (kerr != CL_SUCCESS) {
@@ -440,12 +444,6 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
             clSetKernelArg(k, 5, sizeof(cl_uint), &iters);
             size_t local_mem_size = (size_t)2u * (size_t)required_words * sizeof(uint32_t); // local_size=1 in launch
             clSetKernelArg(k, 6, local_mem_size, nullptr);
-        }
-
-        if (WORDS != required_words) {
-            clReleaseKernel(k);
-            ms_out = 0.0;
-            return true;
         }
 
         size_t local = 1u;
@@ -480,16 +478,15 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
 
     auto run_priv_unroll_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
                                       double &ms_out) -> bool {
+        if (WORDS != required_words) {
+            ms_out = 0.0;
+            return true;
+        }
         cl_int kerr = CL_SUCCESS;
         cl_kernel k = clCreateKernel(program, kname, &kerr);
         if (kerr != CL_SUCCESS) {
             std::cerr << "Create kernel " << kname << " failed: " << kerr << std::endl;
             return false;
-        }
-        if (WORDS != required_words) {
-            clReleaseKernel(k);
-            ms_out = 0.0;
-            return true;
         }
         clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
         if (is_mul) {
@@ -527,16 +524,15 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     auto run_priv_unroll_mtn_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
                                          size_t local_size, size_t meta_words,
                                          double &ms_out) -> bool {
+        if (WORDS != required_words) {
+            ms_out = 0.0;
+            return true;
+        }
         cl_int kerr = CL_SUCCESS;
         cl_kernel k = clCreateKernel(program, kname, &kerr);
         if (kerr != CL_SUCCESS) {
             std::cerr << "Create kernel " << kname << " failed: " << kerr << std::endl;
             return false;
-        }
-        if (WORDS != required_words) {
-            clReleaseKernel(k);
-            ms_out = 0.0;
-            return true;
         }
         clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
         size_t local_mem_size = ((size_t)FIXED_4096_WORDS + 2u + (size_t)FIXED_4096_WORDS +
@@ -590,16 +586,15 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
 
     auto run_priv_fips_mt_kernel = [&](const char *kname, bool is_mul, uint32_t required_words,
                                        size_t local_size, size_t local_u32, double &ms_out) -> bool {
+        if (WORDS != required_words) {
+            ms_out = 0.0;
+            return true;
+        }
         cl_int kerr = CL_SUCCESS;
         cl_kernel k = clCreateKernel(program, kname, &kerr);
         if (kerr != CL_SUCCESS) {
             std::cerr << "Create kernel " << kname << " failed: " << kerr << std::endl;
             return false;
-        }
-        if (WORDS != required_words) {
-            clReleaseKernel(k);
-            ms_out = 0.0;
-            return true;
         }
         clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
         size_t local_mem_size = local_u32 * sizeof(uint32_t);

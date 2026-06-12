@@ -36,16 +36,28 @@
 #define ECM_STAGE1_I24_U32_BLSUB 0
 #endif
 
-#ifndef ECM_STAGE1_FORCE_UNROLL32
-#define ECM_STAGE1_FORCE_UNROLL32 0
+#ifndef ECM_STAGE1_MUL_FORCE_UNROLL32
+#define ECM_STAGE1_MUL_FORCE_UNROLL32 0
 #endif
 
-#ifndef ECM_STAGE1_FORCE_UNROLL384
-#define ECM_STAGE1_FORCE_UNROLL384 0
+#ifndef ECM_STAGE1_MUL_FORCE_UNROLL384
+#define ECM_STAGE1_MUL_FORCE_UNROLL384 0
 #endif
 
-#ifndef ECM_STAGE1_FORCE_PRIV_OPT
-#define ECM_STAGE1_FORCE_PRIV_OPT 0
+#ifndef ECM_STAGE1_MUL_FORCE_PRIV_OPT
+#define ECM_STAGE1_MUL_FORCE_PRIV_OPT 0
+#endif
+
+#ifndef ECM_STAGE1_SQR_FORCE_UNROLL32
+#define ECM_STAGE1_SQR_FORCE_UNROLL32 0
+#endif
+
+#ifndef ECM_STAGE1_SQR_FORCE_UNROLL384
+#define ECM_STAGE1_SQR_FORCE_UNROLL384 0
+#endif
+
+#ifndef ECM_STAGE1_SQR_FORCE_PRIV_OPT
+#define ECM_STAGE1_SQR_FORCE_PRIV_OPT 0
 #endif
 
 #ifndef ECM_STAGE1_384_LIMBS
@@ -506,16 +518,16 @@ static inline void mont_mul_stage1(uint *out, const uint *a, const uint *b,
         return;
     }
 #endif
-#if ECM_STAGE1_FORCE_UNROLL32
+#if ECM_STAGE1_MUL_FORCE_UNROLL32
     mont_mul_stage1_unroll32(out, a, b, N, np0, limbs);
     return;
 #endif
-#if ECM_STAGE1_FORCE_PRIV_OPT
+#if ECM_STAGE1_MUL_FORCE_PRIV_OPT
     mont_mul_stage1_priv_opt(out, a, b, N, np0, limbs);
     return;
 #endif
     if (limbs == 16u) {
-#if ECM_STAGE1_FORCE_UNROLL384
+#if ECM_STAGE1_MUL_FORCE_UNROLL384
         mont_mul_stage1_unroll_only_384(out, a, b, N, np0);
 #else
         mont_mul_stage1_unroll_only_512(out, a, b, N, np0);
@@ -539,7 +551,29 @@ static inline void mont_sqr_stage1(uint *out, const uint *a,
         return;
     }
 #endif
-    mont_mul_stage1(out, a, a, N, np0, limbs);
+#if ECM_STAGE1_SQR_FORCE_UNROLL32
+    mont_mul_stage1_unroll32(out, a, a, N, np0, limbs);
+    return;
+#endif
+#if ECM_STAGE1_SQR_FORCE_PRIV_OPT
+    mont_mul_stage1_priv_opt(out, a, a, N, np0, limbs);
+    return;
+#endif
+    if (limbs == 16u) {
+#if ECM_STAGE1_SQR_FORCE_UNROLL384
+        mont_mul_stage1_unroll_only_384(out, a, a, N, np0);
+#else
+        mont_mul_stage1_unroll_only_512(out, a, a, N, np0);
+#endif
+    } else if (limbs == 128u) {
+#if ECM_STAGE1_SQR_PATH == 2
+        mont_mul_stage1_fips4096(out, a, a, N, np0);
+#else
+        mont_mul_stage1_unroll64_4096(out, a, a, N, np0);
+#endif
+    } else {
+        mont_mul_stage1_priv_opt(out, a, a, N, np0, limbs);
+    }
 }
 
 // ---------------------------------------------------------------------------

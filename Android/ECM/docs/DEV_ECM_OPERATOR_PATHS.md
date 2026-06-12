@@ -272,12 +272,20 @@ Program 缓存 key 含 **完整源码 + build options**；更改 path 或 N 位�
 
 ## 8. 如何新增一条路径
 
+**Montgomery（&lt;4096-bit）** — 优先改注册表，详见 **[`docs/DEV_OPERATOR_PATH_REGISTRY.md`](../../../docs/DEV_OPERATOR_PATH_REGISTRY.md)**：
+
+1. `kMontPathRegistry[]`（`src/opencl_ecm_mont_path_registry.cpp`）增加一行：id、aliases、`auto_priority`、`n_fits`、`force_macro`。
+2. `ecm_stage1.cl` 实现对应 `mont_mul_stage1_*` 与 `#if` 分支。
+3. **arrays.xml**（可选）— value 与 `aliases` 对齐。
+4. 一般 **不必** 再改 `opencl_ecm_resolve_stage1_mont_mode()` 或 `opencl_ecm_stage1_mont_mode_name()`。
+
+**Add/sub、4096 path、额外 .cl 片段** — 仍按原流程：
+
 1. **arrays.xml** — 在对应 `*_labels` / `*_values` 增加同索引条目。  
-2. **Host 解析** — `opencl_ecm_mont_path.cpp` 或 `opencl_ecm_addsub_path.cpp` 增加字符串 → id。  
-3. **Kernel** — 在 `ecm_stage1.cl`（及必要时 `ecm_stage1_mont4096_paths.cl`）增加 `#if ECM_STAGE1_*` 分支。  
-4. **ensure_ecm_kernel** — 若需额外 `.cl` 片段或新 `-D`，在 `cgbn_stage1_opencl.cpp` 拼接源码与 `snprintf(opts, ...)`。  
-5. **日志名** — 更新 `opencl_ecm_stage1_mont_mode_name()` 或 `opencl_ecm_addsub_path_name()`，便于对照 `GPU: stage1 operators:` 行。  
-6. **Rebuild** — 修改 repo 内 `cgbn/...` 后执行 Gradle build，触发 `syncEcmStage1Kernels`。
+2. **Host 解析** — `opencl_ecm_addsub_path.cpp` 或 4096 字符串（`opencl_ecm_mont_path.cpp`）。  
+3. **Kernel** — `ecm_stage1.cl` / `ecm_stage1_mont4096_paths.cl`。  
+4. **ensure_ecm_kernel** — 额外源码或 `-D`（`cgbn_stage1_opencl.cpp`）；mont 32-bit 强制宏已由 `opencl_ecm_stage1_mont_build_flags()` 推导。  
+5. **Rebuild** — Gradle `syncEcmStage1Kernels`。
 
 ---
 
@@ -503,6 +511,8 @@ add/sub **没有** mul/sqr 那种单一的 `n_bit_size` 阈值函数；与 Montg
 | JNI / 运行 | `Android/ECM/app/src/main/cpp/ecm_android_run.cpp` |
 | Stage-1 host | `src/cgbn_stage1_opencl.cpp` |
 | Montgomery path | `src/opencl_ecm_mont_path.cpp`, `.h` |
+| Montgomery 注册表 | `src/opencl_ecm_mont_path_registry.cpp`, `include/opencl_ecm_path_registry.h` |
+| 注册表设计文档 | `docs/DEV_OPERATOR_PATH_REGISTRY.md` |
 | Add/sub path | `src/opencl_ecm_addsub_path.cpp`, `.h` |
 | i24 host 算术 | `src/opencl_ecm_limb24.cpp` |
 | 主 OpenCL kernel | `cgbn/backends/opencl/kernels/ecm_stage1.cl` |

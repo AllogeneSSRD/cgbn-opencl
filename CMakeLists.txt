@@ -69,6 +69,7 @@ add_executable(ecm
     src/opencl_ecm_mont.cpp
     src/opencl_ecm_limb24.cpp
     src/opencl_ecm_mont_path.cpp
+    src/opencl_ecm_path_registry.cpp
     src/opencl_ecm_addsub_path.cpp
     src/opencl_ecm_selftest.cpp
 )
