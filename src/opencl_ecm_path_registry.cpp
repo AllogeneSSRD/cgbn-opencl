@@ -1,20 +1,3 @@
-// ============================================================================
-// ECM Stage-1 算子路径注册表（统一实现）
-//
-// 本文件合并了历史上的三个源文件：
-//   opencl_ecm_path_registry.cpp + opencl_ecm_mont_path.cpp + opencl_ecm_addsub_path.cpp
-//
-// 设计要点（去耦合 + 单一数据源）：
-//   1. mul / sqr 共用同一 .cl 文件，仅函数名前缀不同 → 用 ECM_MONT_OPERATORS X-macro
-//      单源定义算子行，分别展开为 kMontMulRegistry / kMontSqrRegistry。
-//   2. add / sub 为镜像族，约束完全一致 → 用 ECM_ADDSUB_OPERATORS X-macro 单源定义，
-//      分别展开为 kAddModRegistry / kSubModRegistry。
-//   3. 解析逻辑（auto 优选 + 别名匹配 + 回退）与算子族无关，由通用模板函数承担。
-//
-// 新增 / 删除算子：见 docs/DEV_OPERATOR_PATH_REGISTRY.md。只需改对应 X-macro 一行 +
-// 新增/删除一个 .cl 文件即可，无需触碰解析器或主内核。
-// ============================================================================
-
 #include "opencl_ecm_path_registry.h"
 
 #include <algorithm>
@@ -25,10 +8,6 @@
 #include <vector>
 
 namespace {
-
-// ---------------------------------------------------------------------------
-// 别名匹配
-// ---------------------------------------------------------------------------
 
 bool alias_matches(const char *path, const char *alias) {
     return path != nullptr && alias != nullptr && strcmp(path, alias) == 0;
@@ -46,10 +25,6 @@ bool aliases_contain(const char *const *aliases, const char *path) {
     return false;
 }
 
-// ---------------------------------------------------------------------------
-// 约束常量
-// ---------------------------------------------------------------------------
-
 constexpr uint16_t kMontNoMinN = 0;
 constexpr uint16_t kMontNoMaxN = 0;
 constexpr uint16_t kMontUnroll384MaxN = 384;
@@ -65,45 +40,22 @@ constexpr uint16_t kAddSub512Container = 512;
 constexpr uint16_t kAddSub384MaxN = 378;
 constexpr uint16_t kAddSub512MaxN = 506;
 
-// ---------------------------------------------------------------------------
-// 别名数组（mul / sqr 各一份；side-prefixed 别名为历史兼容键）
-// ---------------------------------------------------------------------------
+#define ECM_MONT_ALIAS_TABLE(side, S)                                                              \
+    static const char *const kMontAliases_##side##_unroll384[] = {                                 \
+        "unroll_only_384", "mont_" S "_priv_unroll_only_384", nullptr};                            \
+    static const char *const kMontAliases_##side##_unroll512[] = {                                 \
+        "unroll_only_512", "mont_" S "_priv_unroll_only_512", nullptr};                            \
+    static const char *const kMontAliases_##side##_unroll64_4096[] = {"unroll64_4096", nullptr};   \
+    static const char *const kMontAliases_##side##_fips4096[] = {"fips4096", nullptr};             \
+    static const char *const kMontAliases_##side##_fips4096_mt8[] = {"fips4096_mt8", nullptr};     \
+    static const char *const kMontAliases_##side##_fips4096_mt16[] = {"fips4096_mt16", nullptr};   \
+    static const char *const kMontAliases_##side##_unroll32[] = {                                  \
+        "unroll32", "mont_" S "_priv_unroll32", "mont_" S "_stage1_unroll32", nullptr};           \
+    static const char *const kMontAliases_##side##_priv_opt[] = {                                  \
+        "priv_opt", "mont_" S "_priv_opt", "mont_" S "_stage1_priv_opt", nullptr};
 
-static const char *const kMulAliases_unroll384[] = {"unroll_only_384",
-                                                    "mont_mul_priv_unroll_only_384", nullptr};
-static const char *const kMulAliases_unroll512[] = {"unroll_only_512",
-                                                    "mont_mul_priv_unroll_only_512", nullptr};
-static const char *const kMulAliases_unroll64_4096[] = {"unroll64_4096", nullptr};
-static const char *const kMulAliases_unroll64_4096_mt2[] = {"unroll64_4096_mt2", nullptr};
-static const char *const kMulAliases_fips4096[] = {"fips4096", nullptr};
-static const char *const kMulAliases_fips4096_mt8[] = {"fips4096_mt8", nullptr};
-static const char *const kMulAliases_fips4096_mt16[] = {"fips4096_mt16", nullptr};
-static const char *const kMulAliases_unroll32[] = {"unroll32", "mont_mul_priv_unroll32",
-                                                   "mont_mul_stage1_unroll32", nullptr};
-static const char *const kMulAliases_priv_opt[] = {"priv_opt", "mont_mul_priv_opt",
-                                                   "mont_mul_stage1_priv_opt", nullptr};
-
-static const char *const kSqrAliases_unroll384[] = {"unroll_only_384",
-                                                    "mont_sqr_priv_unroll_only_384", nullptr};
-static const char *const kSqrAliases_unroll512[] = {"unroll_only_512",
-                                                    "mont_sqr_priv_unroll_only_512", nullptr};
-static const char *const kSqrAliases_unroll64_4096[] = {"unroll64_4096", nullptr};
-static const char *const kSqrAliases_unroll64_4096_mt2[] = {"unroll64_4096_mt2", nullptr};
-static const char *const kSqrAliases_fips4096[] = {"fips4096", nullptr};
-static const char *const kSqrAliases_fips4096_mt8[] = {"fips4096_mt8", nullptr};
-static const char *const kSqrAliases_fips4096_mt16[] = {"fips4096_mt16", nullptr};
-static const char *const kSqrAliases_unroll32[] = {"unroll32", "mont_sqr_priv_unroll32",
-                                                   "mont_sqr_stage1_unroll32", nullptr};
-static const char *const kSqrAliases_priv_opt[] = {"priv_opt", "mont_sqr_priv_opt",
-                                                   "mont_sqr_stage1_priv_opt", nullptr};
-
-// ---------------------------------------------------------------------------
-// Montgomery 算子单一数据源
-//   X(id, cl_stem, alias_base, prio, minN, maxN, strict, maxContainer,
-//     os, gpu, gpuEx, dedicated, coop, scratch)
-//   cl_name      = "mont_<side>_" cl_stem
-//   kernel_path  = "mont_mul/mont_mul_" cl_stem ".cl"   （mul/sqr 共用 mul 文件）
-// ---------------------------------------------------------------------------
+ECM_MONT_ALIAS_TABLE(mul, "mul")
+ECM_MONT_ALIAS_TABLE(sqr, "sqr")
 
 #define ECM_MONT_OPERATORS(X)                                                                      \
     X(unroll_only_384, unroll_384b, unroll384, 10, kMontNoMinN, kMontUnroll384MaxN, true, 0,        \
@@ -112,8 +64,6 @@ static const char *const kSqrAliases_priv_opt[] = {"priv_opt", "mont_sqr_priv_op
       ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)                                                       \
     X(unroll64_4096, unroll_4096b, unroll64_4096, 21, kMont4096MinN, kMont4096MaxN, false,          \
       kContainer4096Bits, ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)                                   \
-    X(unroll64_4096_mt2, unroll_4096b_mt2, unroll64_4096_mt2, 22, kMont4096MinN, kMont4096MaxN,     \
-      false, kContainer4096Bits, ECM_OS_ANY, ECM_GPU_ANY, 0, true, 2, 389)                          \
     X(fips4096, fips_4096b, fips4096, 23, kMont4096MinN, kMont4096MaxN, false, kContainer4096Bits,  \
       ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)                                                       \
     X(fips4096_mt8, fips_4096b, fips4096_mt8, 24, kMont4096MinN, kMont4096MaxN, false,              \
@@ -126,16 +76,12 @@ static const char *const kSqrAliases_priv_opt[] = {"priv_opt", "mont_sqr_priv_op
       ECM_GPU_ANY, 0, false, 1, 0)
 
 #define ECM_MONT_MUL_ROW(idt, stem, al, ...)                                                       \
-    {#idt, "mont_mul_" #stem, kMulAliases_##al, "mont_mul/mont_mul_" #stem ".cl", __VA_ARGS__},
+    {#idt, "mont_mul_" #stem, kMontAliases_mul_##al, "mont_mul/mont_mul_" #stem ".cl", __VA_ARGS__},
 #define ECM_MONT_SQR_ROW(idt, stem, al, ...)                                                       \
-    {#idt, "mont_sqr_" #stem, kSqrAliases_##al, "mont_mul/mont_mul_" #stem ".cl", __VA_ARGS__},
+    {#idt, "mont_sqr_" #stem, kMontAliases_sqr_##al, "mont_mul/mont_mul_" #stem ".cl", __VA_ARGS__},
 
 constexpr EcmMontPathDescriptor kMontMulRegistry[] = {ECM_MONT_OPERATORS(ECM_MONT_MUL_ROW)};
 constexpr EcmMontPathDescriptor kMontSqrRegistry[] = {ECM_MONT_OPERATORS(ECM_MONT_SQR_ROW)};
-
-// ---------------------------------------------------------------------------
-// add/sub 别名数组
-// ---------------------------------------------------------------------------
 
 static const char *const kAddAliases_asm_4096b[] = {"asm_4096b", "asm_b32", nullptr};
 static const char *const kAddAliases_unroll_4096b[] = {"unroll_4096b", "fused_unroll_b32", nullptr};
@@ -169,12 +115,6 @@ static const char *const kSubAliases_unroll_512b[] = {"unroll_512b", "fused_unro
 static const char *const kSubAliases_fused[] = {"fused", nullptr};
 static const char *const kSubAliases_fused_unroll[] = {"fused_unroll", nullptr};
 
-// ---------------------------------------------------------------------------
-// add/sub 算子单一数据源（add/sub 约束一致；id == cl/path stem）
-//   X(id, prio, minN, maxN, strict, maxContainer, os, gpu, gpuEx)
-//   cl_name     = "<fam>_" id ；kernel_path = "<fam>/<fam>_" id ".cl"
-// ---------------------------------------------------------------------------
-
 #define ECM_ADDSUB_OPERATORS(X)                                                                    \
     X(asm_4096b, 28, kAddSubNoMinN, kAddSubNoMaxN, false, kContainer4096Bits, ECM_OS_ANY,           \
       ECM_GPU_AMD, 0)                                                                               \
@@ -206,10 +146,6 @@ static const char *const kSubAliases_fused_unroll[] = {"fused_unroll", nullptr};
 constexpr EcmAddSubPathDescriptor kAddModRegistry[] = {ECM_ADDSUB_OPERATORS(ECM_ADD_ROW)};
 constexpr EcmAddSubPathDescriptor kSubModRegistry[] = {ECM_ADDSUB_OPERATORS(ECM_SUB_ROW)};
 
-// ---------------------------------------------------------------------------
-// 过滤谓词
-// ---------------------------------------------------------------------------
-
 bool ecm_path_mask_fits(uint32_t required_mask, uint32_t exclude_mask, uint32_t runtime_mask) {
     if (required_mask != 0u && required_mask != ECM_OS_ANY && required_mask != ECM_GPU_ANY) {
         if ((runtime_mask & required_mask) == 0u) {
@@ -222,14 +158,10 @@ bool ecm_path_mask_fits(uint32_t required_mask, uint32_t exclude_mask, uint32_t 
     return true;
 }
 
-// ---------------------------------------------------------------------------
-// 源码片段路径
-// ---------------------------------------------------------------------------
-
 static constexpr const char *kEcmStage1CommonConfig = "common/stage1_config.h.cl";
 static constexpr const char *kEcmStage1CommonMpPriv = "common/mp_priv.h.cl";
-static constexpr const char *kEcmStage1LadderHelpers = "common/ladder_helpers.cl";
-static constexpr const char *kEcmStage1AsmCommon = "common/asm_common.inc.cl";
+static constexpr const char *kEcmStage1LadderHelpers = "common/ladder_helpers.h.cl";
+static constexpr const char *kEcmStage1AsmCommon = "common/asm_common.h.cl";
 static constexpr const char *kEcmStage1OperatorIface = "common/operator_iface.h.cl";
 static constexpr const char *kEcmStage1Coop = "ecm_stage1_coop.cl";
 static constexpr const char *kEcmStage1Entry = "ecm_stage1.cl";
@@ -251,10 +183,10 @@ bool plan_needs_asm_common(const EcmStage1KernelBuildPlan &plan) {
 int stage1_coop_wg_for_plan(const EcmStage1KernelBuildPlan &plan) {
     int coop_wg = 1;
     if (plan.limbs == kContainer4096Limbs) {
-        if (plan.mul != nullptr && ecm_mont_path_is_4096_dedicated(plan.mul)) {
+        if (plan.mul != nullptr) {
             coop_wg = std::max(coop_wg, static_cast<int>(plan.mul->coop_work_group_size));
         }
-        if (plan.sqr != nullptr && ecm_mont_path_is_4096_dedicated(plan.sqr)) {
+        if (plan.sqr != nullptr) {
             coop_wg = std::max(coop_wg, static_cast<int>(plan.sqr->coop_work_group_size));
         }
     }
@@ -280,10 +212,6 @@ void append_impl_macro(std::string &out, const char *name, const char *symbol) {
     out += symbol;
     out += "\n";
 }
-
-// ---------------------------------------------------------------------------
-// id ↔ 整型 path 映射（coop 整型分发 / Android 旧解析器）
-// ---------------------------------------------------------------------------
 
 int addsub_id_kernel_path(const char *id) {
     if (id == nullptr) {
@@ -320,9 +248,6 @@ int mont_id_kernel_path(const char *id) {
     if (id == nullptr) {
         return ECM_MONT4096_PATH_UNROLL64;
     }
-    if (strcmp(id, "unroll64_4096_mt2") == 0) {
-        return ECM_MONT4096_PATH_UNROLL64_MT2;
-    }
     if (strcmp(id, "fips4096") == 0) {
         return ECM_MONT4096_PATH_FIPS4096;
     }
@@ -334,10 +259,6 @@ int mont_id_kernel_path(const char *id) {
     }
     return ECM_MONT4096_PATH_UNROLL64;
 }
-
-// ---------------------------------------------------------------------------
-// 通用解析器（与算子族无关）
-// ---------------------------------------------------------------------------
 
 std::vector<const EcmMontPathDescriptor *> auto_sorted_mont(const EcmMontPathDescriptor *registry,
                                                             size_t count) {
@@ -490,7 +411,7 @@ void append_define(std::string &opts, const char *macro, int value) {
 }
 
 int mont_kernel_path_for_plan(const EcmMontPathDescriptor *desc, uint32_t plan_limbs) {
-    if (!ecm_mont_path_is_4096_dedicated(desc)) {
+    if (desc == nullptr || !desc->dedicated) {
         return 0;
     }
     const uint32_t operator_limbs = ecm_mont_operator_limbs(desc);
@@ -502,14 +423,6 @@ int mont_kernel_path_for_plan(const EcmMontPathDescriptor *desc, uint32_t plan_l
 
 } // namespace
 
-// ===========================================================================
-// 通用谓词 / 工具（公共）
-// ===========================================================================
-
-bool ecm_mont_path_is_4096_dedicated(const EcmMontPathDescriptor *desc) {
-    return desc != nullptr && desc->dedicated &&
-           desc->max_n_bits >= static_cast<uint16_t>(ECM_PATH_4096_AUTO_MIN_BITS);
-}
 
 bool ecm_path_n_bit_fits(uint16_t min_n_bits, uint16_t max_n_bits, bool max_n_strict,
                          size_t n_bit_size) {
@@ -634,10 +547,6 @@ int ecm_mont_descriptor_kernel_path(const EcmMontPathDescriptor *desc) {
     return mont_id_kernel_path(desc != nullptr ? desc->id : nullptr);
 }
 
-// ===========================================================================
-// 源码拼装
-// ===========================================================================
-
 std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(
     const EcmStage1KernelBuildPlan &plan) {
     std::vector<const char *> paths;
@@ -698,10 +607,6 @@ std::string opencl_ecm_stage1_assemble_kernel_source(
     return source;
 }
 
-// ===========================================================================
-// Montgomery 注册表 / 解析
-// ===========================================================================
-
 size_t opencl_ecm_mont_mul_registry_count() {
     return sizeof(kMontMulRegistry) / sizeof(kMontMulRegistry[0]);
 }
@@ -743,10 +648,6 @@ const EcmMontPathDescriptor *opencl_ecm_resolve_mont_sqr(const char *path, const
     return resolve_mont_side(kMontSqrRegistry, opencl_ecm_mont_sqr_registry_count(), path, ctx,
                              unknown_path);
 }
-
-// ===========================================================================
-// Add/Sub-mod 注册表 / 解析
-// ===========================================================================
 
 size_t opencl_ecm_addmod_registry_count() {
     return sizeof(kAddModRegistry) / sizeof(kAddModRegistry[0]);
@@ -790,10 +691,6 @@ const EcmAddSubPathDescriptor *opencl_ecm_resolve_submod_path(const char *path,
     return resolve_addsub_side(kSubModRegistry, opencl_ecm_submod_registry_count(), path, ctx);
 }
 
-// ===========================================================================
-// 构建计划组装 / 选项
-// ===========================================================================
-
 EcmStage1KernelBuildPlan opencl_ecm_stage1_make_build_plan(
     uint32_t limbs, uint32_t tpi, const EcmMontPathDescriptor *mul,
     const EcmMontPathDescriptor *sqr, const EcmAddSubPathDescriptor *add,
@@ -836,10 +733,10 @@ std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildP
     const int coop_wg = stage1_coop_wg_for_plan(plan);
     int coop_scratch = 0;
     if (plan.limbs == kContainer4096Limbs) {
-        if (plan.mul != nullptr && ecm_mont_path_is_4096_dedicated(plan.mul)) {
+        if (plan.mul != nullptr && plan.mul->coop_work_group_size > 1u) {
             coop_scratch = std::max(coop_scratch, static_cast<int>(plan.mul->local_scratch_u32));
         }
-        if (plan.sqr != nullptr && ecm_mont_path_is_4096_dedicated(plan.sqr)) {
+        if (plan.sqr != nullptr && plan.sqr->coop_work_group_size > 1u) {
             coop_scratch = std::max(coop_scratch, static_cast<int>(plan.sqr->local_scratch_u32));
         }
     }
@@ -852,10 +749,6 @@ std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildP
 
     return opts;
 }
-
-// ===========================================================================
-// 兼容封装 —— 原 opencl_ecm_mont_path.cpp
-// ===========================================================================
 
 const EcmMontPathDescriptor *opencl_ecm_stage1_compatible_mont_fallback(size_t n_bit_size) {
     EcmPathContext ctx{};
@@ -884,7 +777,7 @@ int opencl_ecm_parse_mont4096_path(const char *path, size_t n_bit_size) {
     ctx.n_bit_size = n_bit_size;
     ctx.container_limbs = static_cast<uint32_t>(ECM_PATH_4096_CONTAINER_BITS / 32u);
     const EcmMontPathDescriptor *desc = opencl_ecm_resolve_mont_mul(path, ctx, nullptr);
-    if (desc == nullptr || !ecm_mont_path_is_4096_dedicated(desc)) {
+    if (desc == nullptr || !desc->dedicated) {
         return ECM_MONT4096_PATH_UNROLL64;
     }
     return ecm_mont_descriptor_kernel_path(desc);
@@ -929,10 +822,6 @@ const char *opencl_ecm_stage1_mont_mode_name(ecm_stage1_mont_mode mode) {
 const char *opencl_ecm_stage1_mont_sqr_mode_name(ecm_stage1_mont_mode mode) {
     return opencl_ecm_mont_sqr_cl_name(opencl_ecm_mont_sqr_descriptor(mode));
 }
-
-// ===========================================================================
-// 兼容封装 —— 原 opencl_ecm_addsub_path.cpp
-// ===========================================================================
 
 int opencl_ecm_parse_addsub_path(const char *path) {
     if (opencl_ecm_path_is_auto(path)) {

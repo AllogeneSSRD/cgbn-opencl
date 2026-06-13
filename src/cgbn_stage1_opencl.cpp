@@ -601,10 +601,10 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
     const uint32_t tpi = plan.tpi;
     int coop_wg = 1;
     if (limbs == 128u) {
-        if (plan.mul != nullptr && ecm_mont_path_is_4096_dedicated(plan.mul)) {
+        if (plan.mul != nullptr) {
             coop_wg = std::max(coop_wg, static_cast<int>(plan.mul->coop_work_group_size));
         }
-        if (plan.sqr != nullptr && ecm_mont_path_is_4096_dedicated(plan.sqr)) {
+        if (plan.sqr != nullptr) {
             coop_wg = std::max(coop_wg, static_cast<int>(plan.sqr->coop_work_group_size));
         }
     }

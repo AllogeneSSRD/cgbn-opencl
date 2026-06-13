@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate stage1 add/sub bit-width paths under add_mod/ and sub_mod/.
-Also writes common/asm_common.inc.cl (shared AMDGCN inline-asm infrastructure)."""
+Also writes common/asm_common.h.cl (shared AMDGCN inline-asm infrastructure)."""
 
 from __future__ import annotations
 
@@ -158,7 +158,7 @@ def write_asm_common() -> None:
         body = emit_sub_block(limbs, global_addr=False, fix_in_block=True)
         lines.append(f"#ifndef {guard}\n#define {guard}\n{body}#endif\n")
     lines.append("#endif // __AMDGCN__\n")
-    path = COMMON / "asm_common.inc.cl"
+    path = COMMON / "asm_common.h.cl"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(lines), encoding="utf-8")
     print(f"Wrote {path}")

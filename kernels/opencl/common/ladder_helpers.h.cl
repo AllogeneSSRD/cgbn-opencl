@@ -1,4 +1,5 @@
 // Curve ladder helpers (independent of operator selection).
+// 依赖 common/mp_priv.h.cl 中的 mp_ge / mp_sub_n 等基础 limb 原语。
 
 static inline void mp_shift_left_1_mod(uint *r, const uint *a, const uint *N, uint limbs) {
     uint carry = 0u;
@@ -27,4 +28,3 @@ static inline void maybe_mont_normalize(uint *r, const uint *N, uint limbs) {
     (void)limbs;
 #endif
 }
-

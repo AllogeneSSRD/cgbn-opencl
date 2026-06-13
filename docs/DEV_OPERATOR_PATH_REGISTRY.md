@@ -120,8 +120,8 @@ struct EcmMontPathDescriptor {           // add/sub 版去掉最后三个字段
     uint32_t os_mask;          // OS 过滤（ECM_OS_*，ANY=不限）
     uint32_t gpu_vendor_mask;  // 厂商白名单（ECM_GPU_*，ANY=不限）
     uint32_t gpu_vendor_exclude_mask; // 厂商黑名单
-    bool     dedicated;        // 固定位宽算子（mont 专用）
-    uint8_t  coop_work_group_size;    // 协作工作组（4096 专用）
+    bool     dedicated;        // 固定位宽算子（384b/512b/4096 一视同仁）
+    uint8_t  coop_work_group_size;    // 协作工作组大小：==1 单线程，>1 多线程
     uint16_t local_scratch_u32;       // 本地内存占用（4096 专用）
 };
 ```
@@ -134,6 +134,15 @@ struct EcmMontPathDescriptor {           // add/sub 版去掉最后三个字段
 3. 别名无法匹配 → 置 `unknown_path`（mont）/ 返回 `nullptr`（addsub）。
 
 `*_fits()` 依次校验：N 位宽区间、容器位宽、OS 掩码、GPU 厂商白/黑名单、dedicated 容器约束。
+
+**关于固定位宽算子（dedicated）**：384b / 512b / 4096 都是同一类固定位宽算子，没有「4096 专用」
+的特殊判定。它们之间唯一的额外区别是 `coop_work_group_size`：==1 为单线程（在普通内核里直接
+运行），>1 为多线程协作算子（加载 `ecm_stage1_coop.cl`）。协作 scratch / 整型 path 等也一律按
+`coop_work_group_size` 与 `dedicated` 判定，不再有 `is_4096_dedicated` 之类的特例函数。
+
+**别名单一数据源**：mul / sqr 的别名数组由 `ECM_MONT_ALIAS_TABLE(side, S)` 宏按 side 展开两次
+生成（side-prefixed 兼容键如 `mont_mul_priv_*` / `mont_sqr_priv_*` 通过字符串字面量拼接自动产生），
+不再手工维护两份。
 
 ---
 
@@ -178,8 +187,8 @@ struct EcmMontPathDescriptor {           // add/sub 版去掉最后三个字段
 `opencl_ecm_stage1_assemble_kernel_source(plan, load_file)` 顺序拼接：
 
 1. 注入 `#define ECM_STAGE1_{MUL,SQR,ADD,SUB}_IMPL <cl_name>`
-2. `common/stage1_config.h.cl` → `common/mp_priv.h.cl` → `common/ladder_helpers.cl`
-3. `common/asm_common.inc.cl`（仅当所选 add/sub 路径名含 `_asm_`）
+2. `common/stage1_config.h.cl` → `common/mp_priv.h.cl` → `common/ladder_helpers.h.cl`
+3. `common/asm_common.h.cl`（仅当所选 add/sub 路径名含 `_asm_`）
 4. 所选算子文件（mul, sqr, add, sub —— 按 `kernel_path` 去重）
 5. `common/operator_iface.h.cl`（宏别名）
 6. `ecm_stage1_coop.cl`（仅当 4096 且 `coop_work_group_size > 1`）
@@ -222,7 +231,16 @@ echo '(2^641-1)' | .\build\Debug\ecm.exe -v -d 1 -gpu -sigma 3:20260611 -gpucurv
 
 ---
 
-## 9. 内核版本
+## 9. common 命名约定
+
+`common/` 下全部文件统一为 `*.h.cl` 后缀（配置、limb 原语、ladder 辅助、算子接口、asm 公共块），
+不再混用 `.cl` / `.inc.cl`。`asm_common.h.cl` 由 `tools/gen_mp_addsub_bits_stage1.py` 生成。
+
+> Android assets（`Android/ECM/app/src/main/assets/kernels/`）是独立副本，重命名后需重新同步资源
+> （`tools/split_ecm_stage1_kernel_tree.py` / kernel_assets 流程）。
+
+## 10. 内核版本
 
 `ECM_STAGE1_KERNEL_REV = 14` —— 宏别名注入架构；注册表三文件合并为单一实现；mul/sqr、add/sub
-采用 X-macro 单一数据源。
+采用 X-macro 单一数据源；mul/sqr 别名亦单源化；删除 `unroll64_4096_mt2`；取消 4096 特殊判定
+（固定位宽算子仅按 `coop_work_group_size` 区分多/单线程）；`common/` 统一 `*.h.cl` 命名。

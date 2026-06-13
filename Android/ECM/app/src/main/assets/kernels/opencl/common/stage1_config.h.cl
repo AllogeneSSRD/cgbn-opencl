@@ -1,0 +1,49 @@
+// ECM stage1 compile-time configuration (host: -DMAX_LIMBS= -DTPI= etc.)
+
+#ifndef MAX_LIMBS
+#define MAX_LIMBS 64
+#endif
+
+#ifndef TPI
+#define TPI 8
+#endif
+
+#ifndef ECM_STAGE1_FORCE_NORMALIZE
+#define ECM_STAGE1_FORCE_NORMALIZE 0
+#endif
+
+#ifndef MP_ADD_MOD_FUSED_UNROLL
+#define MP_ADD_MOD_FUSED_UNROLL 2
+#endif
+
+#ifndef ECM_STAGE1_COOP_WG
+#define ECM_STAGE1_COOP_WG 0
+#endif
+
+#ifndef ECM_STAGE1_COOP_SCRATCH_U32
+#define ECM_STAGE1_COOP_SCRATCH_U32 0
+#endif
+
+#if ECM_STAGE1_COOP_WG > 1
+#define ECM_STAGE1_USE_COOP_WG 1
+#else
+#define ECM_STAGE1_USE_COOP_WG 0
+#endif
+
+#ifndef ECM_STAGE1_384_LIMBS
+#define ECM_STAGE1_384_LIMBS 12u
+#endif
+
+#ifndef ECM_STAGE1_512_CONTAINER_LIMBS
+#define ECM_STAGE1_512_CONTAINER_LIMBS 16u
+#endif
+
+#if MAX_LIMBS <= 16
+#define ECM_ADDSUB_UNROLL_HINT 16
+#elif MAX_LIMBS <= 32
+#define ECM_ADDSUB_UNROLL_HINT 32
+#elif MAX_LIMBS <= 64
+#define ECM_ADDSUB_UNROLL_HINT 64
+#else
+#define ECM_ADDSUB_UNROLL_HINT 32
+#endif

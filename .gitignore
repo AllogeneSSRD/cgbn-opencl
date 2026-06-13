@@ -1,12 +1,14 @@
 
-.vscode/
 .github/
-.refactor/
 .opencl_cache/
-*/__pycache__/
-test/bench
+.refactor/
+.vscode/
+logs/
 build/
 docs/ecm/
+test/bench
+
+*/__pycache__/
 *.save
 *-*signature.txt
 
