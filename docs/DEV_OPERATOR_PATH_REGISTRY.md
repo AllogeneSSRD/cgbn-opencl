@@ -1,109 +1,228 @@
-# 算子路径注册表（宏别名注入架构）
+# 算子路径注册表 —— 去耦合可扩展架构（开发者指南）
 
-Stage-1 **Montgomery mul/sqr** 与 **add/sub-mod** 路径集中在注册表中定义与选择，Host 端通过宏别名注入将选定算子绑定到统一接口。桌面与 Android 共用 `src/opencl_ecm_path_registry.cpp`。
+Stage-1 的 **Montgomery mul/sqr** 与 **add/sub-mod** 算子，其「选择 → 注入 → 拼装」全流程
+集中在单一注册表中。主内核与算子实现 **完全解耦**：主内核只调用宏别名，Host 端通过宏注入
+把选定算子绑定到统一接口。桌面与 Android 共用同一份 `src/opencl_ecm_path_registry.cpp`。
 
-内核命名规范见 [`kernels/opencl/README.md`](../kernels/opencl/README.md)。
+> 本文档同时是「如何新增 / 删除一个算子」的操作手册，见 [§5](#5-如何新增一个算子)。
 
-## 架构概览
+---
+
+## 1. 架构总览
 
 ```
-Host (C++)                              Kernel (OpenCL)
-──────────────────────────────────────  ──────────────────────────
-汇编源码:
-#define ECM_STAGE1_MUL_IMPL mont_mul_unroll_384b
-#define ECM_STAGE1_SQR_IMPL mont_sqr_unroll_384b
-#define ECM_STAGE1_ADD_IMPL add_mod_unroll_384b
-#define ECM_STAGE1_SUB_IMPL sub_mod_unroll_384b
-                                        ↓
-                                       operator_iface.h.cl:
-                                       #define mont_mul ECM_STAGE1_MUL_IMPL
-                                       #define mont_sqr ECM_STAGE1_SQR_IMPL
-                                       #define add_mod ECM_STAGE1_ADD_IMPL
-                                       #define sub_mod ECM_STAGE1_SUB_IMPL
-                                        ↓
-                                       ecm_stage1.cl:
-                                       void double_add_v2(...) {
-                                           mont_mul(q, AA, BB, N, np0, limbs);
-                                           add_mod(w, DA, CB, N, limbs);
-                                           ...
-                                       }
+Host (C++)                                  Kernel (OpenCL)
+──────────────────────────────────────────  ────────────────────────────
+opencl_ecm_path_registry.cpp                注入的汇编头：
+  ├─ ECM_MONT_OPERATORS  (单一数据源)         #define ECM_STAGE1_MUL_IMPL mont_mul_unroll_384b
+  ├─ ECM_ADDSUB_OPERATORS(单一数据源)         #define ECM_STAGE1_SQR_IMPL mont_sqr_unroll_384b
+  │                                           #define ECM_STAGE1_ADD_IMPL add_mod_unroll_384b
+  ├─ resolve_mont_side()  通用解析            #define ECM_STAGE1_SUB_IMPL sub_mod_unroll_384b
+  ├─ resolve_addsub_side()通用解析                       ↓
+  └─ assemble_kernel_source()  拼装           common/operator_iface.h.cl:
+                                                #define mont_mul ECM_STAGE1_MUL_IMPL
+                                                #define add_mod  ECM_STAGE1_ADD_IMPL ...
+                                                         ↓
+                                              ecm_stage1.cl:  只调用 mont_mul / mont_sqr /
+                                              add_mod / sub_mod，无任何 #ifdef 算子分支。
 ```
 
-主内核 `ecm_stage1.cl` 只调用宏别名 `mont_mul`/`mont_sqr`/`add_mod`/`sub_mod`，无任何 `#ifdef` 算子分支，无 4096 硬编码。
+**解耦的三层边界**
 
-## 目录与命名
+| 层 | 职责 | 改一个算子是否需要动它 |
+|----|------|----------------------|
+| 主内核 `ecm_stage1.cl` | ladder 逻辑，只用宏别名 | 否 |
+| 接口 `operator_iface.h.cl` | 宏别名 → 注入符号 | 否 |
+| 注册表 `opencl_ecm_path_registry.cpp` | 描述符表 + 解析 + 拼装 | 是（仅一行） |
+| 算子 `.cl` 文件 | 具体实现 | 是（新增/删除一个文件） |
 
-| 算子族 | 目录 | 文件命名 | `cl_name` 示例 |
-|--------|------|----------|---------------|
-| Montgomery mul + sqr | `mont_mul/` | `mont_mul_{variant}_{bits}b.cl` | `mont_mul_unroll_384b` / `mont_sqr_unroll_384b` |
-| Add mod | `add_mod/` | `add_mod_{variant}_{bits}b.cl` | `add_mod_unroll_384b` |
-| Sub mod | `sub_mod/` | `sub_mod_{variant}_{bits}b.cl` | `sub_mod_unroll_384b` |
-| 公共配置 | `common/` | `stage1_config.h.cl`, `mp_priv.h.cl`, `ladder_helpers.cl`, `operator_iface.h.cl` | — |
-| 主入口 | — | `ecm_stage1.cl` | — |
-| Coop 补充 | — | `ecm_stage1_coop.cl` | 仅 `ECM_STAGE1_COOP_WG > 1` 时加载 |
+---
 
-**命名规则：** `cl_name` == OpenCL 函数名 == 文件名主干（位数后缀带 `b`，如 `384b`）。同一个 mul 文件同时导出 `mont_mul_*` 和 `mont_sqr_*`（sqr 内部调用 mul）。
+## 2. 源文件布局（本次重构后）
 
-## 汇编加载顺序
+| 文件 | 角色 |
+|------|------|
+| `include/opencl_ecm_path_registry.h` | **唯一公共头**。描述符、枚举、全部对外函数声明。 |
+| `src/opencl_ecm_path_registry.cpp` | **唯一实现**。注册表数据源 + 通用解析器 + 拼装 + 兼容封装。 |
 
-`opencl_ecm_stage1_assemble_kernel_source(plan, load_file)` 按以下顺序拼接源码：
+> 历史上的 `opencl_ecm_mont_path.{h,cpp}` 与 `opencl_ecm_addsub_path.{h,cpp}` 已**合并删除**，
+> 其全部公共接口迁入上面两个文件，调用方无需改动函数名。
 
-1. **注入宏**：`#define ECM_STAGE1_MUL_IMPL <plan.mul->cl_name>` 等 4 个宏
-2. `common/stage1_config.h.cl` — 编译期配置（`MAX_LIMBS`, `TPI`, `COOP_WG` 等）
-3. `common/mp_priv.h.cl` — 基础 limb 原语（`mp_ge`, `mp_sub_n`, `mp_copy` 等）
-4. `common/ladder_helpers.cl` — 与算子无关的 ladder 辅助函数
-5. 已选算子文件（mul, sqr, add, sub — 按 `kernel_path` 去重）
-6. `common/operator_iface.h.cl` — 别名 `mont_mul`/`mont_sqr`/`add_mod`/`sub_mod`
-7. `ecm_stage1_coop.cl` — 仅当 4096 位且 `coop_work_group_size > 1` 时加载
-8. `ecm_stage1.cl` — 主 ladder 入口
+内核目录：
 
-Host 通过 `load_ecm_stage1_kernel_file()` 加载文件；根目录 `kernels/opencl/`，环境变量 `ECM_KERNEL_ROOT` 可覆盖。
+| 目录 | 角色 |
+|------|------|
+| `kernels/opencl/common/` | 配置、limb 原语、ladder 辅助、算子接口、asm 公共块 |
+| `kernels/opencl/mont_mul/` | Montgomery mul + sqr 实现（mul/sqr 同文件，sqr 内部调 mul） |
+| `kernels/opencl/add_mod/` | 模加算子 |
+| `kernels/opencl/sub_mod/` | 模减算子 |
+| `kernels/opencl/ecm_stage1.cl` | 主 ladder 入口 |
+| `kernels/opencl/ecm_stage1_coop.cl` | 4096 位协作工作组补充（仅 `COOP_WG>1` 时加载） |
 
-## 描述符字段
+---
+
+## 3. 单一数据源（X-macro）
+
+去冗余的核心：**mul 与 sqr 共用同一 `.cl` 文件**（仅函数名前缀不同），**add 与 sub 是约束完全
+一致的镜像族**。因此不再维护四张几乎重复的表，而是两张「单一数据源」宏，按算子族各展开两次：
 
 ```cpp
-struct EcmMontPathDescriptor {
-    const char *id;           // CLI 参数 / 别名匹配 (如 "unroll_only_384")
-    const char *cl_name;      // OpenCL 函数名 (如 "mont_mul_unroll_384b")
-    const char *const *aliases;
-    const char *kernel_path;  // 相对 kernels/opencl/ (如 "mont_mul/mont_mul_unroll_384b.cl")
-    int8_t auto_priority;     // 自动选择优先级 (值越小越优先，-1 表示仅手动)
-    uint16_t min_n_bits;      // 最小 N 位宽
-    uint16_t max_n_bits;      // 最大 N 位宽
-    bool max_n_strict;        // max_n_bits 是否严格上限
-    uint16_t max_container_bits;
-    uint32_t os_mask;         // OS 过滤 (ECM_OS_*)
-    uint32_t gpu_vendor_mask; // GPU 厂商过滤 (ECM_GPU_*)
-    uint32_t gpu_vendor_exclude_mask;
-    bool dedicated;           // 是否为固定宽度算子
-    uint8_t coop_work_group_size; // 合作工作组大小 (4096 位专用)
-    uint16_t local_scratch_u32;   // 本地内存占用量
-    const char *force_macro;  // 已废弃 (宏别名注入后不再需要)
-};
+// Montgomery：每行一个算子，展开出 kMontMulRegistry / kMontSqrRegistry
+#define ECM_MONT_OPERATORS(X)                                                  \
+    X(unroll_only_384, unroll_384b, unroll384, 10, kMontNoMinN,                \
+      kMontUnroll384MaxN, true, 0, ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)     \
+    ... /* 其余算子各一行 */
 
-// add/sub 描述符结构类似，无 dedicated/coop/scratch 字段
-struct EcmAddSubPathDescriptor { ... };
+#define ECM_MONT_MUL_ROW(idt, stem, al, ...) \
+    {#idt, "mont_mul_" #stem, kMulAliases_##al, "mont_mul/mont_mul_" #stem ".cl", __VA_ARGS__},
+#define ECM_MONT_SQR_ROW(idt, stem, al, ...) \
+    {#idt, "mont_sqr_" #stem, kSqrAliases_##al, "mont_mul/mont_mul_" #stem ".cl", __VA_ARGS__},
+
+constexpr EcmMontPathDescriptor kMontMulRegistry[] = {ECM_MONT_OPERATORS(ECM_MONT_MUL_ROW)};
+constexpr EcmMontPathDescriptor kMontSqrRegistry[] = {ECM_MONT_OPERATORS(ECM_MONT_SQR_ROW)};
 ```
 
-## 4096 位 Coop 路径
+```cpp
+// add/sub：id 即文件/函数 stem，展开出 kAddModRegistry / kSubModRegistry
+#define ECM_ADDSUB_OPERATORS(X)                                                \
+    X(asm_4096b, 28, kAddSubNoMinN, kAddSubNoMaxN, false, kContainer4096Bits,  \
+      ECM_OS_ANY, ECM_GPU_AMD, 0)                                              \
+    ... /* 其余算子各一行 */
 
-4096 位协作工作组（`ECM_STAGE1_COOP_WG > 1`）使用 `ecm_stage1_coop.cl` 作为补充：
+#define ECM_ADD_ROW(idt, ...) {#idt, "add_mod_" #idt, kAddAliases_##idt, "add_mod/add_mod_" #idt ".cl", __VA_ARGS__},
+#define ECM_SUB_ROW(idt, ...) {#idt, "sub_mod_" #idt, kSubAliases_##idt, "sub_mod/sub_mod_" #idt ".cl", __VA_ARGS__},
+```
 
-- 定义 `kernel_double_add`（`reqd_work_group_size` 版本），使用 `__local` 内存 + barrier
-- 内部通过 `ECM_STAGE1_MUL_PATH`/`ECM_STAGE1_SQR_PATH` 整数枚举分发到具体的 4096 协作算子
-- 主入口 `ecm_stage1.cl` 的 `kernel_double_add` 被 `#if !ECM_STAGE1_USE_COOP_WG` 包围，二者互斥
-- 构建选项中仍保留 `ECM_STAGE1_MUL_PATH` 等枚举（仅 coop 内部使用）
+**命名铁律（X-macro 依赖它）**
 
-## 生成器
+- mont：`cl_name == "mont_<side>_" + stem`，`kernel_path == "mont_mul/mont_mul_" + stem + ".cl"`
+  （mul/sqr 共用 mul 文件）。
+- add/sub：`cl_name == "<fam>_" + id`，`kernel_path == "<fam>/<fam>_" + id + ".cl"`。
+- `cl_name` == OpenCL 函数名 == 文件名主干。位宽后缀带 `b`（如 `384b`）。
 
-| 工具 | 输出目标 |
-|------|---------|
-| `tools/gen_mp_addsub_bits_stage1.py` | `add_mod/add_mod_unroll_{bits}b.cl`, `sub_mod/sub_mod_unroll_{bits}b.cl` 及 asm 变体 |
-| `tools/gen_mp_addsub_asm_block16_stage1.py` | `add_mod/add_mod_asm_512b.cl`, `sub_mod/sub_mod_asm_512b.cl` |
-| `tools/gen_mp_addsub_asm_block32_stage1.py` | `add_mod/add_mod_asm_4096b.cl`, `sub_mod/sub_mod_asm_4096b.cl` |
+只要遵守命名铁律，新增算子就只是宏里加一行。
 
-生成器输出函数命名遵循 `{op}_{variant}_{bits}b` 格式，包含 `*_body` 内部实现和带 `limbs` 校验的外层包装。
+---
 
-## 内核版本
+## 4. 描述符字段
 
-`ECM_STAGE1_KERNEL_REV=13` —— 宏别名注入架构，算子文件独立，dispatch.cl 已移除。
+```cpp
+struct EcmMontPathDescriptor {           // add/sub 版去掉最后三个字段
+    const char *id;            // CLI/别名匹配键
+    const char *cl_name;       // OpenCL 函数名
+    const char *const *aliases;// 以 nullptr 结尾的别名数组
+    const char *kernel_path;   // 相对 kernels/opencl/
+    int8_t  auto_priority;     // 自动选择优先级，越小越优先；-1=仅手动
+    uint16_t min_n_bits;       // N 最小位宽（0=不限）
+    uint16_t max_n_bits;       // N 最大位宽（0=不限），判定时按 N+CARRY
+    bool     max_n_strict;     // max 是否取严格小于
+    uint16_t max_container_bits;// 要求的最小容器位宽
+    uint32_t os_mask;          // OS 过滤（ECM_OS_*，ANY=不限）
+    uint32_t gpu_vendor_mask;  // 厂商白名单（ECM_GPU_*，ANY=不限）
+    uint32_t gpu_vendor_exclude_mask; // 厂商黑名单
+    bool     dedicated;        // 固定位宽算子（mont 专用）
+    uint8_t  coop_work_group_size;    // 协作工作组（4096 专用）
+    uint16_t local_scratch_u32;       // 本地内存占用（4096 专用）
+};
+```
+
+选择逻辑（`resolve_*_side`）：
+
+1. `auto`/空/`default` → 按 `auto_priority` 升序取第一个 `*_fits()` 通过者；全不通过则回退
+   （mont 回退 `priv_opt`→`unroll_only_512`；addsub 回退 `fused_unroll`）。
+2. 显式别名 → 命中后若 `*_fits()` 通过即用；否则在不低于该算子优先级的范围内自动回退。
+3. 别名无法匹配 → 置 `unknown_path`（mont）/ 返回 `nullptr`（addsub）。
+
+`*_fits()` 依次校验：N 位宽区间、容器位宽、OS 掩码、GPU 厂商白/黑名单、dedicated 容器约束。
+
+---
+
+## 5. 如何新增一个算子
+
+以新增一个 add-mod 算子 `myvariant`（适用 ≤256 位、全平台）为例：
+
+1. **写内核文件** `kernels/opencl/add_mod/add_mod_myvariant.cl`，导出
+   `add_mod_myvariant(uint *r, const uint *a, const uint *b, const uint *N, uint limbs)`。
+   sub 同理放 `sub_mod/sub_mod_myvariant.cl`，导出 `int sub_mod_myvariant(...)`。
+   - 必须 **自包含**：只能依赖 `common/` 里始终加载的原语（`mp_priv.h.cl` 等），
+     不能调用其他算子文件里的函数（拼装时只会加载被选中的算子文件）。
+2. **加别名数组**（若只有默认别名，数组就一项 + `nullptr`）：
+   ```cpp
+   static const char *const kAddAliases_myvariant[] = {"myvariant", nullptr};
+   static const char *const kSubAliases_myvariant[] = {"myvariant", nullptr};
+   ```
+3. **在 `ECM_ADDSUB_OPERATORS(X)` 加一行**（id 必须等于文件/函数 stem）：
+   ```cpp
+   X(myvariant, 18, kAddSubNoMinN, 256, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0)
+   ```
+   优先级 18 表示比现有 128b(20) 更优先被自动选中（按需调整）。
+4. 若该 id 需要走 4096 协作整型分发或被 Android legacy 解析，再到 `addsub_id_kernel_path()`
+   / `ecm_stage1.cl` 的 `ECM_ADDSUB_PATH_*` 同步一个枚举值；普通算子无需此步。
+5. **重新构建并验证**（见 [§7](#7-验证)）。
+
+新增 mont 算子类似：写 `mont_mul/mont_mul_<stem>.cl`（同时导出 `mont_mul_<stem>` 与
+`mont_sqr_<stem>`），加 `kMulAliases_*`/`kSqrAliases_*`，在 `ECM_MONT_OPERATORS` 加一行。
+4096 固定宽算子需正确设置 `dedicated/coop_work_group_size/local_scratch_u32`。
+
+### 删除一个算子
+
+1. 删除 `ECM_*_OPERATORS` 中对应行与其别名数组。
+2. 删除对应 `.cl` 文件。
+3. 若它出现在 `addsub_id_kernel_path()` / `mont_id_kernel_path()` / coop 整型分发中，一并清理。
+4. 重新构建验证。
+
+---
+
+## 6. 汇编加载顺序
+
+`opencl_ecm_stage1_assemble_kernel_source(plan, load_file)` 顺序拼接：
+
+1. 注入 `#define ECM_STAGE1_{MUL,SQR,ADD,SUB}_IMPL <cl_name>`
+2. `common/stage1_config.h.cl` → `common/mp_priv.h.cl` → `common/ladder_helpers.cl`
+3. `common/asm_common.inc.cl`（仅当所选 add/sub 路径名含 `_asm_`）
+4. 所选算子文件（mul, sqr, add, sub —— 按 `kernel_path` 去重）
+5. `common/operator_iface.h.cl`（宏别名）
+6. `ecm_stage1_coop.cl`（仅当 4096 且 `coop_work_group_size > 1`）
+7. `ecm_stage1.cl`（主入口）
+
+根目录 `kernels/opencl/`，环境变量 `ECM_KERNEL_ROOT` 可覆盖。
+
+---
+
+## 7. 验证
+
+C++ 注册表逻辑可独立于 GPU 做**行为等价**校验（本次重构即如此验证：合并前后对
+~38 个 path 字符串 × 12 个位宽 × 7 个容器 × 3 个 OS × 4 个 GPU 的解析结果、注册表全量字段、
+构建选项与源文件列表，逐字节一致）。
+
+GPU 端冒烟测试：
+
+```powershell
+cd d:\code\MPA-OpenCl
+D:\code\vcpkg\downloads\tools\cmake-4.3.2-windows\cmake-4.3.2-windows-x86_64\bin\cmake --build build --config Debug --target ecm
+echo '(2^151-1)' | .\build\Debug\ecm.exe -v -d 1 -gpu -sigma 3:2026     -gpucurves 16  1e4 0
+echo '(2^421-1)' | .\build\Debug\ecm.exe -v -d 1 -gpu -sigma 3:20260611 -gpucurves 256 1e5 0
+echo '(2^347-1)' | .\build\Debug\ecm.exe -v -d 1 -gpu -sigma 3:561219477 -gpucurves 32 1e5 0
+echo '(2^641-1)' | .\build\Debug\ecm.exe -v -d 1 -gpu -sigma 3:20260611 -gpucurves 32  1e4 0
+```
+
+---
+
+## 8. 内核冗余的后续合并路线（待 GPU 实测）
+
+本次已合并 **Host 端**（三文件→一文件、四表→两单源、删除 `force_macro` 与未用的
+`EcmPathDescriptor`、修复 4 个无法编译的 `unroll_4096b/512b` 算子文件）。内核 `.cl` 仍有可压缩空间，
+因涉及性能须在目标 GPU 实测后再合，列为后续：
+
+- `add_mod_unroll_{128,192,256,384}b.cl` 与 `sub_mod_*` 是按位宽全展开的生成文件，结构同构。
+  可由 `tools/gen_mp_addsub_bits_stage1.py` 统一生成，源文件只保留生成器 + 模板，减少手工副本。
+- 各位宽 `unroll_*` 与通用 `fused_unroll`（按 `MAX_LIMBS` 展开）语义接近；差异在于位宽专用版本
+  只对 N 实际宽度做运算而非整容器宽度，属性能优化。合并前需对比各位宽 kernel 实测吞吐。
+- `add_mod` 与 `sub_mod` 互为镜像，可考虑由同一模板宏生成两族，进一步减少重复。
+
+---
+
+## 9. 内核版本
+
+`ECM_STAGE1_KERNEL_REV = 14` —— 宏别名注入架构；注册表三文件合并为单一实现；mul/sqr、add/sub
+采用 X-macro 单一数据源。

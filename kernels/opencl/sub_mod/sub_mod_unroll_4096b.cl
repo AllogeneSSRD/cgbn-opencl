@@ -1,5 +1,5 @@
 // Extracted stage1 sub_mod/unroll_4096b.cl
-static inline static inline int sub_mod_unroll_4096b_body(uint *r, const uint *a, const uint *b,
+static inline int sub_mod_unroll_4096b_body(uint *r, const uint *a, const uint *b,
                                                    const uint *N) {
     ulong br = 0ul;
     #pragma unroll
@@ -29,5 +29,6 @@ static inline static inline int sub_mod_unroll_4096b_body(uint *r, const uint *a
 }
 
 static inline int sub_mod_unroll_4096b(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
-    return sub_mod_unroll_4096b_body(r, a, b, N, limbs);
+    if (limbs == 128u) { return sub_mod_unroll_4096b_body(r, a, b, N); }
+    return 0;
 }

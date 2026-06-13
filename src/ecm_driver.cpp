@@ -27,7 +27,7 @@
 
 #include "opencl_ecm_entry.h"
 #include "opencl_ecm_save.h"
-#include "opencl_ecm_addsub_path.h"
+#include "opencl_ecm_path_registry.h"
 #include "ecm.h"
 #include "cgbn_stage1.h"
 #include "opencl_ecm_log.h"

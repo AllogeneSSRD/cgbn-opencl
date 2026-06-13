@@ -7,7 +7,6 @@
 #include "opencl_ecm_debug_utils.h"
 #include "opencl_ecm_log.h"
 #include "opencl_ecm_mont.h"
-#include "opencl_ecm_mont_path.h"
 #include "opencl_ecm_path_registry.h"
 #include "opencl_ecm_selftest.h"
 

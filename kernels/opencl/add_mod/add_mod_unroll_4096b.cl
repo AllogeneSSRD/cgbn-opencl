@@ -1,5 +1,5 @@
 // Extracted stage1 add_mod/unroll_4096b.cl
-static inline static inline void add_mod_unroll_4096b_body(uint *r, const uint *a, const uint *b, const uint *N) {
+static inline void add_mod_unroll_4096b_body(uint *r, const uint *a, const uint *b, const uint *N) {
     ulong carry_add = 0ul;
     ulong carry_sub = 1ul;
 
@@ -30,6 +30,6 @@ static inline static inline void add_mod_unroll_4096b_body(uint *r, const uint *
 }
 
 static inline void add_mod_unroll_4096b(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
-    add_mod_unroll_4096b_body(r, a, b, N, limbs);
+    if (limbs == 128u) { add_mod_unroll_4096b_body(r, a, b, N); }
     (void)limbs;
 }
