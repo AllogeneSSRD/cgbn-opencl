@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
 
     const uint32_t limbs = (uint32_t)bits / 32u;
     std::string bench_src =
-        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_addsub_bench.cl");
+        cgbn::opencl::load_kernel_file("bench/ecm_addsub_bench.cl");
     if (bench_src.empty()) {
         std::cerr << "Failed to load ecm_addsub_bench.cl" << std::endl;
         cgbn::opencl::destroy_context(ctx);
@@ -82,10 +82,10 @@ int main(int argc, char **argv) {
     const EcmAddSubBuildManifest manifest =
         opencl_ecm_addsub_build_manifest((uint32_t)limbs, asm_enabled, asm_b64);
     for (const std::string &rel : manifest.source_paths) {
-        if (rel == "cgbn/backends/opencl/kernels/ecm_addsub_bench.cl") {
+        if (rel == "bench/ecm_addsub_bench.cl") {
             continue;
         }
-        const std::string extra = cgbn::opencl::load_text_file(rel.c_str());
+        const std::string extra = cgbn::opencl::load_kernel_file(rel.c_str());
         if (!extra.empty()) {
             bench_src += "\n" + extra;
         }

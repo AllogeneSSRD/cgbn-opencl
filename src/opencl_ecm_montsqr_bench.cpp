@@ -187,25 +187,25 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     }
 
     std::string mont_priv =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_priv.cl");
     std::string mont_priv_bench_src =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_bench.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_priv_bench.cl");
     std::string mont_priv_opt =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_opt.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_priv_opt.cl");
     std::string mont_mul_manual_src = cgbn::opencl::load_kernel_file(
-        "cgbn/backends/opencl/kernels/mont_mul_unroll_only_512_manual_generated.cl");
+        "bench/mont_mul_unroll_only_512_manual_generated.cl");
     std::string mont_mul_asm_fused_src =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_mul_asm_fused.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_mul_asm_fused.cl");
     std::string mont_mul_asm_block8_src = cgbn::opencl::load_kernel_file(
-        "cgbn/backends/opencl/kernels/mont_mul_asm_block8_generated.cl");
+        "bench/mont_mul_asm_block8_generated.cl");
     std::string mont_mul_asm_src = cgbn::opencl::load_kernel_file(
-        "cgbn/backends/opencl/kernels/mont_mul_asm_512_generated.cl");
+        "bench/mont_mul_asm_512_generated.cl");
     std::string mont_priv_opt_bench_src =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_opt_bench.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_priv_opt_bench.cl");
     std::string mont_wg_src =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_wg.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_wg.cl");
     std::string mont_wg_bench_src =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_wg_bench.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_wg_bench.cl");
     if (mont_priv.empty() || mont_priv_bench_src.empty() || mont_priv_opt.empty() ||
         mont_priv_opt_bench_src.empty()) {
         std::cerr << "Failed to load mont_priv / mont_priv_opt kernel sources" << std::endl;

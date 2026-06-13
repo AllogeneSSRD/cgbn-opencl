@@ -26,9 +26,9 @@ SCRIPTS = [
 
 
 def main() -> None:
-    MP_GEN = ROOT / "cgbn/backends/opencl/kernels/mp_addsub/generated"
+    MP_GEN = ROOT / "kernels/opencl/bench/mp_addsub/generated"
     MP_GEN.mkdir(parents=True, exist_ok=True)
-    (ROOT / "cgbn/backends/opencl/kernels/mp_addsub/stage1").mkdir(parents=True, exist_ok=True)
+    (ROOT / "kernels/opencl/bench/mp_addsub/stage1").mkdir(parents=True, exist_ok=True)
 
     for name in SCRIPTS:
         path = TOOLS / name

@@ -119,7 +119,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         return false;
     }
 
-    std::string bench_src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_addsub_bench.cl");
+    std::string bench_src = cgbn::opencl::load_kernel_file("bench/ecm_addsub_bench.cl");
     if (bench_src.empty()) {
         std::cerr << "Failed to load ecm_addsub_bench.cl" << std::endl;
         return false;
@@ -143,7 +143,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         if (rel.find("ecm_addsub_bench.cl") != std::string::npos) {
             continue;
         }
-        std::string part = cgbn::opencl::load_text_file(rel.c_str());
+        std::string part = cgbn::opencl::load_kernel_file(rel.c_str());
         if (part.empty()) {
             std::cerr << "Warning: missing " << rel << " (run python tools/mp_addsub/gen_all.py)\n";
             continue;

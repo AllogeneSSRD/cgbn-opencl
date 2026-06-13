@@ -1,17 +1,86 @@
 // ECM stage1 ladder — operator-free; implementations bound via ECM_STAGE1_*_IMPL macros.
 
 // ---------------------------------------------------------------------------
-// Scalar multiply (stage1 algorithm): r = r * m mod N.
-// Uses Host-injected mont_mul operator (same as the main double_add_v2
-// ladder operator set) for the modular reduction step.
+// Single-limb Montgomery multiplication helpers (R = 2^32).
+// mul_ui32_limbs / shift_right_32_limbs are shared with ecm_stage1_coop.
 // ---------------------------------------------------------------------------
 
-static inline void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
-    uint m_arr[MAX_LIMBS];
-    for (uint i = 0u; i < limbs; ++i) m_arr[i] = 0u;
-    m_arr[0] = m;
-    mont_mul(r, r, m_arr, N, np0, limbs);
-    maybe_mont_normalize(r, N, limbs);
+static inline uint mul_ui32_limbs(uint *r, uint m, uint limbs) {
+    ulong carry = 0ul;
+    for (uint i = 0u; i < limbs; ++i) {
+        ulong prod = (ulong)r[i] * (ulong)m + carry;
+        r[i] = (uint)prod;
+        carry = prod >> 32;
+    }
+    return (uint)carry;
+}
+
+static inline void shift_right_32_limbs(uint *r, uint limbs) {
+    for (uint i = 0u; i + 1u < limbs; ++i) {
+        r[i] = r[i + 1u];
+    }
+    r[limbs - 1u] = 0u;
+}
+
+// ---------------------------------------------------------------------------
+// special_mult_ui32 — single-limb Montgomery multiply (R = 2^32).
+//
+// CIOS pattern (same as mont_mul_unroll_384b), just one outer iteration
+// because the multiplier m is a single 32-bit limb.  NOT inlined:
+// keeping it as a separate call avoids blowing up register pressure
+// in double_add_v2 / run_double_add_instance (see mont_mul_unroll_512b).
+//
+//   • shift fused into the reduction loop (CIOS standard)
+//   • final conditional subtraction is branchless via bitmask
+// ---------------------------------------------------------------------------
+static void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
+    uint t[MAX_LIMBS + 1u];
+    for (uint i = 0u; i <= limbs; ++i) t[i] = 0u;
+
+    // 1) product: t = r * m  (single-limb CIOS outer iteration)
+    {
+        ulong carry = 0ul;
+        for (uint j = 0u; j < limbs; ++j) {
+            ulong uv = (ulong)t[j] + (ulong)m * (ulong)r[j] + carry;
+            t[j] = (uint)uv;
+            carry = uv >> 32;
+        }
+        t[limbs] = (uint)carry;
+    }
+
+    // 2) reduction: t = (t + (t[0]*np0) * N) >> 32
+    {
+        uint mp = (uint)((ulong)t[0] * (ulong)np0);
+        ulong carry = 0ul;
+        for (uint j = 0u; j < limbs; ++j) {
+            ulong uv = (ulong)t[j] + (ulong)mp * (ulong)N[j] + carry;
+            if (j > 0u) {
+                t[j - 1u] = (uint)uv;
+            }
+            carry = uv >> 32;
+        }
+        ulong top = (ulong)t[limbs] + carry;
+        t[limbs - 1u] = (uint)top;
+        t[limbs] = (uint)(top >> 32);
+    }
+
+    // 3) branchless conditional subtraction (same pattern as mont_mul_unroll_384b)
+    {
+        ulong borrow = 0ul;
+        uint D[MAX_LIMBS];
+        for (uint i = 0u; i < limbs; ++i) {
+            ulong tv = (ulong)t[i];
+            ulong nv = (ulong)N[i];
+            ulong w = tv - nv - borrow;
+            D[i] = (uint)w;
+            borrow = (tv < nv + borrow) ? 1ul : 0ul;
+        }
+        uint need_sub = (t[limbs] != 0u) ? 1u : (borrow == 0ul ? 1u : 0u);
+        uint mask = 0u - need_sub;
+        for (uint i = 0u; i < limbs; ++i) {
+            r[i] = (D[i] & mask) | (t[i] & ~mask);
+        }
+    }
 }
 
 static inline void special_mult_stage1(uint *r, uint m, const uint *N, uint np0, uint limbs) {

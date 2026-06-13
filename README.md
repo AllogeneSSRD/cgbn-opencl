@@ -120,7 +120,7 @@ build\Debug\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 |------|------|----------|
 | OpenCL 实现总览 | stage-1 主机/内核分工、与 CUDA 差异 | [docs/OPENCL_IMPLEMENTATION.md](docs/OPENCL_IMPLEMENTATION.md) |
 | 程序二进制缓存 | FNV-1a 键、`/.opencl_cache/` | 实现见 `cgbn/backends/opencl/impl_opencl.cpp`；变量见下表 |
-| 内核树与 manifest | `.cl` 注册、路径枚举 | [cgbn/backends/opencl/kernels/mp_addsub/README.md](cgbn/backends/opencl/kernels/mp_addsub/README.md) |
+| 内核树与 manifest | `.cl` 注册、路径枚举 | [kernels/opencl/bench/mp_addsub/README.md](kernels/opencl/bench/mp_addsub/README.md) |
 | 调试与 env | `ECM_PROFILE_OPS`、`ECM_VERIFY_GPU_*` 等 | [docs/DEBUG_PARAMETERS_GUIDE.md](docs/DEBUG_PARAMETERS_GUIDE.md) |
 
 ### 环境变量
@@ -215,7 +215,7 @@ adb shell run-as com.example.ecm ls -la code_cache/opencl_cache/
 | 文档 / 入口 | 简介 |
 |-------------|------|
 | [tools/DISASM_SETUP.md](tools/DISASM_SETUP.md) | Windows 安装 objdump / llvm-objdump，配合 ISA 导出 |
-| [cgbn/backends/opencl/kernels/mp_addsub/README.md](cgbn/backends/opencl/kernels/mp_addsub/README.md) | add/sub 内核布局、`gen_all.py` 再生成、bench 优先级 |
+| [kernels/opencl/bench/mp_addsub/README.md](kernels/opencl/bench/mp_addsub/README.md) | add/sub 内核布局、`gen_all.py` 再生成、bench 优先级 |
 | `tools/gen_*.py`、`disasm_*_isa.ps1` | Montgomery/addsub 展开与 asm 块生成；反汇编脚本 |
 
 ### 性能测试（`bench/`）
@@ -264,14 +264,22 @@ adb shell run-as com.example.ecm ls -la code_cache/opencl_cache/
 
 ```
 ECM-OpenCl/
-├── src/                    # ecm 驱动、stage-1 OpenCL 主机、微基准
-├── cgbn/backends/opencl/   # OpenCL 实现与 kernels/
-├── docs/                   # 原理、调试、上游 README 副本
-├── bench/                  # 性能测试与调优记录
-├── tools/                  # 生成器与反汇编
+├── src/                    # ecm driver, stage-1 OpenCL host, micro-benchmarks
+├── include/                # public headers
+├── kernels/opencl/         # OpenCL kernel sources
+│   ├── common/             #   shared helpers, operator interface, mp primitives
+│   ├── mont_mul/           #   Montgomery multiply kernels
+│   ├── add_mod/            #   modular addition kernels
+│   ├── sub_mod/            #   modular subtraction kernels
+│   ├── bench/              #   micro-benchmark kernels (addsub, mont, asm selftest)
+│   └── ecm_stage1*.cl      #   stage-1 ladder entry points
+├── cgbn/backends/opencl/   # OpenCL backend runtime (context, build, cache)
+├── docs/                   # principles, debug, upstream README copies
+├── bench/                  # performance records and tuning notes
+├── tools/                  # generators and disassembly
 ├── Android/ECM/            # Android App
-├── RyzenAI/                # NPU 微基准
-└── test/                   # CUDA/OpenCL 正确性套件（Makefile）
+├── RyzenAI/                # NPU micro-benchmarks
+└── test/                   # CUDA/OpenCL correctness suite (Makefile)
 ```
 
 ---

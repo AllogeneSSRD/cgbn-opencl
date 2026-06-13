@@ -128,7 +128,7 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
 
-    std::string src = cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/selftest.cl");
+    std::string src = cgbn::opencl::load_kernel_file("bench/selftest.cl");
     if (src.empty()) {
         std::cerr << "Failed to load selftest.cl" << std::endl;
         cgbn::opencl::destroy_context(ctx);

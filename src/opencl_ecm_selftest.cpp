@@ -33,7 +33,7 @@ int opencl_ecm_selftest_mont_mul(cgbn::opencl::context_t &ctx, const mpz_t N, ui
                                  uint32_t np0) {
     const uint32_t limbs = bits / 32;
     std::string mont_src =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont.cl");
+        cgbn::opencl::load_kernel_file("bench/mont.cl");
     if (mont_src.empty()) {
         ecm_ts_fprintf(stderr,
                        "GPU: mont.cl not found (add mont.cl to APK assets for self-test)\n");

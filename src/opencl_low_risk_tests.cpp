@@ -495,18 +495,11 @@ bool runBinaryPredicate(cl_context ctx, cl_command_queue queue, cl_program progr
 }
 
 std::string loadKernelSource() {
-    const std::array<const char *, 3> candidates = {
-        "cgbn/backends/opencl/kernels/base.cl",
-        "../cgbn/backends/opencl/kernels/base.cl",
-        "../../cgbn/backends/opencl/kernels/base.cl"
-    };
-
-    for (const char *candidate : candidates) {
-        std::string source = cgbn::opencl::load_text_file(candidate);
-        if (!source.empty()) {
-            return source;
-        }
+    std::string source = cgbn::opencl::load_kernel_file("bench/base.cl");
+    if (!source.empty()) {
+        return source;
     }
+    return std::string();
 
     return R"CLC(
 __kernel void cgbn_set_ui32(__global uint *out, uint value, uint limbs) {

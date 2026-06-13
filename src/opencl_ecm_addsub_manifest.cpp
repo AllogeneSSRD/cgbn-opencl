@@ -28,27 +28,27 @@ EcmAddSubBenchKernel kspec(const char *kname, const char *label, EcmAddSubTier t
 EcmAddSubBuildManifest opencl_ecm_addsub_build_manifest(uint32_t words, bool asm_enabled,
                                                         bool asm_b64_enabled) {
     EcmAddSubBuildManifest m;
-    push_if(m.source_paths, "ecm_addsub_bench.cl");
+    push_if(m.source_paths, "bench/ecm_addsub_bench.cl");
     // Manual full-unroll sources are ~1 MiB and include 4096-bit bodies; skip on Android @1024+.
     const bool skip_manual_unroll = kAndroidBenchLite && words >= 32u;
     if (!skip_manual_unroll) {
-        push_if(m.source_paths, "mp_addsub/generated/add_fused_unroll_manual.cl");
-        push_if(m.source_paths, "mp_addsub/generated/sub_fused_unroll_manual.cl");
+        push_if(m.source_paths, "bench/mp_addsub/generated/add_fused_unroll_manual.cl");
+        push_if(m.source_paths, "bench/mp_addsub/generated/sub_fused_unroll_manual.cl");
     }
-    push_if(m.source_paths, "mp_addsub/generated/fused_unroll_auto.cl");
+    push_if(m.source_paths, "bench/mp_addsub/generated/fused_unroll_auto.cl");
     if (asm_enabled) {
-        push_if(m.source_paths, "mp_addsub/asm_base.cl");
-        push_if(m.source_paths, "mp_addsub/generated/asm_block16.cl");
+        push_if(m.source_paths, "bench/mp_addsub/asm_base.cl");
+        push_if(m.source_paths, "bench/mp_addsub/generated/asm_block16.cl");
         if (words == 128u) {
-            push_if(m.source_paths, "mp_addsub/generated/asm_block32.cl");
-            push_if(m.source_paths, "mp_addsub/generated/asm_sub_block32.cl");
+            push_if(m.source_paths, "bench/mp_addsub/generated/asm_block32.cl");
+            push_if(m.source_paths, "bench/mp_addsub/generated/asm_sub_block32.cl");
             if (asm_b64_enabled) {
-                push_if(m.source_paths, "mp_addsub/generated/asm_block64.cl");
-                push_if(m.source_paths, "mp_addsub/generated/asm_sub_block64.cl");
+                push_if(m.source_paths, "bench/mp_addsub/generated/asm_block64.cl");
+                push_if(m.source_paths, "bench/mp_addsub/generated/asm_sub_block64.cl");
             }
         }
-        push_if(m.source_paths, "mp_addsub/generated/asm_add_kernels.cl");
-        push_if(m.source_paths, "mp_addsub/generated/asm_sub_kernels.cl");
+        push_if(m.source_paths, "bench/mp_addsub/generated/asm_add_kernels.cl");
+        push_if(m.source_paths, "bench/mp_addsub/generated/asm_sub_kernels.cl");
     }
     return m;
 }

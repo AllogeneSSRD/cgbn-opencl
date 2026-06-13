@@ -71,21 +71,21 @@ int main(int argc, char **argv) {
 
     const uint32_t limbs = bits / 32;
     const std::string mont_priv =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_priv.cl");
     const std::string mont_priv_opt =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_opt.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_priv_opt.cl");
     const std::string mont_mul_manual_src = cgbn::opencl::load_kernel_file(
-        "cgbn/backends/opencl/kernels/mont_mul_unroll_only_512_manual_generated.cl");
+        "bench/mont_mul_unroll_only_512_manual_generated.cl");
     std::string mont_priv_bench_src =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_bench.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_priv_bench.cl");
     std::string mont_priv_opt_bench_src =
-        cgbn::opencl::load_kernel_file("cgbn/backends/opencl/kernels/mont_priv_opt_bench.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_priv_opt_bench.cl");
     const std::string bench_src =
-        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/ecm_addsub_bench.cl");
+        cgbn::opencl::load_kernel_file("bench/ecm_addsub_bench.cl");
     const std::string mont_wg_src =
-        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_wg.cl");
     std::string mont_wg_bench_src =
-        cgbn::opencl::load_text_file("cgbn/backends/opencl/kernels/mont_wg_bench.cl");
+        cgbn::opencl::load_kernel_file("bench/mont_wg_bench.cl");
     if (mont_priv.empty() || mont_priv_opt.empty() || mont_priv_bench_src.empty() ||
         mont_priv_opt_bench_src.empty() || bench_src.empty() || mont_wg_src.empty() ||
         mont_wg_bench_src.empty() ||
