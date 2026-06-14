@@ -1,98 +1,5 @@
 // ECM stage1 ladder — operator-free; implementations bound via ECM_STAGE1_*_IMPL macros.
 
-// ---------------------------------------------------------------------------
-// Single-limb Montgomery multiplication helpers (R = 2^32).
-// mul_ui32_limbs / shift_right_32_limbs are shared with ecm_stage1_coop.
-// ---------------------------------------------------------------------------
-
-static inline uint mul_ui32_limbs(uint *r, uint m, uint limbs) {
-    ulong carry = 0ul;
-    for (uint i = 0u; i < limbs; ++i) {
-        ulong prod = (ulong)r[i] * (ulong)m + carry;
-        r[i] = (uint)prod;
-        carry = prod >> 32;
-    }
-    return (uint)carry;
-}
-
-static inline void shift_right_32_limbs(uint *r, uint limbs) {
-    for (uint i = 0u; i + 1u < limbs; ++i) {
-        r[i] = r[i + 1u];
-    }
-    r[limbs - 1u] = 0u;
-}
-
-// ---------------------------------------------------------------------------
-// special_mult_ui32_generic — fallback single-limb Montgomery multiply.
-// Force noinline: isolate register frame from double_add_v2.
-// CIOS pattern — single outer iteration because m is one 32-bit limb.
-// ---------------------------------------------------------------------------
-#ifdef __GNUC__
-__attribute__((noinline))
-#endif
-static void special_mult_ui32_generic(uint *r, uint m, const uint *N, uint np0, uint limbs) {
-    uint t[MAX_LIMBS + 1u];
-    for (uint i = 0u; i <= limbs; ++i) t[i] = 0u;
-
-    // 1) product: t = r * m
-    {
-        ulong carry = 0ul;
-        for (uint j = 0u; j < limbs; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)m * (ulong)r[j] + carry;
-            t[j] = (uint)uv;
-            carry = uv >> 32;
-        }
-        t[limbs] = (uint)carry;
-    }
-
-    // 2) reduction: t = (t + q*N) >> 32  where q = t[0]*np0
-    {
-        uint mp = (uint)((ulong)t[0] * (ulong)np0);
-        ulong carry = 0ul;
-        for (uint j = 0u; j < limbs; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)mp * (ulong)N[j] + carry;
-            if (j > 0u) t[j - 1u] = (uint)uv;
-            carry = uv >> 32;
-        }
-        ulong top = (ulong)t[limbs] + carry;
-        t[limbs - 1u] = (uint)top;
-        t[limbs] = (uint)(top >> 32);
-    }
-
-    // 3) branchless conditional subtraction (same pattern as mont_mul_unroll_512b)
-    {
-        ulong borrow = 0ul;
-        uint D[MAX_LIMBS];
-        for (uint i = 0u; i < limbs; ++i) {
-            ulong tv = (ulong)t[i];
-            ulong nv = (ulong)N[i];
-            ulong w = tv - nv - borrow;
-            D[i] = (uint)w;
-            borrow = (tv < nv + borrow) ? 1ul : 0ul;
-        }
-        uint need_sub = (t[limbs] != 0u) ? 1u : (borrow == 0ul ? 1u : 0u);
-        uint mask = 0u - need_sub;
-        for (uint i = 0u; i < limbs; ++i) {
-            r[i] = (D[i] & mask) | (t[i] & ~mask);
-        }
-    }
-}
-
-#if MAX_LIMBS <= 16
-// Unrolled 512b variant — host injects special_mult_unroll_512b.cl before this file.
-static inline void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
-    special_mult_ui32_unroll_512b(r, m, N, np0, limbs);
-}
-#else
-static void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
-    special_mult_ui32_generic(r, m, N, np0, limbs);
-}
-#endif
-
-static inline void special_mult_stage1(uint *r, uint m, const uint *N, uint np0, uint limbs) {
-    special_mult_ui32(r, m, N, np0, limbs);
-}
-
 static inline void double_add_v2(uint *q, uint *u, uint *w, uint *v, uint d, const uint *N,
                                  uint np0, uint limbs) {
     uint t[MAX_LIMBS], CB[MAX_LIMBS], DA[MAX_LIMBS], AA[MAX_LIMBS], BB[MAX_LIMBS];
@@ -120,7 +27,7 @@ static inline void double_add_v2(uint *q, uint *u, uint *w, uint *v, uint d, con
     (void)sub_mod(K, AA, BB, N, limbs);
 
     mp_copy(dK, K, limbs);
-    special_mult_stage1(dK, d, N, np0, limbs);
+    special_mult(dK, d, N, np0, limbs);
 
     add_mod(u, BB, dK, N, limbs);
     mont_mul(u, K, u, N, np0, limbs);

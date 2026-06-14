@@ -1,23 +1,5 @@
 // ECM stage1 ladder — operator-free; implementations bound via ECM_STAGE1_*_IMPL macros.
 
-// ---------------------------------------------------------------------------
-// Scalar multiply (stage1 algorithm): r = r * m mod N.
-// Uses Host-injected mont_mul operator (same as the main double_add_v2
-// ladder operator set) for the modular reduction step.
-// ---------------------------------------------------------------------------
-
-static inline void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
-    uint m_arr[MAX_LIMBS];
-    for (uint i = 0u; i < limbs; ++i) m_arr[i] = 0u;
-    m_arr[0] = m;
-    mont_mul(r, r, m_arr, N, np0, limbs);
-    maybe_mont_normalize(r, N, limbs);
-}
-
-static inline void special_mult_stage1(uint *r, uint m, const uint *N, uint np0, uint limbs) {
-    special_mult_ui32(r, m, N, np0, limbs);
-}
-
 static inline void double_add_v2(uint *q, uint *u, uint *w, uint *v, uint d, const uint *N,
                                  uint np0, uint limbs) {
     uint t[MAX_LIMBS], CB[MAX_LIMBS], DA[MAX_LIMBS], AA[MAX_LIMBS], BB[MAX_LIMBS];
@@ -45,7 +27,7 @@ static inline void double_add_v2(uint *q, uint *u, uint *w, uint *v, uint d, con
     (void)sub_mod(K, AA, BB, N, limbs);
 
     mp_copy(dK, K, limbs);
-    special_mult_stage1(dK, d, N, np0, limbs);
+    special_mult(dK, d, N, np0, limbs);
 
     add_mod(u, BB, dK, N, limbs);
     mont_mul(u, K, u, N, np0, limbs);

@@ -91,6 +91,7 @@ static int ensure_opencl_context_ready() {
 
 static EcmPathContext make_path_context(uint32_t limbs, cl_device_id dev) {
     EcmPathContext ctx{};
+    ctx.limbs = limbs;
     ctx.n_bit_size = 0;
     ctx.container_limbs = limbs;
     ctx.os_mask = ecm_path_host_os_mask();
@@ -115,10 +116,10 @@ static bool stage1_need_512_container(const EcmMontPathDescriptor *mul_probe,
     ctx.n_bit_size = n_bit_size;
     const EcmAddSubPathDescriptor *add = opencl_ecm_resolve_addmod_path(gpu_add_path, ctx);
     const EcmAddSubPathDescriptor *sub = opencl_ecm_resolve_submod_path(gpu_sub_path, ctx);
-    return (add != nullptr && add->max_container_bits >= 512u) ||
-           (sub != nullptr && sub->max_container_bits >= 512u) ||
-           (mul_probe != nullptr && mul_probe->dedicated && mul_probe->max_n_bits >= 384u) ||
-           (sqr_probe != nullptr && sqr_probe->dedicated && sqr_probe->max_n_bits >= 384u);
+    return (add != nullptr && add->max_container_limbs >= kStage1Container512Limbs) ||
+           (sub != nullptr && sub->max_container_limbs >= kStage1Container512Limbs) ||
+           (mul_probe != nullptr && mul_probe->dedicated && mul_probe->max_limbs >= 12u) ||
+           (sqr_probe != nullptr && sqr_probe->dedicated && sqr_probe->max_limbs >= 12u);
 }
 
 static uint32_t stage1_container_limbs(size_t n_bit_size, uint32_t limbs32,
@@ -158,14 +159,14 @@ static int resolve_addsub_paths(const char *gpu_add_path, const char *gpu_sub_pa
                        gpu_sub_path ? gpu_sub_path : "");
         return -1;
     }
-    if (add->max_container_bits > 0u && limbs * 32u < add->max_container_bits) {
-        ecm_ts_fprintf(stderr, "OpenCL: add path '%s' requires >=%u-bit container, got %u limbs\n",
-                       add->id, add->max_container_bits, limbs);
+    if (add->max_container_limbs > 0u && limbs < add->max_container_limbs) {
+        ecm_ts_fprintf(stderr, "OpenCL: add path '%s' requires >=%u limbs, got %u limbs\n",
+                       add->id, add->max_container_limbs, limbs);
         return -1;
     }
-    if (sub->max_container_bits > 0u && limbs * 32u < sub->max_container_bits) {
-        ecm_ts_fprintf(stderr, "OpenCL: sub path '%s' requires >=%u-bit container, got %u limbs\n",
-                       sub->id, sub->max_container_bits, limbs);
+    if (sub->max_container_limbs > 0u && limbs < sub->max_container_limbs) {
+        ecm_ts_fprintf(stderr, "OpenCL: sub path '%s' requires >=%u limbs, got %u limbs\n",
+                       sub->id, sub->max_container_limbs, limbs);
         return -1;
     }
     *add_out = add;
@@ -547,35 +548,35 @@ static void stage1_clamp_mont_desc(const EcmMontPathDescriptor *&mul,
                                  uint32_t limbs) {
     EcmPathContext ctx = make_path_context(limbs, g_ctx.device);
     ctx.n_bit_size = n_bit_size;
-    if (mul != nullptr && !ecm_mont_path_fits(mul, ctx)) {
-        if (!ecm_path_n_bit_fits(mul->min_n_bits, mul->max_n_bits, mul->max_n_strict, n_bit_size)) {
+    if (mul != nullptr && !ecm_mont_path_fits(mul, ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask)) {
+        if (!ecm_path_limbs_fits(mul->min_limbs, mul->max_limbs, limbs)) {
             ecm_ts_fprintf(stderr,
-                           "Warning: mul %s requires N+%u<%u bits, got %zu; using %s\n", mul->id,
-                           ECM_STAGE1_MONT_CARRY_BITS, mul->max_n_bits, n_bit_size,
+                           "Warning: mul %s requires limbs [%u,%u], got %u; using %s\n", mul->id,
+                           mul->min_limbs, mul->max_limbs, limbs,
                            opencl_ecm_mont_mul_cl_name(
                                opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_UNROLL512)));
             mul = opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_UNROLL512);
-        } else if (!ecm_mont_path_fits(mul, ctx)) {
+        } else if (!ecm_mont_path_fits(mul, ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask)) {
             ecm_ts_fprintf(stderr,
-                           "Warning: mul %s does not fit %u-limb container for N=%zu bits; using %s\n",
-                           mul->id, limbs, n_bit_size,
+                           "Warning: mul %s does not fit %u-limb container; using %s\n",
+                           mul->id, limbs,
                            opencl_ecm_mont_mul_cl_name(
                                opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_PRIV_OPT)));
             mul = opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_PRIV_OPT);
         }
     }
-    if (sqr != nullptr && !ecm_mont_path_fits(sqr, ctx)) {
-        if (!ecm_path_n_bit_fits(sqr->min_n_bits, sqr->max_n_bits, sqr->max_n_strict, n_bit_size)) {
+    if (sqr != nullptr && !ecm_mont_path_fits(sqr, ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask)) {
+        if (!ecm_path_limbs_fits(sqr->min_limbs, sqr->max_limbs, limbs)) {
             ecm_ts_fprintf(stderr,
-                           "Warning: sqr %s requires N+%u<%u bits, got %zu; using %s\n", sqr->id,
-                           ECM_STAGE1_MONT_CARRY_BITS, sqr->max_n_bits, n_bit_size,
+                           "Warning: sqr %s requires limbs [%u,%u], got %u; using %s\n", sqr->id,
+                           sqr->min_limbs, sqr->max_limbs, limbs,
                            opencl_ecm_mont_sqr_cl_name(
                                opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_UNROLL512)));
             sqr = opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_UNROLL512);
-        } else if (!ecm_mont_path_fits(sqr, ctx)) {
+        } else if (!ecm_mont_path_fits(sqr, ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask)) {
             ecm_ts_fprintf(stderr,
-                           "Warning: sqr %s does not fit %u-limb container for N=%zu bits; using %s\n",
-                           sqr->id, limbs, n_bit_size,
+                           "Warning: sqr %s does not fit %u-limb container; using %s\n",
+                           sqr->id, limbs,
                            opencl_ecm_mont_sqr_cl_name(
                                opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_PRIV_OPT)));
             sqr = opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_PRIV_OPT);
@@ -707,12 +708,13 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
     }
     ocl_log_verbose(verbose,
                     "OpenCL: built kernel MAX_LIMBS=%u TPI=%u ADDMOD_UNROLL=%d NORM=%d "
-                    "mul=%s sqr=%s add=%s sub=%s asm_u32=%d asm_u16=%d coop_wg=%d (%.0fms)\n",
+                    "mul=%s sqr=%s add=%s sub=%s special_mult=%s asm_u32=%d asm_u16=%d coop_wg=%d (%.0fms)\n",
                     limbs, tpi, build_plan.add_mod_fused_unroll, build_plan.stage1_force_normalize,
                     plan.mul != nullptr ? plan.mul->id : "unknown",
                     plan.sqr != nullptr ? plan.sqr->id : "unknown",
                     plan.add != nullptr ? plan.add->id : "unknown",
                     plan.sub != nullptr ? plan.sub->id : "unknown",
+                    plan.special_mult != nullptr ? plan.special_mult->id : "unknown",
                     ((plan.add != nullptr && plan.add->kernel_path != nullptr &&
                       strcmp(plan.add->kernel_path, "add_mod/asm_4096b.cl") == 0) ||
                      (plan.sub != nullptr && plan.sub->kernel_path != nullptr &&
@@ -790,8 +792,12 @@ extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mu
     double init_ms = 0.0;
     const uint32_t tpi = choose_effective_tpi(limbs);
     stage1_clamp_mont_desc(mul, sqr, n_log2, limbs);
+    EcmPathContext ctx_sm = make_path_context(limbs, g_ctx.device);
+    ctx_sm.n_bit_size = n_log2;
+    const EcmSpecialMultPathDescriptor *special_mult =
+        opencl_ecm_resolve_special_mult(nullptr, ctx_sm);
     const EcmStage1KernelBuildPlan plan =
-        opencl_ecm_stage1_make_build_plan(limbs, tpi, mul, sqr, add, sub, 1, 2);
+        opencl_ecm_stage1_make_build_plan(limbs, tpi, mul, sqr, add, sub, special_mult, 1, 2);
     return ensure_ecm_kernel(plan, verbose, &init_ms);
 }
 
@@ -910,8 +916,12 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     }
 
     stage1_clamp_mont_desc(mul, sqr, n_log2, limbs);
+    EcmPathContext ctx_sm2 = make_path_context(limbs, g_ctx.device);
+    ctx_sm2.n_bit_size = n_log2;
+    const EcmSpecialMultPathDescriptor *special_mult2 =
+        opencl_ecm_resolve_special_mult(nullptr, ctx_sm2);
     const EcmStage1KernelBuildPlan build_plan =
-        opencl_ecm_stage1_make_build_plan(limbs, tpi, mul, sqr, add, sub, 1, 2);
+        opencl_ecm_stage1_make_build_plan(limbs, tpi, mul, sqr, add, sub, special_mult2, 1, 2);
 
     double device_init_ms = 0.0;
     if (ensure_ecm_kernel(build_plan, verbose, &device_init_ms) != 0) {
@@ -968,8 +978,9 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     const char *mont_sqr_op = opencl_ecm_mont_sqr_cl_name(sqr);
     const char *add_op = add != nullptr ? add->cl_name : "unknown";
     const char *sub_op = sub != nullptr ? sub->cl_name : "unknown";
-    ecm_ts_fprintf(stdout, "GPU: stage1 operators: mul=%s, sqr=%s, add=%s, sub=%s\n", mont_mul_op,
-                   mont_sqr_op, add_op, sub_op);
+    const char *special_op = special_mult2 != nullptr ? special_mult2->cl_name : "special_mult_ui32_generic";
+    ecm_ts_fprintf(stdout, "GPU: stage1 operators: mul=%s, sqr=%s, add=%s, sub=%s, special_mult=%s\n",
+                   mont_mul_op, mont_sqr_op, add_op, sub_op, special_op);
     if (device_init_ms > 0.0) {
         ecm_ts_fprintf(stdout, "GPU: kernel compile/build for this limb size took %.0fms\n",
                 device_init_ms);

@@ -34,6 +34,7 @@ constexpr size_t ECM_PATH_4096_AUTO_MIN_BITS = 3072u;
 constexpr size_t ECM_PATH_4096_CONTAINER_BITS = 4096u;
 
 struct EcmPathContext {
+    uint32_t limbs;
     size_t n_bit_size;
     uint32_t container_limbs;
     uint32_t os_mask;
@@ -46,10 +47,9 @@ struct EcmMontPathDescriptor {
     const char *const *aliases;
     const char *kernel_path;
     int8_t auto_priority;
-    uint16_t min_n_bits;
-    uint16_t max_n_bits;
-    bool max_n_strict;
-    uint16_t max_container_bits;
+    uint32_t min_limbs;
+    uint32_t max_limbs;
+    uint32_t max_container_limbs;
     uint32_t os_mask;
     uint32_t gpu_vendor_mask;
     uint32_t gpu_vendor_exclude_mask;
@@ -64,10 +64,22 @@ struct EcmAddSubPathDescriptor {
     const char *const *aliases;
     const char *kernel_path;
     int8_t auto_priority;
-    uint16_t min_n_bits;
-    uint16_t max_n_bits;
-    bool max_n_strict;
-    uint16_t max_container_bits;
+    uint32_t min_limbs;
+    uint32_t max_limbs;
+    uint32_t max_container_limbs;
+    uint32_t os_mask;
+    uint32_t gpu_vendor_mask;
+    uint32_t gpu_vendor_exclude_mask;
+};
+
+struct EcmSpecialMultPathDescriptor {
+    const char *id;
+    const char *cl_name;
+    const char *const *aliases;
+    const char *kernel_path;
+    int8_t auto_priority;
+    uint32_t min_limbs;
+    uint32_t max_limbs;
     uint32_t os_mask;
     uint32_t gpu_vendor_mask;
     uint32_t gpu_vendor_exclude_mask;
@@ -113,18 +125,20 @@ struct EcmStage1KernelBuildPlan {
     const EcmMontPathDescriptor *sqr;
     const EcmAddSubPathDescriptor *add;
     const EcmAddSubPathDescriptor *sub;
+    const EcmSpecialMultPathDescriptor *special_mult;
 };
 
-bool ecm_path_n_bit_fits(uint16_t min_n_bits, uint16_t max_n_bits, bool max_n_strict,
-                         size_t n_bit_size);
+bool ecm_path_limbs_fits(uint32_t min_limbs, uint32_t max_limbs, uint32_t limbs);
 uint32_t ecm_path_host_os_mask();
 uint32_t ecm_path_gpu_vendor_from_cl_vendor_string(const char *vendor_lower);
 uint32_t ecm_mont_operator_limbs(const EcmMontPathDescriptor *desc);
-bool ecm_mont_path_fits(const EcmMontPathDescriptor *desc, const EcmPathContext &ctx);
-bool ecm_addsub_path_fits(const EcmAddSubPathDescriptor *desc, const EcmPathContext &ctx);
+bool ecm_mont_path_fits(const EcmMontPathDescriptor *desc, uint32_t limbs, uint32_t runtime_mask);
+bool ecm_addsub_path_fits(const EcmAddSubPathDescriptor *desc, uint32_t limbs, uint32_t runtime_mask);
+bool ecm_special_mult_path_fits(const EcmSpecialMultPathDescriptor *desc, uint32_t limbs, uint32_t runtime_mask);
 bool opencl_ecm_path_is_auto(const char *path);
 int ecm_addsub_descriptor_kernel_path(const EcmAddSubPathDescriptor *desc);
 int ecm_mont_descriptor_kernel_path(const EcmMontPathDescriptor *desc);
+int ecm_special_mult_descriptor_kernel_path(const EcmSpecialMultPathDescriptor *desc);
 std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(const EcmStage1KernelBuildPlan &plan);
 std::string opencl_ecm_stage1_assemble_kernel_source(
     const EcmStage1KernelBuildPlan &plan,
@@ -149,19 +163,26 @@ const EcmAddSubPathDescriptor *opencl_ecm_resolve_addmod_path(const char *path,
                                                               const EcmPathContext &ctx);
 const EcmAddSubPathDescriptor *opencl_ecm_resolve_submod_path(const char *path,
                                                               const EcmPathContext &ctx);
+size_t opencl_ecm_special_mult_registry_count();
+const EcmSpecialMultPathDescriptor *opencl_ecm_special_mult_registry_entry(size_t index);
+const EcmSpecialMultPathDescriptor *opencl_ecm_resolve_special_mult(const char *path,
+                                                                     const EcmPathContext &ctx);
 EcmStage1KernelBuildPlan opencl_ecm_stage1_make_build_plan(
     uint32_t limbs, uint32_t tpi, const EcmMontPathDescriptor *mul,
     const EcmMontPathDescriptor *sqr, const EcmAddSubPathDescriptor *add,
-    const EcmAddSubPathDescriptor *sub, int stage1_force_normalize, int add_mod_fused_unroll);
+    const EcmAddSubPathDescriptor *sub, const EcmSpecialMultPathDescriptor *special_mult,
+    int stage1_force_normalize, int add_mod_fused_unroll);
 std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildPlan &plan);
 bool opencl_ecm_stage1_build_plan_equal(const EcmStage1KernelBuildPlan &a,
                                         const EcmStage1KernelBuildPlan &b);
 int opencl_ecm_parse_mont4096_path(const char *path, size_t n_bit_size);
-const EcmMontPathDescriptor *opencl_ecm_stage1_compatible_mont_fallback(size_t n_bit_size);
+const EcmMontPathDescriptor *opencl_ecm_stage1_compatible_mont_fallback(size_t n_bit_size, uint32_t limbs);
 const char *opencl_ecm_mont_path_cl_name(const EcmMontPathDescriptor *desc,
                                          const char *fallback_cl_name);
 const char *opencl_ecm_mont_mul_cl_name(const EcmMontPathDescriptor *desc);
 const char *opencl_ecm_mont_sqr_cl_name(const EcmMontPathDescriptor *desc);
+const char *opencl_ecm_special_mult_cl_name(const EcmSpecialMultPathDescriptor *desc,
+                                             const char *fallback_cl_name);
 const char *opencl_ecm_stage1_mont_mode_name(ecm_stage1_mont_mode mode);
 const char *opencl_ecm_stage1_mont_sqr_mode_name(ecm_stage1_mont_mode mode);
 ecm_stage1_mont_mode opencl_ecm_resolve_stage1_mont_mode(const char *gpu_mul_path,
