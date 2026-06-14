@@ -64,13 +64,13 @@ ECM_MONT_ALIAS_TABLE(sqr, "sqr")
 
 #define ECM_MONT_OPERATORS(X)                                                                      \
     X(unroll_only_384, unroll_384b, unroll384, 10, kMontNoMinLimbs, kMontUnroll384MaxLimbs, 0,       \
-      ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)                                                       \
+      ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0)                                            \
     X(unroll_only_512, unroll_512b, unroll512, 20, kMontNoMinLimbs, kMontUnroll512MaxLimbs, 0,       \
-      ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)                                                       \
+      ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)                                                         \
     X(unroll_only_768b, unroll_768b, unroll768, 22, kMontNoMinLimbs, kMontUnroll768MaxLimbs, 0,      \
-      ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)                                                       \
+      ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0)                                            \
     X(unroll_only_1024b, unroll_1024b, unroll1024, 24, kMontNoMinLimbs, kMontUnroll1024MaxLimbs, 0,  \
-      ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)                                                       \
+      ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0)                                                       \
     X(unroll64_4096, unroll_4096b, unroll64_4096, 23, kMont4096MinLimbs, kMont4096MaxLimbs,          \
       kMont4096MaxLimbs, ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)                                   \
     X(fips4096, fips_4096b, fips4096, 27, kMont4096MinLimbs, kMont4096MaxLimbs,                      \
@@ -159,7 +159,7 @@ static const char *const kSpecialMultAliases_unroll_512b[] = {"unroll_512b", nul
 static const char *const kSpecialMultAliases_generic[] = {"generic", nullptr};
 
 #define ECM_SPECIAL_MULT_OPERATORS(X)                                                              \
-    X(unroll_512b, 10, 0u, 16u, ECM_OS_ANY, ECM_GPU_ANY, 0)                                        \
+    X(unroll_512b, 10, 16u, 16u, ECM_OS_ANY, ECM_GPU_ANY, 0)                                        \
     X(generic,    50, 0u,  0u, ECM_OS_ANY, ECM_GPU_ANY, 0)
 
 #define ECM_SPECIAL_MULT_ROW(idt, prio, min_limbs, max_limbs, os_mask, gpu_mask, gpu_excl)         \

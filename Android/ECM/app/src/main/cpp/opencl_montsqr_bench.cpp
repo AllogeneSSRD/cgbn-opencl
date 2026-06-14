@@ -24,7 +24,7 @@ constexpr uint32_t kMaxBenchBits = 8192;
 
 constexpr uint32_t kLimb24Mask = (1u << 24) - 1u;
 constexpr uint32_t kMontI24Limbs512 = 22u;
-constexpr const char* kKernelAssetRoot = "cgbn/backends/opencl/kernels/";
+constexpr const char* kKernelAssetRoot = "kernels/opencl/bench/";
 
 struct MontI24BenchKernel {
     const char* kernel_name;
@@ -173,7 +173,7 @@ std::string build_montsqr_source(uint32_t words, bool use_wg, std::ostringstream
         std::string part = load_kernel_asset(asset_rel.c_str());
         if (part.empty()) {
             log << "missing kernel asset: " << rel << "\n";
-            log << "run Gradle syncMontsqrKernels or rebuild the app\n";
+            log << "run Gradle syncEcmStage1Kernels or rebuild the app\n";
             return {};
         }
         sanitize_mont_part(part, rel);

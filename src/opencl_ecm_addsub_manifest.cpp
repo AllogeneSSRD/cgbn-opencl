@@ -11,10 +11,10 @@ constexpr bool kAndroidBenchLite = true;
 constexpr bool kAndroidBenchLite = false;
 #endif
 
-constexpr const char *kKernelsRoot = "cgbn/backends/opencl/kernels";
-
+// rel paths already carry the "bench/..." prefix and resolve relative to the stage1
+// kernel root (kernels/opencl). No cgbn root prepend anymore.
 void push_if(std::vector<std::string> &paths, const char *rel) {
-    paths.emplace_back(std::string(kKernelsRoot) + "/" + rel);
+    paths.emplace_back(rel);
 }
 
 EcmAddSubBenchKernel kspec(const char *kname, const char *label, EcmAddSubTier tier, bool is_add,

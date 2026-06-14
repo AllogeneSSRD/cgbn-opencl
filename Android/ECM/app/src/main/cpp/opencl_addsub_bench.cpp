@@ -195,7 +195,7 @@ std::string build_addsub_source(uint32_t words, int limb_bits, std::ostringstrea
         src = load_kernel_asset(rel);
         if (src.empty()) {
             log << "missing kernel asset: " << rel << "\n";
-            log << "run Gradle syncAddsubKernels or rebuild the app\n";
+            log << "run Gradle syncEcmStage1Kernels or rebuild the app\n";
         }
         return src;
     }
@@ -204,7 +204,7 @@ std::string build_addsub_source(uint32_t words, int limb_bits, std::ostringstrea
         const std::string part = load_kernel_asset(rel.c_str());
         if (part.empty()) {
             log << "missing kernel asset: " << rel << "\n";
-            log << "run Gradle syncAddsubKernels or rebuild the app\n";
+            log << "run Gradle syncEcmStage1Kernels or rebuild the app\n";
             return {};
         }
         if (!src.empty()) {

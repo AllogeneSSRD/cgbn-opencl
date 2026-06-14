@@ -81,73 +81,16 @@ android {
 
 val mpaRoot = rootProject.projectDir.parentFile.parentFile
 
-val addsubKernelIncludes = arrayOf(
-    "ecm_addsub_bench.cl",
-    "mp_addsub/generated/add_fused_unroll_manual.cl",
-    "mp_addsub/generated/sub_fused_unroll_manual.cl",
-    "mp_addsub/generated/fused_unroll_auto.cl",
-    "mp_addsub/limb24_addsub.cl",
-)
-
-tasks.register<Copy>("syncAddsubKernels") {
-    from(mpaRoot.resolve("cgbn/backends/opencl/kernels")) {
-        addsubKernelIncludes.forEach { include(it) }
-    }
-    into(layout.projectDirectory.dir("src/main/assets/kernels/cgbn/backends/opencl/kernels"))
-}
-
-// Flat mirror (kernels/<name>.cl) for legacy asset paths on device.
-tasks.register<Copy>("syncAddsubKernelsFlat") {
-    from(mpaRoot.resolve("cgbn/backends/opencl/kernels")) {
-        addsubKernelIncludes.forEach { include(it) }
-        eachFile {
-            path = name
-        }
-        includeEmptyDirs = false
-    }
-    into(layout.projectDirectory.dir("src/main/assets/kernels"))
-}
-
-val montsqrKernelIncludes = arrayOf(
-    "mont_priv.cl",
-    "mont_priv_opt.cl",
-    "mont_mul_unroll_only_512_manual_generated.cl",
-    "mont_priv_bench.cl",
-    "mont_priv_opt_bench.cl",
-    "mont_wg.cl",
-    "mont_wg_bench.cl",
-    "mont_mul_unroll_i24.cl",
-    "mont_mul_unroll_i24_384_manual_generated.cl",
-    "mont_mul_unroll_i24_bench.cl",
-)
-
-tasks.register<Copy>("syncMontsqrKernels") {
-    from(mpaRoot.resolve("cgbn/backends/opencl/kernels")) {
-        montsqrKernelIncludes.forEach { include(it) }
-    }
-    into(layout.projectDirectory.dir("src/main/assets/kernels/cgbn/backends/opencl/kernels"))
-}
-
+// All stage1 + bench + selftest kernels now live under kernels/opencl/ (bench/, common/,
+// mont_mul/, add_mod/, sub_mod/, special_mult/). A single sync mirrors the whole tree into
+// assets/kernels/opencl/. The cgbn backend no longer ships any .cl kernels.
 tasks.register<Copy>("syncEcmStage1Kernels") {
     from(mpaRoot.resolve("kernels/opencl"))
     into(layout.projectDirectory.dir("src/main/assets/kernels/opencl"))
 }
 
-tasks.register<Copy>("syncEcmSelftestKernels") {
-    from(mpaRoot.resolve("cgbn/backends/opencl/kernels")) {
-        include("mont.cl")
-    }
-    into(layout.projectDirectory.dir("src/main/assets/kernels/cgbn/backends/opencl/kernels"))
-}
-
 tasks.named("preBuild") {
-    dependsOn(
-        "syncAddsubKernels",
-        "syncAddsubKernelsFlat",
-        "syncMontsqrKernels",
-        "syncEcmStage1Kernels",
-        "syncEcmSelftestKernels",
-    )
+    dependsOn("syncEcmStage1Kernels")
 }
 
 if (ecmAndroidGmpRoot != null) {
