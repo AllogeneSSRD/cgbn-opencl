@@ -23,21 +23,18 @@ static inline void shift_right_32_limbs(uint *r, uint limbs) {
 }
 
 // ---------------------------------------------------------------------------
-// special_mult_ui32 — single-limb Montgomery multiply (R = 2^32).
-//
-// CIOS pattern (same as mont_mul_unroll_384b), just one outer iteration
-// because the multiplier m is a single 32-bit limb.  NOT inlined:
-// keeping it as a separate call avoids blowing up register pressure
-// in double_add_v2 / run_double_add_instance (see mont_mul_unroll_512b).
-//
-//   • shift fused into the reduction loop (CIOS standard)
-//   • final conditional subtraction is branchless via bitmask
+// special_mult_ui32_generic — fallback single-limb Montgomery multiply.
+// Force noinline: isolate register frame from double_add_v2.
+// CIOS pattern — single outer iteration because m is one 32-bit limb.
 // ---------------------------------------------------------------------------
-static void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
+#ifdef __GNUC__
+__attribute__((noinline))
+#endif
+static void special_mult_ui32_generic(uint *r, uint m, const uint *N, uint np0, uint limbs) {
     uint t[MAX_LIMBS + 1u];
     for (uint i = 0u; i <= limbs; ++i) t[i] = 0u;
 
-    // 1) product: t = r * m  (single-limb CIOS outer iteration)
+    // 1) product: t = r * m
     {
         ulong carry = 0ul;
         for (uint j = 0u; j < limbs; ++j) {
@@ -48,15 +45,13 @@ static void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint lim
         t[limbs] = (uint)carry;
     }
 
-    // 2) reduction: t = (t + (t[0]*np0) * N) >> 32
+    // 2) reduction: t = (t + q*N) >> 32  where q = t[0]*np0
     {
         uint mp = (uint)((ulong)t[0] * (ulong)np0);
         ulong carry = 0ul;
         for (uint j = 0u; j < limbs; ++j) {
             ulong uv = (ulong)t[j] + (ulong)mp * (ulong)N[j] + carry;
-            if (j > 0u) {
-                t[j - 1u] = (uint)uv;
-            }
+            if (j > 0u) t[j - 1u] = (uint)uv;
             carry = uv >> 32;
         }
         ulong top = (ulong)t[limbs] + carry;
@@ -64,7 +59,7 @@ static void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint lim
         t[limbs] = (uint)(top >> 32);
     }
 
-    // 3) branchless conditional subtraction (same pattern as mont_mul_unroll_384b)
+    // 3) branchless conditional subtraction (same pattern as mont_mul_unroll_512b)
     {
         ulong borrow = 0ul;
         uint D[MAX_LIMBS];
@@ -82,6 +77,17 @@ static void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint lim
         }
     }
 }
+
+#if MAX_LIMBS <= 16
+// Unrolled 512b variant — host injects special_mult_unroll_512b.cl before this file.
+static inline void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
+    special_mult_ui32_unroll_512b(r, m, N, np0, limbs);
+}
+#else
+static void special_mult_ui32(uint *r, uint m, const uint *N, uint np0, uint limbs) {
+    special_mult_ui32_generic(r, m, N, np0, limbs);
+}
+#endif
 
 static inline void special_mult_stage1(uint *r, uint m, const uint *N, uint np0, uint limbs) {
     special_mult_ui32(r, m, N, np0, limbs);

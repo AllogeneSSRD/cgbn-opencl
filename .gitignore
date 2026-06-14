@@ -1,4 +1,6 @@
 
+.agents
+skills-lock.json
 .github/
 .opencl_cache/
 .refactor/
