@@ -117,9 +117,10 @@ struct EcmMontPathDescriptor {           // add/sub 版去掉最后三个字段
     uint16_t max_n_bits;       // N 最大位宽（0=不限），判定时按 N+CARRY
     bool     max_n_strict;     // max 是否取严格小于
     uint16_t max_container_bits;// 要求的最小容器位宽
-    uint32_t os_mask;          // OS 过滤（ECM_OS_*，ANY=不限）
-    uint32_t gpu_vendor_mask;  // 厂商白名单（ECM_GPU_*，ANY=不限）
-    uint32_t gpu_vendor_exclude_mask; // 厂商黑名单
+    uint32_t os_mask;          // OS 白名单（ECM_OS_*，低 16 位；ANY=不限）
+    uint32_t gpu_vendor_mask;  // GPU 厂商白名单（ECM_GPU_*，高 16 位；ANY=不限）
+    uint32_t gpu_vendor_exclude_mask; // 黑名单：按【完整 runtime mask = OS|GPU】判定，
+                                      // 可排除 OS（如 ECM_OS_ANDROID）或 GPU（如 ECM_GPU_AMD），任意组合
     bool     dedicated;        // 固定位宽算子（384b/512b/4096 一视同仁）
     uint8_t  coop_work_group_size;    // 协作工作组大小：==1 单线程，>1 多线程
     uint16_t local_scratch_u32;       // 本地内存占用（4096 专用）
@@ -239,8 +240,29 @@ echo '(2^641-1)' | .\build\Debug\ecm.exe -v -d 1 -gpu -sigma 3:20260611 -gpucurv
 > Android assets（`Android/ECM/app/src/main/assets/kernels/`）是独立副本，重命名后需重新同步资源
 > （`tools/split_ecm_stage1_kernel_tree.py` / kernel_assets 流程）。
 
-## 10. 内核版本
+## 10. auto / manual 双实现与平台门控
+
+每个展开宽度（192/256/384/512/768/1024）都有两份实现，**共用同一 id/别名**：
+
+| 变体 | 文件 | 形态 | 门控 |
+|------|------|------|------|
+| auto | `mont_mul/mont_mul_unroll_<W>b.cl` | `#pragma unroll` 循环 | `gpu_vendor_exclude_mask = ECM_OS_ANDROID`（桌面/非安卓） |
+| manual | `mont_mul/mont_mul_unroll_manual_<W>b.cl` | 常量下标手工直线 | `os_mask = ECM_OS_ANDROID`（仅安卓） |
+
+`resolve_mont_side` 会在同名别名的多个描述符中**返回第一个 `*_fits()` 通过者**，因此 `--mul unroll_only_512`
+在桌面自动落到 `mont_mul_unroll_512b`、在安卓落到 `mont_mul_unroll_manual_512b`，无需用户区分。手工直线版让
+Adreno/Mali 把 `t[]/B[]/D[]` 提升到寄存器，规避了循环展开版在移动端的运行时崩溃。
+
+两份实现由 `tools/gen_mont_unroll.py` 单源生成，算法逐位等价（已用 bignum 参考向量验证）。新增宽度只需
+在该脚本的 `WIDTHS` 加一行并重新生成。
+
+> 注：当前选择按**容器宽度**而非 N 实际位宽匹配，<512 位的 N 容器恒为 16 limbs，故实际跑批仍主要用 512b；
+> 192/256/384 等更窄变体已就绪，待选择逻辑改为按 N 活跃位宽匹配后即可自动启用（也可显式指定）。
+
+## 11. 内核版本
 
 `ECM_STAGE1_KERNEL_REV = 14` —— 宏别名注入架构；注册表三文件合并为单一实现；mul/sqr、add/sub
 采用 X-macro 单一数据源；mul/sqr 别名亦单源化；删除 `unroll64_4096_mt2`；取消 4096 特殊判定
-（固定位宽算子仅按 `coop_work_group_size` 区分多/单线程）；`common/` 统一 `*.h.cl` 命名。
+（固定位宽算子仅按 `coop_work_group_size` 区分多/单线程）；`common/` 统一 `*.h.cl` 命名；
+OS/GPU 掩码分置低/高 16 位（消除位冲突），exclude 按完整 runtime 判定支持任意组合；
+每个展开宽度拆分 auto(桌面) / manual(安卓) 双实现，由 `tools/gen_mont_unroll.py` 生成。

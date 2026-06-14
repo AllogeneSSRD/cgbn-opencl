@@ -27,7 +27,9 @@ bool aliases_contain(const char *const *aliases, const char *path) {
 
 constexpr uint32_t kMontNoMinLimbs = 0;
 constexpr uint32_t kMontNoMaxLimbs = 0;
-constexpr uint32_t kMontUnroll384MaxLimbs = 11;  // was 384 strict→11 conservative
+constexpr uint32_t kMontUnroll192MaxLimbs = 6;
+constexpr uint32_t kMontUnroll256MaxLimbs = 8;
+constexpr uint32_t kMontUnroll384MaxLimbs = 12;  // was 384 strict→11 conservative
 constexpr uint32_t kMontUnroll512MaxLimbs = 16;
 constexpr uint32_t kMontUnroll768MaxLimbs = 24;
 constexpr uint32_t kMontUnroll1024MaxLimbs = 32;
@@ -42,6 +44,10 @@ constexpr uint32_t kAddSub384MaxLimbs = 12;  // was 378→12
 constexpr uint32_t kAddSub512MaxLimbs = 16;  // was 506→16
 
 #define ECM_MONT_ALIAS_TABLE(side, S)                                                              \
+    static const char *const kMontAliases_##side##_unroll192[] = {                                 \
+        "unroll_only_192", "mont_" S "_priv_unroll_only_192", nullptr};                            \
+    static const char *const kMontAliases_##side##_unroll256[] = {                                 \
+        "unroll_only_256", "mont_" S "_priv_unroll_only_256", nullptr};                            \
     static const char *const kMontAliases_##side##_unroll384[] = {                                 \
         "unroll_only_384", "mont_" S "_priv_unroll_only_384", nullptr};                            \
     static const char *const kMontAliases_##side##_unroll512[] = {                                 \
@@ -62,15 +68,37 @@ constexpr uint32_t kAddSub512MaxLimbs = 16;  // was 506→16
 ECM_MONT_ALIAS_TABLE(mul, "mul")
 ECM_MONT_ALIAS_TABLE(sqr, "sqr")
 
+// Each unrolled width has TWO variants sharing the same id/alias:
+//   auto   (#pragma unroll loop)        -> excluded on Android (gpu_vendor_exclude=ECM_OS_ANDROID)
+//   manual (constant-index straight)    -> Android only (os_mask=ECM_OS_ANDROID)
+// resolve_mont_side returns whichever fits the running platform, so a path like
+// "unroll_only_512" transparently maps to mont_mul_unroll_512b on desktop and
+// mont_mul_unroll_manual_512b on Android. (See docs/DEV_OPERATOR_PATH_REGISTRY.md.)
 #define ECM_MONT_OPERATORS(X)                                                                      \
+    X(unroll_only_192, unroll_192b, unroll192, 6, kMontNoMinLimbs, kMontUnroll192MaxLimbs, 0,       \
+      ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0)                                          \
+    X(unroll_only_256, unroll_256b, unroll256, 8, kMontNoMinLimbs, kMontUnroll256MaxLimbs, 0,       \
+      ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0)                                          \
     X(unroll_only_384, unroll_384b, unroll384, 10, kMontNoMinLimbs, kMontUnroll384MaxLimbs, 0,       \
       ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0)                                            \
     X(unroll_only_512, unroll_512b, unroll512, 20, kMontNoMinLimbs, kMontUnroll512MaxLimbs, 0,       \
-      ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)                                                         \
+      ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0)                                            \
     X(unroll_only_768b, unroll_768b, unroll768, 22, kMontNoMinLimbs, kMontUnroll768MaxLimbs, 0,      \
       ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0)                                            \
     X(unroll_only_1024b, unroll_1024b, unroll1024, 24, kMontNoMinLimbs, kMontUnroll1024MaxLimbs, 0,  \
-      ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0)                                                       \
+      ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0)                                            \
+    X(unroll_only_192, unroll_manual_192b, unroll192, 6, kMontNoMinLimbs, kMontUnroll192MaxLimbs, 0, \
+      ECM_OS_ANDROID, ECM_GPU_ANY, 0, true, 1, 0)                                                    \
+    X(unroll_only_256, unroll_manual_256b, unroll256, 8, kMontNoMinLimbs, kMontUnroll256MaxLimbs, 0, \
+      ECM_OS_ANDROID, ECM_GPU_ANY, 0, true, 1, 0)                                                    \
+    X(unroll_only_384, unroll_manual_384b, unroll384, 10, kMontNoMinLimbs, kMontUnroll384MaxLimbs,   \
+      0, ECM_OS_ANDROID, ECM_GPU_ANY, 0, true, 1, 0)                                                 \
+    X(unroll_only_512, unroll_manual_512b, unroll512, 20, kMontNoMinLimbs, kMontUnroll512MaxLimbs,   \
+      0, ECM_OS_ANDROID, ECM_GPU_ANY, 0, true, 1, 0)                                                 \
+    X(unroll_only_768b, unroll_manual_768b, unroll768, 22, kMontNoMinLimbs, kMontUnroll768MaxLimbs,  \
+      0, ECM_OS_ANDROID, ECM_GPU_ANY, 0, true, 1, 0)                                                 \
+    X(unroll_only_1024b, unroll_manual_1024b, unroll1024, 24, kMontNoMinLimbs,                       \
+      kMontUnroll1024MaxLimbs, 0, ECM_OS_ANDROID, ECM_GPU_ANY, 0, true, 1, 0)                        \
     X(unroll64_4096, unroll_4096b, unroll64_4096, 23, kMont4096MinLimbs, kMont4096MaxLimbs,          \
       kMont4096MaxLimbs, ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)                                   \
     X(fips4096, fips_4096b, fips4096, 27, kMont4096MinLimbs, kMont4096MaxLimbs,                      \
@@ -348,6 +376,11 @@ const EcmMontPathDescriptor *resolve_mont_side(const EcmMontPathDescriptor *regi
         return priv_opt != nullptr ? priv_opt : unroll512;
     }
 
+    // An alias (e.g. "unroll_only_512") may map to several descriptors that differ only by
+    // platform gating — the auto (#pragma unroll) variant for desktop and the manual
+    // constant-index variant for Android. Scan all alias matches and return the first that
+    // actually fits this platform/container; only fall back if none fit.
+    const EcmMontPathDescriptor *alias_hit = nullptr;
     for (size_t i = 0; i < count; ++i) {
         const EcmMontPathDescriptor &desc = registry[i];
         if (!aliases_contain(desc.aliases, path)) {
@@ -356,7 +389,12 @@ const EcmMontPathDescriptor *resolve_mont_side(const EcmMontPathDescriptor *regi
         if (ecm_mont_path_fits(&desc, limbs, runtime_mask)) {
             return &desc;
         }
-        const int min_pri = desc.auto_priority >= 0 ? desc.auto_priority + 1 : 0;
+        if (alias_hit == nullptr) {
+            alias_hit = &desc;
+        }
+    }
+    if (alias_hit != nullptr) {
+        const int min_pri = alias_hit->auto_priority >= 0 ? alias_hit->auto_priority + 1 : 0;
         for (const EcmMontPathDescriptor *fb : auto_sorted_mont(registry, count)) {
             if (fb->auto_priority < min_pri) {
                 continue;
@@ -517,8 +555,12 @@ bool ecm_mont_path_fits(const EcmMontPathDescriptor *desc, uint32_t limbs, uint3
     if (!ecm_path_mask_fits(desc->os_mask, 0, runtime_mask & ECM_OS_ANY)) {
         return false;
     }
-    uint32_t gpu = runtime_mask & ECM_GPU_ANY;
-    if (!ecm_path_mask_fits(desc->gpu_vendor_mask, desc->gpu_vendor_exclude_mask, gpu)) {
+    if (!ecm_path_mask_fits(desc->gpu_vendor_mask, 0u, runtime_mask & ECM_GPU_ANY)) {
+        return false;
+    }
+    // exclude mask is tested against the FULL runtime (OS low bits | GPU high bits),
+    // so it can exclude by OS (e.g. ECM_OS_ANDROID) or by GPU vendor in any combination.
+    if (desc->gpu_vendor_exclude_mask != 0u && (runtime_mask & desc->gpu_vendor_exclude_mask) != 0u) {
         return false;
     }
     if (desc->max_container_limbs == 0) {
@@ -543,8 +585,12 @@ bool ecm_addsub_path_fits(const EcmAddSubPathDescriptor *desc, uint32_t limbs, u
     if (!ecm_path_mask_fits(desc->os_mask, 0, runtime_mask & ECM_OS_ANY)) {
         return false;
     }
-    uint32_t gpu = runtime_mask & ECM_GPU_ANY;
-    if (!ecm_path_mask_fits(desc->gpu_vendor_mask, desc->gpu_vendor_exclude_mask, gpu)) {
+    if (!ecm_path_mask_fits(desc->gpu_vendor_mask, 0u, runtime_mask & ECM_GPU_ANY)) {
+        return false;
+    }
+    // exclude mask is tested against the FULL runtime (OS low bits | GPU high bits),
+    // so it can exclude by OS (e.g. ECM_OS_ANDROID) or by GPU vendor in any combination.
+    if (desc->gpu_vendor_exclude_mask != 0u && (runtime_mask & desc->gpu_vendor_exclude_mask) != 0u) {
         return false;
     }
     return true;
@@ -561,8 +607,12 @@ bool ecm_special_mult_path_fits(const EcmSpecialMultPathDescriptor *desc, uint32
     if (!ecm_path_mask_fits(desc->os_mask, 0, runtime_mask & ECM_OS_ANY)) {
         return false;
     }
-    uint32_t gpu = runtime_mask & ECM_GPU_ANY;
-    if (!ecm_path_mask_fits(desc->gpu_vendor_mask, desc->gpu_vendor_exclude_mask, gpu)) {
+    if (!ecm_path_mask_fits(desc->gpu_vendor_mask, 0u, runtime_mask & ECM_GPU_ANY)) {
+        return false;
+    }
+    // exclude mask is tested against the FULL runtime (OS low bits | GPU high bits),
+    // so it can exclude by OS (e.g. ECM_OS_ANDROID) or by GPU vendor in any combination.
+    if (desc->gpu_vendor_exclude_mask != 0u && (runtime_mask & desc->gpu_vendor_exclude_mask) != 0u) {
         return false;
     }
     return true;

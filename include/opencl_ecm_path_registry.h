@@ -9,23 +9,29 @@
 
 #include "opencl_ecm_mont.h"
 
+// OS and GPU vendor share a single 32-bit "platform mask" but occupy DISJOINT bit ranges:
+//   OS  -> low  16 bits (mask ECM_OS_ANY)
+//   GPU -> high 16 bits (mask ECM_GPU_ANY)
+// so a runtime mask = os_bits | gpu_bits never aliases (previously ECM_OS_ANDROID collided with
+// ECM_GPU_NVIDIA). A descriptor's gpu_vendor_exclude_mask is tested against the FULL runtime mask,
+// so it can exclude by OS (e.g. ECM_OS_ANDROID) or by GPU (e.g. ECM_GPU_AMD) — any combination.
 enum EcmPathOs : uint32_t {
     ECM_OS_WINDOWS = 1u << 0,
     ECM_OS_ANDROID = 1u << 1,
     ECM_OS_LINUX = 1u << 2,
     ECM_OS_MACOS = 1u << 3,
 };
-constexpr uint32_t ECM_OS_ANY = 0xFFFFFFFFu;
+constexpr uint32_t ECM_OS_ANY = 0x0000FFFFu;
 
 enum EcmPathGpuVendor : uint32_t {
-    ECM_GPU_AMD = 1u << 0,
-    ECM_GPU_NVIDIA = 1u << 1,
-    ECM_GPU_INTEL = 1u << 2,
-    ECM_GPU_QUALCOMM = 1u << 3,
-    ECM_GPU_HUAWEI = 1u << 4,
-    ECM_GPU_APPLE = 1u << 5,
+    ECM_GPU_AMD = 1u << 16,
+    ECM_GPU_NVIDIA = 1u << 17,
+    ECM_GPU_INTEL = 1u << 18,
+    ECM_GPU_QUALCOMM = 1u << 19,
+    ECM_GPU_HUAWEI = 1u << 20,
+    ECM_GPU_APPLE = 1u << 21,
 };
-constexpr uint32_t ECM_GPU_ANY = 0xFFFFFFFFu;
+constexpr uint32_t ECM_GPU_ANY = 0xFFFF0000u;
 
 constexpr size_t ECM_STAGE1_MONT_CARRY_BITS = 6u;
 constexpr size_t ECM_STAGE1_UNROLL384_MAX_BITS = 384u;
