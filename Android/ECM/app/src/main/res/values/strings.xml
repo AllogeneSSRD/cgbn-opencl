@@ -31,6 +31,7 @@
     <string name="hint_sqr_path">--sqr</string>
     <string name="hint_add_path">--add</string>
     <string name="hint_sub_path">--sub</string>
+    <string name="hint_special_mult_path">--special-mult</string>
     <string name="btn_run_ecm">运行 ECM (-gpu)</string>
     <string name="chk_verbose">-v 详细输出</string>
     <string name="ecm_advanced_title">高级选项</string>

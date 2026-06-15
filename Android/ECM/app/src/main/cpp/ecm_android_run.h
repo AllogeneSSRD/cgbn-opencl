@@ -17,6 +17,7 @@ struct EcmAndroidRunRequest {
     std::string sqr_path;
     std::string add_path;
     std::string sub_path;
+    std::string special_mult_path;
     std::string save_file;
     bool save_append = false;
 };

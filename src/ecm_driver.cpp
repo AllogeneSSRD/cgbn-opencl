@@ -972,7 +972,8 @@ int main(int argc, char **argv){
                                       params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
                                       params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr,
                                       params->gpu_add_path[0] ? params->gpu_add_path : nullptr,
-                                      params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr);
+                                      params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr,
+                                      nullptr);
         if (prep != 0) {
             std::cerr << "GPU: OpenCL prepare failed" << std::endl;
             mpz_clear(N);

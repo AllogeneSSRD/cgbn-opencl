@@ -16,4 +16,4 @@ test/bench
 
 # Android Studio apk
 Android/ECM/app/debug/
-
+Android/ECM/app/release/

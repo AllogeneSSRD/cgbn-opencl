@@ -46,7 +46,8 @@ void gpu_compute_batch_d(mpz_t d_out, uint32_t sigma, const mpz_t N);
 /* Create OpenCL context, compile kernel for N, print GPU device info (once). */
 int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mul_path,
                        const char *gpu_sqr_path, const char *gpu_add_path,
-                       const char *gpu_sub_path);
+                       const char *gpu_sub_path,
+                       const char *gpu_special_mult_path);
 
 #ifdef __cplusplus
 }

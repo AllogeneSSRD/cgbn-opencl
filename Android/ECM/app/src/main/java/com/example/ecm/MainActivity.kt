@@ -61,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var inputSqrPath: AutoCompleteTextView
     private lateinit var inputAddPath: AutoCompleteTextView
     private lateinit var inputSubPath: AutoCompleteTextView
+    private lateinit var inputSpecialMultPath: AutoCompleteTextView
     private lateinit var chkVerbose: MaterialCheckBox
     private lateinit var ecmAdvancedPanel: LinearLayout
     private lateinit var panelEcm: View
@@ -130,6 +131,7 @@ class MainActivity : AppCompatActivity() {
         inputSqrPath = findViewById(R.id.input_sqr_path)
         inputAddPath = findViewById(R.id.input_add_path)
         inputSubPath = findViewById(R.id.input_sub_path)
+        inputSpecialMultPath = findViewById(R.id.input_special_mult_path)
         chkVerbose = findViewById(R.id.chk_verbose)
         ecmAdvancedPanel = findViewById(R.id.ecm_advanced_panel)
 
@@ -363,27 +365,27 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupEcmPathDropdowns() {
-        bindPathDropdown(inputMulPath, R.array.ecm_mul_path_labels, R.array.ecm_mul_path_values)
-        bindPathDropdown(inputSqrPath, R.array.ecm_sqr_path_labels, R.array.ecm_sqr_path_values)
-        bindPathDropdown(inputAddPath, R.array.ecm_add_path_labels, R.array.ecm_add_path_values)
-        bindPathDropdown(inputSubPath, R.array.ecm_sub_path_labels, R.array.ecm_sub_path_values)
+        bindJniPathDropdown(inputMulPath) { nativeListMulPaths() }
+        bindJniPathDropdown(inputSqrPath) { nativeListSqrPaths() }
+        bindJniPathDropdown(inputAddPath) { nativeListAddPaths() }
+        bindJniPathDropdown(inputSubPath) { nativeListSubPaths() }
+        bindJniPathDropdown(inputSpecialMultPath) { nativeListSpecialMultPaths() }
     }
 
-    private fun bindPathDropdown(
+    private fun bindJniPathDropdown(
         dropdown: AutoCompleteTextView,
-        labelsRes: Int,
-        valuesRes: Int,
         defaultIndex: Int = 0,
+        listFn: () -> String,
     ) {
-        val labels = resources.getStringArray(labelsRes)
-        val values = resources.getStringArray(valuesRes)
-        require(labels.size == values.size)
+        val raw = listFn()
+        val items = raw.split('\n').filter { it.isNotEmpty() }
         dropdown.setAdapter(
-            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, labels),
+            ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, items),
         )
         dropdown.threshold = 0
-        dropdown.setText(labels[defaultIndex], false)
-        dropdown.tag = values
+        if (items.isNotEmpty()) {
+            dropdown.setText(items[defaultIndex], false)
+        }
         dropdown.setOnClickListener { dropdown.showDropDown() }
         dropdown.setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
@@ -393,23 +395,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun selectedPathValue(dropdown: AutoCompleteTextView): String {
-        val labels = dropdown.text?.toString()?.trim().orEmpty()
-        val values = dropdown.tag as? Array<*> ?: return ""
-        val labelArray = resources.getStringArray(
-            when (dropdown.id) {
-                R.id.input_mul_path -> R.array.ecm_mul_path_labels
-                R.id.input_sqr_path -> R.array.ecm_sqr_path_labels
-                R.id.input_add_path -> R.array.ecm_add_path_labels
-                R.id.input_sub_path -> R.array.ecm_sub_path_labels
-                else -> R.array.ecm_mul_path_labels
-            },
-        )
-        for (i in labelArray.indices) {
-            if (labelArray[i] == labels) {
-                return values[i]?.toString().orEmpty()
-            }
-        }
-        return if (labels == "auto" || labels.isEmpty()) "" else labels
+        val text = dropdown.text?.toString()?.trim().orEmpty()
+        return if (text == "auto" || text.isEmpty()) "" else text
     }
 
     private fun pathArgForNative(value: String): String {
@@ -506,6 +493,7 @@ class MainActivity : AppCompatActivity() {
                     pathArgForNative(selectedPathValue(inputSqrPath)),
                     pathArgForNative(selectedPathValue(inputAddPath)),
                     pathArgForNative(selectedPathValue(inputSubPath)),
+                    pathArgForNative(selectedPathValue(inputSpecialMultPath)),
                     saveFile,
                     chkSaveAppend.isChecked,
                     logCallback,
@@ -671,6 +659,7 @@ class MainActivity : AppCompatActivity() {
         inputSqrPath.isEnabled = !busy
         inputAddPath.isEnabled = !busy
         inputSubPath.isEnabled = !busy
+        inputSpecialMultPath.isEnabled = !busy
         chkVerbose.isEnabled = !busy
     }
 
@@ -687,6 +676,11 @@ class MainActivity : AppCompatActivity() {
     )
     private external fun nativeProbe(openClLoadError: String?): String
     private external fun nativeShortTest(): String
+    private external fun nativeListMulPaths(): String
+    private external fun nativeListSqrPaths(): String
+    private external fun nativeListAddPaths(): String
+    private external fun nativeListSubPaths(): String
+    private external fun nativeListSpecialMultPaths(): String
     private external fun nativeMontSqrBench(
         bits: Int,
         kernelIters: Int,
@@ -724,6 +718,7 @@ class MainActivity : AppCompatActivity() {
         sqrPath: String,
         addPath: String,
         subPath: String,
+        specialMultPath: String,
         saveFile: String,
         saveAppend: Boolean,
         logCallback: EcmLogCallback?,

@@ -10,6 +10,7 @@
 #include "jni_utf8.h"
 #include "opencl_program_cache.h"
 #include "opencl_runtime.h"
+#include "opencl_ecm_path_registry.h"
 
 #include "opencl_ecm_checkpoint.h"
 
@@ -41,6 +42,94 @@ static std::string prepend_opencl_error(JNIEnv* env, jstring j_err, const std::s
     }
     report += body;
     return report;
+}
+
+namespace {
+
+std::string build_path_list(const char *const *aliases, std::string &result) {
+    for (; *aliases != nullptr; ++aliases) {
+        result += *aliases;
+        result += '\n';
+    }
+    return result;
+}
+
+std::string build_mont_list(const EcmMontPathDescriptor *registry, size_t count) {
+    std::string result = "auto\n";
+    for (size_t i = 0; i < count; ++i) {
+        if (registry[i].os_mask & ECM_OS_ANDROID) {
+            if (registry[i].id != nullptr) {
+                result += registry[i].id;
+                result += '\n';
+            }
+        }
+    }
+    return result;
+}
+
+std::string build_addsub_list(const EcmAddSubPathDescriptor *registry, size_t count) {
+    std::string result = "auto\n";
+    for (size_t i = 0; i < count; ++i) {
+        if ((registry[i].os_mask & ECM_OS_ANDROID) &&
+            !(registry[i].gpu_vendor_exclude_mask & ECM_OS_ANDROID)) {
+            if (registry[i].aliases != nullptr && registry[i].aliases[0] != nullptr) {
+                result += registry[i].aliases[0];
+                result += '\n';
+            }
+        }
+    }
+    return result;
+}
+
+std::string build_special_mult_list() {
+    const size_t count = opencl_ecm_special_mult_registry_count();
+    std::string result = "auto\n";
+    for (size_t i = 0; i < count; ++i) {
+        const EcmSpecialMultPathDescriptor *desc = opencl_ecm_special_mult_registry_entry(i);
+        if (desc != nullptr && (desc->os_mask & ECM_OS_ANDROID) &&
+            !(desc->gpu_vendor_exclude_mask & ECM_OS_ANDROID)) {
+            if (desc->aliases != nullptr && desc->aliases[0] != nullptr) {
+                result += desc->aliases[0];
+                result += '\n';
+            }
+        }
+    }
+    return result;
+}
+
+} // namespace
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_example_ecm_MainActivity_nativeListMulPaths(JNIEnv* env, jobject /* this */) {
+    return new_jstring_utf8(env,
+        build_mont_list(opencl_ecm_mont_mul_registry_entry(0),
+                        opencl_ecm_mont_mul_registry_count()));
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_example_ecm_MainActivity_nativeListSqrPaths(JNIEnv* env, jobject /* this */) {
+    return new_jstring_utf8(env,
+        build_mont_list(opencl_ecm_mont_sqr_registry_entry(0),
+                        opencl_ecm_mont_sqr_registry_count()));
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_example_ecm_MainActivity_nativeListAddPaths(JNIEnv* env, jobject /* this */) {
+    return new_jstring_utf8(env,
+        build_addsub_list(opencl_ecm_addmod_registry_entry(0),
+                          opencl_ecm_addmod_registry_count()));
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_example_ecm_MainActivity_nativeListSubPaths(JNIEnv* env, jobject /* this */) {
+    return new_jstring_utf8(env,
+        build_addsub_list(opencl_ecm_submod_registry_entry(0),
+                          opencl_ecm_submod_registry_count()));
+}
+
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_example_ecm_MainActivity_nativeListSpecialMultPaths(JNIEnv* env, jobject /* this */) {
+    return new_jstring_utf8(env, build_special_mult_list());
 }
 
 extern "C" JNIEXPORT jstring JNICALL
@@ -140,6 +229,7 @@ Java_com_example_ecm_MainActivity_nativeRunEcm(
         jstring j_sqr_path,
         jstring j_add_path,
         jstring j_sub_path,
+        jstring j_special_mult_path,
         jstring j_save_file,
         jboolean j_save_append,
         jobject j_log_callback) {
@@ -166,6 +256,7 @@ Java_com_example_ecm_MainActivity_nativeRunEcm(
     req.sqr_path = jstring_to_utf8(env, j_sqr_path);
     req.add_path = jstring_to_utf8(env, j_add_path);
     req.sub_path = jstring_to_utf8(env, j_sub_path);
+    req.special_mult_path = jstring_to_utf8(env, j_special_mult_path);
     req.save_file = jstring_to_utf8(env, j_save_file);
     req.save_append = j_save_append == JNI_TRUE;
     android_ecm_log_set_listener(env, j_log_callback);

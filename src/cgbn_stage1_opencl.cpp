@@ -134,16 +134,22 @@ static int resolve_addsub_paths(const char *gpu_add_path, const char *gpu_sub_pa
     const EcmAddSubPathDescriptor *add = opencl_ecm_resolve_addmod_path(gpu_add_path, ctx);
     if (add == nullptr) {
         ecm_ts_fprintf(stderr,
-                       "OpenCL: unknown --add path '%s' (fused, fused_unroll, fused_unroll_b16, "
-                       "fused_unroll_b32, asm_b16, asm_b32, default)\n",
+                       "OpenCL: unknown --add path '%s' (fused, fused_unroll, default,\n"
+                       "  unroll_128b, unroll_192b, unroll_256b, unroll_384b, unroll_512b, unroll_4096b,\n"
+                       "  asm_128b, asm_192b, asm_256b, asm_384b, asm_512b, asm_4096b,\n"
+                       "  asm_b16, asm_b32, fused_unroll_b16, fused_unroll_b32, fused_unroll_auto,\n"
+                       "  or with add_mod_ prefix, e.g. add_mod_unroll_256b)\n",
                        gpu_add_path ? gpu_add_path : "");
         return -1;
     }
     const EcmAddSubPathDescriptor *sub = opencl_ecm_resolve_submod_path(gpu_sub_path, ctx);
     if (sub == nullptr) {
         ecm_ts_fprintf(stderr,
-                       "OpenCL: unknown --sub path '%s' (fused, fused_unroll, fused_unroll_b16, "
-                       "fused_unroll_b32, asm_b32, default)\n",
+                       "OpenCL: unknown --sub path '%s' (fused, fused_unroll, default,\n"
+                       "  unroll_128b, unroll_192b, unroll_256b, unroll_384b, unroll_512b, unroll_4096b,\n"
+                       "  asm_128b, asm_192b, asm_256b, asm_384b, asm_512b, asm_4096b,\n"
+                       "  asm_b16, asm_b32, fused_unroll_b16, fused_unroll_b32, fused_unroll_auto,\n"
+                       "  or with sub_mod_ prefix, e.g. sub_mod_unroll_256b)\n",
                        gpu_sub_path ? gpu_sub_path : "");
         return -1;
     }
@@ -749,7 +755,8 @@ static uint32_t stage1_ckpt_limbs(size_t data_size, uint32_t curves) {
 
 extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mul_path,
                                   const char *gpu_sqr_path, const char *gpu_add_path,
-                                  const char *gpu_sub_path) {
+                                  const char *gpu_sub_path,
+                                  const char *gpu_special_mult_path) {
     if (ensure_opencl_context_ready() != 0) {
         return ECM_ERROR;
     }
@@ -778,7 +785,7 @@ extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mu
     EcmPathContext ctx_sm = make_path_context(limbs, g_ctx.device);
     ctx_sm.n_bit_size = n_log2;
     const EcmSpecialMultPathDescriptor *special_mult =
-        opencl_ecm_resolve_special_mult(nullptr, ctx_sm);
+        opencl_ecm_resolve_special_mult(gpu_special_mult_path, ctx_sm);
     const EcmStage1KernelBuildPlan plan =
         opencl_ecm_stage1_make_build_plan(limbs, tpi, mul, sqr, add, sub, special_mult, 1, 2);
     return ensure_ecm_kernel(plan, verbose, &init_ms);

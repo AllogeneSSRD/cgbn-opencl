@@ -70,20 +70,98 @@ opencl_ecm_path_registry.cpp                注入的汇编头：
 ```cpp
 // Montgomery：每行一个算子，展开出 kMontMulRegistry / kMontSqrRegistry
 #define ECM_MONT_OPERATORS(X)                                                  \
-    X(unroll_only_384, unroll_384b, unroll384, 10, kMontNoMinLimbs,            \
-      kMontUnroll384MaxLimbs, 0, ECM_OS_ANY, ECM_GPU_ANY,                       \
+    X(unroll_384b, unroll_384b, unroll384, 10, kMontNoMinLimbs,            \
+      kMontUnroll384MaxLimbs, kMontUnroll384MaxLimbs, ECM_OS_ANY, ECM_GPU_ANY, \
       ECM_OS_ANDROID, true, 1, 0)                                              \
-    ... /* 其余算子各一行 (id, stem, alias, prio, min_l, max_l,                 \
+    ... /* 其余算子各一行 (idt, stem, al, prio, min_l, max_l,                 \
            container_l, os_mask, gpu_mask, gpu_excl, fixed_width, coop, scratch) */
 
 #define ECM_MONT_MUL_ROW(idt, stem, al, ...) \
-    {#idt, "mont_mul_" #stem, kMulAliases_##al, "mont_mul/mont_mul_" #stem ".cl", __VA_ARGS__},
+    {#idt, "mont_mul_" #stem, kMontAliases_mul_##al, "mont_mul/mont_mul_" #stem ".cl", __VA_ARGS__},
 #define ECM_MONT_SQR_ROW(idt, stem, al, ...) \
-    {#idt, "mont_sqr_" #stem, kSqrAliases_##al, "mont_mul/mont_mul_" #stem ".cl", __VA_ARGS__},
+    {#idt, "mont_sqr_" #stem, kMontAliases_sqr_##al, "mont_mul/mont_mul_" #stem ".cl", __VA_ARGS__},
 
 constexpr EcmMontPathDescriptor kMontMulRegistry[] = {ECM_MONT_OPERATORS(ECM_MONT_MUL_ROW)};
 constexpr EcmMontPathDescriptor kMontSqrRegistry[] = {ECM_MONT_OPERATORS(ECM_MONT_SQR_ROW)};
 ```
+
+### 3.1 别名数组的生成与引用（连锁宏展开详解）
+
+别名字符串数组不是硬编码的，而是通过**三阶段连锁宏展开**把两个宏的参数连接起来：
+
+#### 第一阶段：ECM_MONT_ALIAS_TABLE 定义数组变量
+
+```cpp
+#define ECM_MONT_ALIAS_TABLE(side, S)                                          \
+    static const char *const kMontAliases_##side##_unroll768[] = {             \
+        "unroll_768b", "unroll_only_768b", "mont_" S "_priv_unroll_only_768b", nullptr};
+```
+
+调用 `ECM_MONT_ALIAS_TABLE(mul, "mul")` 展开得到：
+
+```cpp
+static const char *const kMontAliases_mul_unroll768[] = {
+    "unroll_768b", "unroll_only_768b", "mont_mul_priv_unroll_only_768b", nullptr};
+```
+
+- `##side##` 处 token-paste `mul` → 变量名含 `_mul_`
+- `S` 处字符串字面量 `"mul"` → `"mont_mul_priv_unroll_only_768b"`（side-prefixed 兼容键）
+- sqr 同理调用 `ECM_MONT_ALIAS_TABLE(sqr, "sqr")`，生成 `kMontAliases_sqr_unroll768[]`
+
+#### 第二阶段：ECM_MONT_OPERATORS 提供别名令牌
+
+```cpp
+#define ECM_MONT_OPERATORS(X)
+    X(unroll_768b, unroll_768b, unroll768, ...)
+//                ^^^^^^^^^^   ^^^^^^^^
+//                idt + stem   al（一个裸 token，不是字符串）
+```
+
+第三个参数 `al` = `unroll768` 是**裸 C 预处理器 token**（无引号、无 `#`），它作为变量名的"后缀片
+段"传递。同理 manual 变体传 `unroll768manual`。
+
+#### 第三阶段：ECM_MONT_MUL_ROW token-paste 引用
+
+```cpp
+#define ECM_MONT_MUL_ROW(idt, stem, al, ...)                                   \
+    {#idt, "mont_mul_" #stem, kMontAliases_mul_##al, ...}
+//                           ^^^^^^^^^^^^^^^^^^^^^^^^
+//                           把 al 粘贴到变量名尾部
+```
+
+当 `X = ECM_MONT_MUL_ROW` 时，`X(unroll_768b, unroll_768b, unroll768, ...)` 展开为：
+
+| 参数 | 形参 | 展开后值 | 方式 |
+|------|------|----------|------|
+| `unroll_768b` | `idt` | `"unroll_768b"` | 字符串化 `#idt` → `id` 字段 |
+| `unroll_768b` | `stem` | `"mont_mul_unroll_768b"` | `"mont_mul_" #stem` → `cl_name` |
+| `unroll768` | `al` | `kMontAliases_mul_unroll768` | `##al` token-paste → `aliases` 字段 |
+| `__VA_ARGS__` | ... | `10, 0, ...` | 逐字展开为 `auto_priority` 等剩余字段 |
+
+最终生成一条描述符：
+
+```cpp
+{
+    "unroll_768b",                           // id
+    "mont_mul_unroll_768b",                  // cl_name
+    kMontAliases_mul_unroll768,              // aliases → 指向第一阶段数组的指针
+    "mont_mul/mont_mul_unroll_768b.cl",      // kernel_path
+    22, 0, 24, 24, ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0
+}
+```
+
+#### 关键点总结
+
+| 概念 | 传递形态 | 最终用途 |
+|------|---------|---------|
+| `idt` | 宏参数 token → `#idt` 字符串化 | 描述符 `id` 字段（字符串），用于 UI 显示、调试日志、legacy 查找 |
+| `stem` | 宏参数 token → `#stem` 字符串化拼接 | 描述符 `cl_name`（如 `mont_mul_unroll_768b`）和 `kernel_path` |
+| `al` | 宏参数 token → `##al` token-paste | 拼出变量名 `kMontAliases_mul_unroll768`，该变量由 ECM_MONT_ALIAS_TABLE 定义 |
+| `"unroll_768b"` | 第一阶段数组内的字符串字面量 | 别名表 [0] 项，如 `--mul unroll_768b` CLI 参数匹配 |
+
+`ECM_MONT_ALIAS_TABLE` 定义的变量名后缀必须与 `ECM_MONT_OPERATORS` 传入的 `al` token 字面一致，
+否则 token-paste 后得到的变量名不存在 → 编译错误。这是一种**编译期契约**：没有中间注册步骤，
+错误会在编译期直接暴露。
 
 ```cpp
 // add/sub：id 即文件/函数 stem，展开出 kAddModRegistry / kSubModRegistry
@@ -102,6 +180,7 @@ constexpr EcmMontPathDescriptor kMontSqrRegistry[] = {ECM_MONT_OPERATORS(ECM_MON
   （mul/sqr 共用 mul 文件）。
 - add/sub：`cl_name == "<fam>_" + id`，`kernel_path == "<fam>/<fam>_" + id + ".cl"`。
 - `cl_name` == OpenCL 函数名 == 文件名主干。位宽后缀带 `b`（如 `384b`）。
+- mont `al` token 必须与 `ECM_MONT_ALIAS_TABLE` 定义的数组名后缀字面一致（参见 §3.1）。
 
 只要遵守命名铁律，新增算子就只是宏里加一行。
 
@@ -111,9 +190,9 @@ constexpr EcmMontPathDescriptor kMontSqrRegistry[] = {ECM_MONT_OPERATORS(ECM_MON
 
 ```cpp
 struct EcmMontPathDescriptor {           // special_mult 版去掉最后三个字段
-    const char *id;            // CLI/别名匹配键
+    const char *id;            // CLI/别名匹配键（也是 JNI 下拉框的显示名）
     const char *cl_name;       // OpenCL 函数名
-    const char *const *aliases;// 以 nullptr 结尾的别名数组
+    const char *const *aliases;// 以 nullptr 结尾的别名数组指针（指向 ECM_MONT_ALIAS_TABLE 定义的静态数组）
     const char *kernel_path;   // 相对 kernels/opencl/
     int8_t  auto_priority;     // 自动选择优先级，越小越优先；-1=仅手动
     uint32_t min_limbs;        // 最小 limbs 数（0=不限）
@@ -251,23 +330,60 @@ echo '(2^641-1)' | .\build\Debug\ecm.exe -v -d 1 -gpu -sigma 3:20260611 -gpucurv
 
 ## 10. auto / manual 双实现与平台门控
 
-每个展开宽度（192/256/384/512/768/1024）都有两份实现，**共用同一 id/别名**：
+每个展开宽度（192/256/384/512/768/1024）都有两份实现，**共用 `unroll_*b` 别名，id 不同**：
 
-| 变体 | 文件 | 形态 | 门控 |
-|------|------|------|------|
-| auto | `mont_mul/mont_mul_unroll_<W>b.cl` | `#pragma unroll` 循环 | `gpu_vendor_exclude_mask = ECM_OS_ANDROID`（桌面/非安卓） |
-| manual | `mont_mul/mont_mul_unroll_manual_<W>b.cl` | 常量下标手工直线 | `os_mask = ECM_OS_ANDROID`（仅安卓） |
+| 变体 | id | stem | 文件 | 形态 | 平台 |
+|------|----|------|------|------|------|
+| auto | `unroll_<W>b` | `unroll_<W>b` | `mont_mul/mont_mul_unroll_<W>b.cl` | `#pragma unroll` 循环 | 桌面/非安卓 |
+| manual | `unroll_manual_<W>b` | `unroll_manual_<W>b` | `mont_mul/mont_mul_unroll_manual_<W>b.cl` | 手工直线标量变量 | 安卓 |
 
-`resolve_mont_side` 会在同名别名的多个描述符中**返回第一个 `*_fits()` 通过者**，因此 `--mul unroll_only_512`
-在桌面自动落到 `mont_mul_unroll_512b`、在安卓落到 `mont_mul_unroll_manual_512b`，无需用户区分。手工直线版让
-Adreno/Mali 把 `t[]/B[]/D[]` 提升到寄存器，规避了循环展开版在移动端的运行时崩溃。
+### 编译性能差异
 
-两份实现由 `tools/gen_mont_unroll.py` 单源生成，算法逐位等价（已用 bignum 参考向量验证）。新增宽度只需
-在该脚本的 `WIDTHS` 加一行并重新生成。
+auto 版通过 `#pragma unroll` 让编译器展开循环并在 IR 层面做 SRA（Scalar Replacement of
+Aggregates），运行性能最优但编译时间可达 **100 秒**（以 768b 为例，编译器需在展开后的
+~1250 条操作上运行全套优化 pass，寄存器分配和指令调度开销随操作数 O(n²) 增长）。
 
-> 注：容器大小由 `stage1_container_limbs()` 按 add/sub 算子的 Exact-Fit Container 动态决定，
-> N 位宽自动落入对应的 192/256/384/512/768/1024b 容器，无需显式指定。桌面和安卓各有独立的
-> auto / manual 变体，由 `resolve_mont_side` 按平台门控自动选择。
+manual 版已展开为直线代码，编译时间仅 **~10 秒**，无循环展开开销。先后经过三轮优化逼近
+auto 性能：
+
+| 版本 | manual 形态 | Android 编译时间 | Android 相对 auto 性能 | 说明 |
+|------|-------------|-----------------|----------------------|------|
+| v1 | 数组 + `{ }` 作用域块 | ~10s | -40% | 基线和 `{ }` 阻断了 VLIW 指令调度 |
+| v2 | 平铺数组（去 `{ }`） | ~10s | -40% | `{ }` 非瓶颈 |
+| v3 | 标量变量 `t_0..t_25`, `B_0..B_23`, `D_0..D_23` | ~10s | -32.5% | 标量化收益 +7.5% |
+| v4 | 标量变量，消除 `D_0..D_23`（两次减法 pass） | ~10s | -28% | 寄存器压力 ~83→~59，+5%，累计 +12% |
+| v5 | 4-wide 乘积分组预计算（已回退） | — | — | 引入 p0..p3 额外寄存器反增压力，性能比基线低 15%，不采用 |
+
+v3→v4 优化原理：CIOS 最终减法阶段原本存储 24 个 `D_i = t_i - N[i] - borrow` 中间结果，
+再统一 mask-select 输出。改为第一遍减法链只计算 `need_sub`（不存中间值），第二遍重新
+计算减法并直接 inline mask-select 输出。代价是额外 24 次减法操作（对比内层 576 次 mul
+微不足道），收益是节省 24 个 `uint` 寄存器变量，显著缓解 Adreno 的寄存器溢出。
+
+**别名共享机制**：auto 和 manual 变体的别名数组**都**以 `"unroll_<W>b"` 为首项：
+...（以下不变）
+
+```cpp
+// auto 变体
+static const char *const kMontAliases_mul_unroll768[] = {
+    "unroll_768b", "unroll_only_768b", ..., nullptr};
+
+// manual 变体
+static const char *const kMontAliases_mul_unroll768manual[] = {
+    "unroll_768b", "unroll_manual_768b", ..., nullptr};
+```
+
+`resolve_mont_side` 在别名匹配循环中按注册表顺序扫描：桌面端 auto 先匹配且 `*_fits()` 通过
+→ 返回 auto；安卓端 auto 匹配但被 `ECM_OS_ANDROID` 排除 mask 拦截 → 继续扫描 → manual
+匹配且通过 → 返回 manual。
+
+**下拉框区分**：Android JNI `build_mont_list` 用 `id` 字段（而非 `aliases[0]`）生成下拉列表，
+因此 auto/prolog/manual 显示为 `unroll_768b` / `unroll_manual_768b` 两个独立可区分选项。
+
+两份实现由 `tools/gen_mont_unroll.py` 单源生成，算法逐位等价。
+
+> 注：768b/1024b 位宽较大，其 manual 变体代码量可能超出部分 Adreno 编译器的单文件处理
+> 能力上限。遇到编译失败时可退回 `--mul unroll_768b`（auto 变体），实测 Qualcomm Adreno 830
+> 能成功编译 auto 版 768b。
 
 ## 11. 内核版本
 
@@ -275,4 +391,4 @@ Adreno/Mali 把 `t[]/B[]/D[]` 提升到寄存器，规避了循环展开版在�
 入口 guard 改为对应位宽；special_mult 扩展为 192/256/384/512/768/1024b 固定位宽家族；`stage1_need_512_container`
 及 `kStage1Container512Limbs` 已移除；`stage1_container_limbs` 仅按 add/sub 的 max_container_limbs 升级；
 OpenCL 后端源文件（`cgbn_opencl.h`、`impl_opencl.cpp`）移至 `kernels/opencl/`；注册表字段从 `min_n_bits`/`max_n_bits`
-统一为 `min_limbs`/`max_limbs`。
+统一为 `min_limbs`/`max_limbs`；manual unroll 算子优化为标量变量 + 两遍减法 pass（消除 D 数组，降低寄存器压力）。

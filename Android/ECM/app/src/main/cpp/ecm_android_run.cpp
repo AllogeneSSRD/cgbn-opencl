@@ -191,7 +191,8 @@ std::string run_ecm_android(const EcmAndroidRunRequest& req) {
         params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
         params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr,
         params->gpu_add_path[0] ? params->gpu_add_path : nullptr,
-        params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr);
+        params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr,
+        req.special_mult_path.empty() ? nullptr : req.special_mult_path.c_str());
     if (prep != 0) {
         mpz_clear(N);
         mpz_clear(batch_s);
