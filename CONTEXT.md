@@ -32,6 +32,7 @@ OpenCL GPU 上的加速。以下术语按领域分组，为跨设计讨论提供
 | **MAX_LIMBS** | 编译时常量，设定内核容器大小（以 limbs 计）。例如 M421 使用 `MAX_LIMBS=16`（512-bit 容器）。 |
 | **Container bits** | `MAX_LIMBS × 32`，GPU 内核的"计算盒子"。N 的实际比特数必须 ≤ container_bits - 进位预留。 |
 | **CARRY_BITS** | 进位预留比特数（当前为 6），为 Montgomery 乘法的中间进位提供安全余量。 |
+| **Exact-Fit Container** | 固定位宽算子的精确匹配容器：分配的 limbs 恰好等于算子所需，无冗余填充。与旧版"Padding Container"（一律 ≥16 limbs）相反。`max_container_limbs` 对 fixed_width 算子即为其 exact-fit container 的 limbs 数。 |
 
 ---
 
@@ -44,7 +45,7 @@ OpenCL GPU 上的加速。以下术语按领域分组，为跨设计讨论提供
 | **mont_sqr** | Montgomery 平方：`out = a²·R⁻¹ mod N`，通常与 mul 共享算子文件。 |
 | **add_mod** | `add_mod(r, a, b, N, limbs)` — 模加法：`r = (a+b) mod N`。 |
 | **sub_mod** | `sub_mod(r, a, b, N, limbs)` — 模减法：`r = (a-b) mod N`，返回 borrow 指示是否需补 N。 |
-| **special_mult** | `special_mult(r, m, N, np0, limbs)` — 单 limb Montgomery 乘法 `r·m·2⁻³² mod N`，用于 Stage-1 ladder 中的特殊位宽乘数（Suyama d）。对应数学上的 `r ← r × (m·R⁻¹) mod N`，在 `double_add_v2` 的 dK 计算中被调用。 |
+| **special_mult** | `special_mult(r, m, N, np0, limbs)` — 单 limb Montgomery 乘法 `r·m·2⁻³² mod N`，用于 Stage-1 ladder 中的特殊位宽乘数（Suyama d）。与 mont_mul 类似也有固定位宽变体（192/256/384/512/768/1024b）和 generic 通用版，由注册表按容器大小自动选择。 |
 | **np0** | Montgomery 还原参数：`np0 = -N⁻¹ mod 2³²`，用于 CIOS 迭代中快速选择商。 |
 | **CIOS** | Coarsely Integrated Operand Scanning，Montgomery 乘法的一种高效实现模式。每次外层迭代处理一个 limb，内层做乘积-累加-规约。 |
 | **Montgomery Ladder** | ECM 的 double-and-add 主循环。按 s 的比特序列逐位处理，恒定时间，不暴露比特值。每次迭代调用 `double_add_v2`。 |
@@ -57,11 +58,11 @@ OpenCL GPU 上的加速。以下术语按领域分组，为跨设计讨论提供
 |------|------|
 | **算子（Operator）** | `mont_mul`、`mont_sqr`、`add_mod`、`sub_mod`、`special_mult` 中的一个可替换函数。每个算子有一个标识符（id）、OpenCL 函数名（cl_name）、别名数组（aliases）和源文件路径（kernel_path）。 |
 | **算子族（Family）** | 五族：`mont_mul`、`mont_sqr`、`add_mod`、`sub_mod`、`special_mult`。`mont_mul` 与 `mont_sqr` 共用同一 `.cl` 文件但导出不同函数名。 |
-| **Dedicated 算子** | 固定位宽算子，如 `unroll_512b`（仅 16 limbs）、`unroll_384b`（11–12 limbs）、`fips_4096b`（128 limbs）。不可用于其他容器大小。 |
+| **Fixed-Width 算子** | 固定位宽算子，每个算子运行在其 Exact-Fit Container 中（如 `asm_384b` → 12 limbs、`unroll_1024b` → 32 limbs），不可用于其他容器大小。与 Generic 算子互斥。 |
 | **Generic 算子** | 不限位宽的通用算子（`priv_opt`、`unroll32`、`generic`），`max_limbs=0` 表示无上限。 |
 | **Auto priority** | 自动选择时的优先级（越小越优先）。`-1` 表示仅可通过显式 `--mul`/`--sqr` 等指定。 |
 | **min_limbs / max_limbs** | 算子可接受的最小/最大 limbs 数。`0` 表示无限制。`max_limbs=0` 为通用算子（适用于任意容器）。 |
-| **max_container_limbs** | 专用的容器大小约束：仅对 dedicated 算子生效。若 `max_container_limbs > 0` 且 `limbs > max_container_limbs` 则拒绝该算子。对 4096b 专用算子需同时设置 `min_limbs=128` 防止被小容器误选。 |
+| **max_container_limbs** | 容器大小约束字段：对 fixed_width 算子等于其 Exact-Fit Container 的 limbs 数；对 generic 算子为 `0`（无容器限制）。若当前 limbs > max_container_limbs（且非 0）则拒绝该算子。 |
 
 ---
 

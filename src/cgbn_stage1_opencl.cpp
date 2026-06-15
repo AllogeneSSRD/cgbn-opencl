@@ -34,7 +34,6 @@
 #include <ctime>
 
 #define CARRY_BITS ECM_STAGE1_MONT_CARRY_BITS
-constexpr uint32_t kStage1Container512Limbs = 16u;
 
 static cgbn::opencl::context_t g_ctx;
 static bool g_ctx_ready = false;
@@ -107,30 +106,19 @@ static EcmPathContext make_path_context(uint32_t limbs, cl_device_id dev) {
     return ctx;
 }
 
-static bool stage1_need_512_container(const EcmMontPathDescriptor *mul_probe,
-                                      const EcmMontPathDescriptor *sqr_probe, size_t n_bit_size,
-                                      const char *gpu_add_path, const char *gpu_sub_path,
-                                      uint32_t limbs32) {
-    const uint32_t probe_limbs = std::max(limbs32, kStage1Container512Limbs);
-    EcmPathContext ctx = make_path_context(probe_limbs, g_ctx.device);
-    ctx.n_bit_size = n_bit_size;
-    const EcmAddSubPathDescriptor *add = opencl_ecm_resolve_addmod_path(gpu_add_path, ctx);
-    const EcmAddSubPathDescriptor *sub = opencl_ecm_resolve_submod_path(gpu_sub_path, ctx);
-    return (add != nullptr && add->max_container_limbs >= kStage1Container512Limbs) ||
-           (sub != nullptr && sub->max_container_limbs >= kStage1Container512Limbs) ||
-           (mul_probe != nullptr && mul_probe->dedicated && mul_probe->max_limbs >= 12u) ||
-           (sqr_probe != nullptr && sqr_probe->dedicated && sqr_probe->max_limbs >= 12u);
-}
-
 static uint32_t stage1_container_limbs(size_t n_bit_size, uint32_t limbs32,
-                                       const EcmMontPathDescriptor *mul_probe,
-                                       const EcmMontPathDescriptor *sqr_probe,
                                        const char *gpu_add_path, const char *gpu_sub_path) {
     uint32_t limbs = limbs32;
-    if (stage1_need_512_container(mul_probe, sqr_probe, n_bit_size, gpu_add_path, gpu_sub_path,
-                                  limbs32) &&
-        limbs < kStage1Container512Limbs) {
-        limbs = kStage1Container512Limbs;
+    // Resolve add/sub at limbs32 to see if the selected path needs a larger container.
+    EcmPathContext ctx = make_path_context(limbs32, g_ctx.device);
+    ctx.n_bit_size = n_bit_size;
+    const EcmAddSubPathDescriptor *add = opencl_ecm_resolve_addmod_path(gpu_add_path, ctx);
+    if (add != nullptr && add->max_container_limbs > limbs) {
+        limbs = add->max_container_limbs;
+    }
+    const EcmAddSubPathDescriptor *sub = opencl_ecm_resolve_submod_path(gpu_sub_path, ctx);
+    if (sub != nullptr && sub->max_container_limbs > limbs) {
+        limbs = sub->max_container_limbs;
     }
     return limbs;
 }
@@ -586,7 +574,7 @@ static void stage1_clamp_mont_desc(const EcmMontPathDescriptor *&mul,
 
 static uint32_t select_bits(size_t n_log2) {
     static const uint32_t candidates[] = {
-        256, 384, 512, 768, 1024, 1280, 1536, 1792, 2048, 2560, 3072, 3584, 4096,
+        192, 256, 384, 512, 768, 1024, 1280, 1536, 1792, 2048, 2560, 3072, 3584, 4096,
         4608, 5120, 5632, 6144, 6656, 7168, 7680, 8192, 8704, 9216};
     for (uint32_t b : candidates) {
         if (n_log2 + CARRY_BITS <= b) {
@@ -771,13 +759,8 @@ extern "C" int gpu_prepare_opencl(size_t n_log2, int verbose, const char *gpu_mu
     }
     const uint32_t limbs32 = bits32 / 32u;
 
-    const EcmMontPathDescriptor *mul_probe = nullptr;
-    const EcmMontPathDescriptor *sqr_probe = nullptr;
-    if (resolve_mont_paths(gpu_mul_path, gpu_sqr_path, n_log2, 0, &mul_probe, &sqr_probe) != 0) {
-        return ECM_ERROR;
-    }
     const uint32_t limbs =
-        stage1_container_limbs(n_log2, limbs32, mul_probe, sqr_probe, gpu_add_path, gpu_sub_path);
+        stage1_container_limbs(n_log2, limbs32, gpu_add_path, gpu_sub_path);
 
     const EcmMontPathDescriptor *mul = nullptr;
     const EcmMontPathDescriptor *sqr = nullptr;
@@ -851,12 +834,6 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         }
     }
 
-    const EcmMontPathDescriptor *mul_probe = nullptr;
-    const EcmMontPathDescriptor *sqr_probe = nullptr;
-    if (resolve_mont_paths(gpu_mul_path, gpu_sqr_path, n_log2, 0, &mul_probe, &sqr_probe) != 0) {
-        free(s_bits);
-        return ECM_ERROR;
-    }
     if (ensure_opencl_context_ready() != 0) {
         free(s_bits);
         return ECM_ERROR;
@@ -869,8 +846,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     }
     const uint32_t limbs32_plan = bits32_plan / 32u;
     const uint32_t expect_limbs =
-        stage1_container_limbs(n_log2, limbs32_plan, mul_probe, sqr_probe, gpu_add_path,
-                               gpu_sub_path);
+        stage1_container_limbs(n_log2, limbs32_plan, gpu_add_path, gpu_sub_path);
     const uint32_t expect_bits = expect_limbs * 32u;
 
     uint32_t limbs = 0;

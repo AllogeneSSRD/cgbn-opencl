@@ -56,6 +56,7 @@ opencl_ecm_path_registry.cpp                注入的汇编头：
 | `kernels/opencl/mont_mul/` | Montgomery mul + sqr 实现（mul/sqr 同文件，sqr 内部调 mul） |
 | `kernels/opencl/add_mod/` | 模加算子 |
 | `kernels/opencl/sub_mod/` | 模减算子 |
+| `kernels/opencl/special_mult/` | 单 limb Montgomery 乘算子（固定位宽 + generic 通用版） |
 | `kernels/opencl/ecm_stage1.cl` | 主 ladder 入口 |
 | `kernels/opencl/ecm_stage1_coop.cl` | 4096 位协作工作组补充（仅 `COOP_WG>1` 时加载） |
 
@@ -69,9 +70,11 @@ opencl_ecm_path_registry.cpp                注入的汇编头：
 ```cpp
 // Montgomery：每行一个算子，展开出 kMontMulRegistry / kMontSqrRegistry
 #define ECM_MONT_OPERATORS(X)                                                  \
-    X(unroll_only_384, unroll_384b, unroll384, 10, kMontNoMinN,                \
-      kMontUnroll384MaxN, true, 0, ECM_OS_ANY, ECM_GPU_ANY, 0, true, 1, 0)     \
-    ... /* 其余算子各一行 */
+    X(unroll_only_384, unroll_384b, unroll384, 10, kMontNoMinLimbs,            \
+      kMontUnroll384MaxLimbs, 0, ECM_OS_ANY, ECM_GPU_ANY,                       \
+      ECM_OS_ANDROID, true, 1, 0)                                              \
+    ... /* 其余算子各一行 (id, stem, alias, prio, min_l, max_l,                 \
+           container_l, os_mask, gpu_mask, gpu_excl, fixed_width, coop, scratch) */
 
 #define ECM_MONT_MUL_ROW(idt, stem, al, ...) \
     {#idt, "mont_mul_" #stem, kMulAliases_##al, "mont_mul/mont_mul_" #stem ".cl", __VA_ARGS__},
@@ -85,8 +88,8 @@ constexpr EcmMontPathDescriptor kMontSqrRegistry[] = {ECM_MONT_OPERATORS(ECM_MON
 ```cpp
 // add/sub：id 即文件/函数 stem，展开出 kAddModRegistry / kSubModRegistry
 #define ECM_ADDSUB_OPERATORS(X)                                                \
-    X(asm_4096b, 28, kAddSubNoMinN, kAddSubNoMaxN, false, kContainer4096Bits,  \
-      ECM_OS_ANY, ECM_GPU_AMD, 0)                                              \
+    X(asm_384b, 26, kAddSubNoMinLimbs, kAddSub384MaxLimbs, 12u,                 \
+      ECM_OS_ANY, ECM_GPU_AMD, 0)                                               \
     ... /* 其余算子各一行 */
 
 #define ECM_ADD_ROW(idt, ...) {#idt, "add_mod_" #idt, kAddAliases_##idt, "add_mod/add_mod_" #idt ".cl", __VA_ARGS__},
@@ -107,21 +110,20 @@ constexpr EcmMontPathDescriptor kMontSqrRegistry[] = {ECM_MONT_OPERATORS(ECM_MON
 ## 4. 描述符字段
 
 ```cpp
-struct EcmMontPathDescriptor {           // add/sub 版去掉最后三个字段
+struct EcmMontPathDescriptor {           // special_mult 版去掉最后三个字段
     const char *id;            // CLI/别名匹配键
     const char *cl_name;       // OpenCL 函数名
     const char *const *aliases;// 以 nullptr 结尾的别名数组
     const char *kernel_path;   // 相对 kernels/opencl/
     int8_t  auto_priority;     // 自动选择优先级，越小越优先；-1=仅手动
-    uint16_t min_n_bits;       // N 最小位宽（0=不限）
-    uint16_t max_n_bits;       // N 最大位宽（0=不限），判定时按 N+CARRY
-    bool     max_n_strict;     // max 是否取严格小于
-    uint16_t max_container_bits;// 要求的最小容器位宽
+    uint32_t min_limbs;        // 最小 limbs 数（0=不限）
+    uint32_t max_limbs;        // 最大 limbs 数（0=不限）
+    uint32_t max_container_limbs; // Exact-Fit Container 的 limbs 数；0=无容器限制
     uint32_t os_mask;          // OS 白名单（ECM_OS_*，低 16 位；ANY=不限）
     uint32_t gpu_vendor_mask;  // GPU 厂商白名单（ECM_GPU_*，高 16 位；ANY=不限）
     uint32_t gpu_vendor_exclude_mask; // 黑名单：按【完整 runtime mask = OS|GPU】判定，
                                       // 可排除 OS（如 ECM_OS_ANDROID）或 GPU（如 ECM_GPU_AMD），任意组合
-    bool     dedicated;        // 固定位宽算子（384b/512b/4096 一视同仁）
+    bool     fixed_width;        // 固定位宽算子
     uint8_t  coop_work_group_size;    // 协作工作组大小：==1 单线程，>1 多线程
     uint16_t local_scratch_u32;       // 本地内存占用（4096 专用）
 };
@@ -134,12 +136,12 @@ struct EcmMontPathDescriptor {           // add/sub 版去掉最后三个字段
 2. 显式别名 → 命中后若 `*_fits()` 通过即用；否则在不低于该算子优先级的范围内自动回退。
 3. 别名无法匹配 → 置 `unknown_path`（mont）/ 返回 `nullptr`（addsub）。
 
-`*_fits()` 依次校验：N 位宽区间、容器位宽、OS 掩码、GPU 厂商白/黑名单、dedicated 容器约束。
+`*_fits()` 依次校验：N 位宽区间、容器位宽、OS 掩码、GPU 厂商白/黑名单、fixed_width 容器约束。
 
-**关于固定位宽算子（dedicated）**：384b / 512b / 4096 都是同一类固定位宽算子，没有「4096 专用」
+**关于固定位宽算子（fixed_width）**：384b / 512b / 4096 都是同一类固定位宽算子，没有「4096 专用」
 的特殊判定。它们之间唯一的额外区别是 `coop_work_group_size`：==1 为单线程（在普通内核里直接
 运行），>1 为多线程协作算子（加载 `ecm_stage1_coop.cl`）。协作 scratch / 整型 path 等也一律按
-`coop_work_group_size` 与 `dedicated` 判定，不再有 `is_4096_dedicated` 之类的特例函数。
+`coop_work_group_size` 与 `fixed_width` 判定，不再有 `is_4096_fixed_width` 之类的特例函数。
 
 **别名单一数据源**：mul / sqr 的别名数组由 `ECM_MONT_ALIAS_TABLE(side, S)` 宏按 side 展开两次
 生成（side-prefixed 兼容键如 `mont_mul_priv_*` / `mont_sqr_priv_*` 通过字符串字面量拼接自动产生），
@@ -163,16 +165,21 @@ struct EcmMontPathDescriptor {           // add/sub 版去掉最后三个字段
    ```
 3. **在 `ECM_ADDSUB_OPERATORS(X)` 加一行**（id 必须等于文件/函数 stem）：
    ```cpp
-   X(myvariant, 18, kAddSubNoMinN, 256, false, kAddSub512Container, ECM_OS_ANY, ECM_GPU_ANY, 0)
+   X(myvariant, 18, kAddSubNoMinLimbs, 8u, 8u, ECM_OS_ANY, ECM_GPU_ANY, 0)
    ```
-   优先级 18 表示比现有 128b(20) 更优先被自动选中（按需调整）。
+   优先级 18 表示比现有 128b(20) 更优先被自动选中（按需调整）。各字段依次为：
+   id, priority, min_limbs, max_limbs, max_container_limbs, os_mask, gpu_vendor_mask, gpu_vendor_exclude_mask。
 4. 若该 id 需要走 4096 协作整型分发或被 Android legacy 解析，再到 `addsub_id_kernel_path()`
    / `ecm_stage1.cl` 的 `ECM_ADDSUB_PATH_*` 同步一个枚举值；普通算子无需此步。
 5. **重新构建并验证**（见 [§7](#7-验证)）。
 
 新增 mont 算子类似：写 `mont_mul/mont_mul_<stem>.cl`（同时导出 `mont_mul_<stem>` 与
 `mont_sqr_<stem>`），加 `kMulAliases_*`/`kSqrAliases_*`，在 `ECM_MONT_OPERATORS` 加一行。
-4096 固定宽算子需正确设置 `dedicated/coop_work_group_size/local_scratch_u32`。
+4096 固定宽算子需正确设置 `fixed_width/coop_work_group_size/local_scratch_u32`。
+
+新增 special_mult 算子类似：写 `special_mult/special_mult_<stem>.cl`，加 `kSpecialMultAliases_*`，
+在 `ECM_SPECIAL_MULT_OPERATORS` 加一行。固定位宽版由 `tools/gen_special_mult_unroll.py` 单源生成，
+新增宽度只需在该脚本的 `WIDTHS` 加一行并重新生成。
 
 ### 删除一个算子
 
@@ -218,17 +225,19 @@ echo '(2^641-1)' | .\build\Debug\ecm.exe -v -d 1 -gpu -sigma 3:20260611 -gpucurv
 
 ---
 
-## 8. 内核冗余的后续合并路线（待 GPU 实测）
+## 8. 已完成的合并与后续优化
 
-本次已合并 **Host 端**（三文件→一文件、四表→两单源、删除 `force_macro` 与未用的
-`EcmPathDescriptor`、修复 4 个无法编译的 `unroll_4096b/512b` 算子文件）。内核 `.cl` 仍有可压缩空间，
-因涉及性能须在目标 GPU 实测后再合，列为后续：
+以下项目已在 REV 14 中完成：
+- Host 端注册表合并（三文件→一文件，四表→两单源，删除 `force_macro`）
+- `add_mod_unroll_{128,192,256,384,512}b.cl` 与 `sub_mod_*` 由 `tools/gen_mp_addsub_bits_stage1.py` 统一生成
+- `special_mult` 固定位宽版由 `tools/gen_special_mult_unroll.py` 统一生成
+- 容器分配改为 Exact-Fit Container（按位宽精确匹配，移除 `stage1_need_512_container`）
+- OpenCL 后端源文件（`cgbn_opencl.h`、`impl_opencl.cpp`）移至 `kernels/opencl/`
 
-- `add_mod_unroll_{128,192,256,384}b.cl` 与 `sub_mod_*` 是按位宽全展开的生成文件，结构同构。
-  可由 `tools/gen_mp_addsub_bits_stage1.py` 统一生成，源文件只保留生成器 + 模板，减少手工副本。
-- 各位宽 `unroll_*` 与通用 `fused_unroll`（按 `MAX_LIMBS` 展开）语义接近；差异在于位宽专用版本
-  只对 N 实际宽度做运算而非整容器宽度，属性能优化。合并前需对比各位宽 kernel 实测吞吐。
+后续可考虑：
 - `add_mod` 与 `sub_mod` 互为镜像，可考虑由同一模板宏生成两族，进一步减少重复。
+- 各位宽 unroll 与通用 fused_unroll 语义接近，差异在于位宽专用版本只对活跃 limbs 做运算，属性能优化。
+  合并前需对比各位宽 kernel 实测吞吐。
 
 ---
 
@@ -256,13 +265,14 @@ Adreno/Mali 把 `t[]/B[]/D[]` 提升到寄存器，规避了循环展开版在�
 两份实现由 `tools/gen_mont_unroll.py` 单源生成，算法逐位等价（已用 bignum 参考向量验证）。新增宽度只需
 在该脚本的 `WIDTHS` 加一行并重新生成。
 
-> 注：当前选择按**容器宽度**而非 N 实际位宽匹配，<512 位的 N 容器恒为 16 limbs，故实际跑批仍主要用 512b；
-> 192/256/384 等更窄变体已就绪，待选择逻辑改为按 N 活跃位宽匹配后即可自动启用（也可显式指定）。
+> 注：容器大小由 `stage1_container_limbs()` 按 add/sub 算子的 Exact-Fit Container 动态决定，
+> N 位宽自动落入对应的 192/256/384/512/768/1024b 容器，无需显式指定。桌面和安卓各有独立的
+> auto / manual 变体，由 `resolve_mont_side` 按平台门控自动选择。
 
 ## 11. 内核版本
 
-`ECM_STAGE1_KERNEL_REV = 14` —— 宏别名注入架构；注册表三文件合并为单一实现；mul/sqr、add/sub
-采用 X-macro 单一数据源；mul/sqr 别名亦单源化；删除 `unroll64_4096_mt2`；取消 4096 特殊判定
-（固定位宽算子仅按 `coop_work_group_size` 区分多/单线程）；`common/` 统一 `*.h.cl` 命名；
-OS/GPU 掩码分置低/高 16 位（消除位冲突），exclude 按完整 runtime 判定支持任意组合；
-每个展开宽度拆分 auto(桌面) / manual(安卓) 双实现，由 `tools/gen_mont_unroll.py` 生成。
+`ECM_STAGE1_KERNEL_REV = 14` —— 容器按 Exact-Fit Container 动态分配（不再统一 16 limbs）；addsub 算子
+入口 guard 改为对应位宽；special_mult 扩展为 192/256/384/512/768/1024b 固定位宽家族；`stage1_need_512_container`
+及 `kStage1Container512Limbs` 已移除；`stage1_container_limbs` 仅按 add/sub 的 max_container_limbs 升级；
+OpenCL 后端源文件（`cgbn_opencl.h`、`impl_opencl.cpp`）移至 `kernels/opencl/`；注册表字段从 `min_n_bits`/`max_n_bits`
+统一为 `min_limbs`/`max_limbs`。

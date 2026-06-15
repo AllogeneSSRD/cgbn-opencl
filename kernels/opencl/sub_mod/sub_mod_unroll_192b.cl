@@ -82,6 +82,6 @@ static inline int sub_mod_unroll_192b_body(uint *r, const uint *a, const uint *b
 
 static inline int sub_mod_unroll_192b(uint *r, const uint *a, const uint *b,
                                          const uint *N, uint limbs) {
-    if (limbs == 16u) { return sub_mod_unroll_192b_body(r, a, b, N); }
+    if (limbs == 6u) { return sub_mod_unroll_192b_body(r, a, b, N); }
     return 0;
 }

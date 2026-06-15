@@ -59,7 +59,7 @@ struct EcmMontPathDescriptor {
     uint32_t os_mask;
     uint32_t gpu_vendor_mask;
     uint32_t gpu_vendor_exclude_mask;
-    bool dedicated;
+    bool fixed_width;
     uint8_t coop_work_group_size;
     uint16_t local_scratch_u32;
 };

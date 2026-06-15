@@ -161,13 +161,13 @@ static inline int sub_mod_unroll_384b_body(uint *r, const uint *a, const uint *b
 #if defined(__AMDGCN__)
 static inline int sub_mod_asm_384b(uint *r, const uint *a, const uint *b,
                                       const uint *N, uint limbs) {
-    if (limbs == 16u) { return sub_mod_asm_384b_body(r, a, b, N); }
+    if (limbs == 12u) { return sub_mod_asm_384b_body(r, a, b, N); }
     return 0;
 }
 #else
 static inline int sub_mod_asm_384b(uint *r, const uint *a, const uint *b,
                                       const uint *N, uint limbs) {
-    if (limbs == 16u) { return sub_mod_unroll_384b_body(r, a, b, N); }
+    if (limbs == 12u) { return sub_mod_unroll_384b_body(r, a, b, N); }
     return 0;
 }
 #endif

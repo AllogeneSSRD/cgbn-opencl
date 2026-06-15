@@ -88,13 +88,13 @@ static inline void add_mod_unroll_192b_body(uint *r, const uint *a, const uint *
 #if defined(__AMDGCN__)
 static inline void add_mod_asm_192b(uint *r, const uint *a, const uint *b,
                                        const uint *N, uint limbs) {
-    if (limbs == 16u) { add_mod_asm_192b_body(r, a, b, N); }
+    if (limbs == 6u) { add_mod_asm_192b_body(r, a, b, N); }
     (void)limbs;
 }
 #else
 static inline void add_mod_asm_192b(uint *r, const uint *a, const uint *b,
                                        const uint *N, uint limbs) {
-    if (limbs == 16u) { add_mod_unroll_192b_body(r, a, b, N); }
+    if (limbs == 6u) { add_mod_unroll_192b_body(r, a, b, N); }
     (void)limbs;
 }
 #endif

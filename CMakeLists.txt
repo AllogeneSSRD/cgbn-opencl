@@ -33,12 +33,12 @@ endfunction()
 
 # OpenCL backend library (static) for tests and later integration
 add_library(cgbn_opencl STATIC
-    cgbn/backends/opencl/impl_opencl.cpp
+    kernels/opencl/impl_opencl.cpp
 )
 
 target_include_directories(cgbn_opencl PUBLIC
     ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/cgbn/backends/opencl
+    ${CMAKE_SOURCE_DIR}/kernels/opencl
 )
 
 target_link_libraries(cgbn_opencl PRIVATE
@@ -76,7 +76,7 @@ add_executable(ecm
 )
 
 target_include_directories(ecm PRIVATE
-    ${CMAKE_SOURCE_DIR}/cgbn/backends/opencl
+    ${CMAKE_SOURCE_DIR}/kernels/opencl
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
 )

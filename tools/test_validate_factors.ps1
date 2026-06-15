@@ -49,6 +49,10 @@ foreach ($T in $Tests) {
     Remove-Item $BatFile, $StdinFile, $OutFile -ErrorAction SilentlyContinue -Force
 
     $Found = $null
+    $OpsLine = ""
+    if ($OutStr -match 'GPU: stage1 operators:\s*([^\r\n]+)') {
+        $OpsLine = $Matches[1]
+    }
     if ($OutStr -match 'factor\[\d+\]\s*=\s*(\d+)') {
         $Found = $Matches[1]
     }
@@ -65,6 +69,9 @@ foreach ($T in $Tests) {
         Write-Host " NOFACTOR" -ForegroundColor Red
         $Fail++
         $Res += @{ L=$T.L; S="FAIL"; E=$T.E; F="(none)" }
+    }
+    if ($OpsLine) {
+        Write-Host ("       operators: {0}" -f $OpsLine) -ForegroundColor DarkGray
     }
 }
 

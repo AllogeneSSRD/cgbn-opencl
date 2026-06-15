@@ -64,13 +64,13 @@ static inline void add_mod_unroll_128b_body(uint *r, const uint *a, const uint *
 #if defined(__AMDGCN__)
 static inline void add_mod_asm_128b(uint *r, const uint *a, const uint *b,
                                        const uint *N, uint limbs) {
-    if (limbs == 16u) { add_mod_asm_128b_body(r, a, b, N); }
+    if (limbs == 4u) { add_mod_asm_128b_body(r, a, b, N); }
     (void)limbs;
 }
 #else
 static inline void add_mod_asm_128b(uint *r, const uint *a, const uint *b,
                                        const uint *N, uint limbs) {
-    if (limbs == 16u) { add_mod_unroll_128b_body(r, a, b, N); }
+    if (limbs == 4u) { add_mod_unroll_128b_body(r, a, b, N); }
     (void)limbs;
 }
 #endif
