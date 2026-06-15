@@ -339,20 +339,55 @@ echo '(2^641-1)' | .\build\Debug\ecm.exe -v -d 1 -gpu -sigma 3:20260611 -gpucurv
 
 ### 编译性能差异
 
-auto 版通过 `#pragma unroll` 让编译器展开循环并在 IR 层面做 SRA（Scalar Replacement of
-Aggregates），运行性能最优但编译时间可达 **100 秒**（以 768b 为例，编译器需在展开后的
-~1250 条操作上运行全套优化 pass，寄存器分配和指令调度开销随操作数 O(n²) 增长）。
+auto 版（REV 15+）仅内层 `for j` 循环使用 `#pragma unroll`，外层 `for i` 保持为普通
+循环。
 
-manual 版已展开为直线代码，编译时间仅 **~10 秒**，无循环展开开销。先后经过三轮优化逼近
-auto 性能：
+**实测结果（Adreno 830, 768b）**：
+- 编译时间：100s → 5s（**20× 加速**）
+- 运行性能：比原双层 `#pragma unroll` **快 20%**
 
-| 版本 | manual 形态 | Android 编译时间 | Android 相对 auto 性能 | 说明 |
-|------|-------------|-----------------|----------------------|------|
-| v1 | 数组 + `{ }` 作用域块 | ~10s | -40% | 基线和 `{ }` 阻断了 VLIW 指令调度 |
-| v2 | 平铺数组（去 `{ }`） | ~10s | -40% | `{ }` 非瓶颈 |
-| v3 | 标量变量 `t_0..t_25`, `B_0..B_23`, `D_0..D_23` | ~10s | -32.5% | 标量化收益 +7.5% |
-| v4 | 标量变量，消除 `D_0..D_23`（两次减法 pass） | ~10s | -28% | 寄存器压力 ~83→~59，+5%，累计 +12% |
-| v5 | 4-wide 乘积分组预计算（已回退） | — | — | 引入 p0..p3 额外寄存器反增压力，性能比基线低 15%，不采用 |
+这是反直觉的结果——减少展开反而提速。根因是**过度展开导致寄存器溢出**：
+
+```
+双层 #pragma unroll (REV<15):
+  展开后 IR: 1152 条操作在一个扁平作用域
+  → 寄存器分配器面对 ~80 个跨迭代 live range
+  → 寄存器文件仅 128×32bit，必然产生 spill
+  → 每条 spill store+load ≈ 100 cycles (local memory latency)
+  → 推测 ~50 次 spill → 5000 cycles 额外开销
+
+仅内层 #pragma unroll (REV 15+):
+  外循环 i=0..23 保持循环结构
+  → 每次迭代 IR 仅 ~50 条操作
+  → 寄存器分配器在独立迭代作用域内优化，仅需处理当前迭代的 live ranges
+  → 寄存器文件内足够容纳 t[0..25] + 临时变量 → 零溢出
+  → 消除全部 spill 开销 → +20% 性能
+```
+
+**关键机制三条**：
+
+1. **寄存器压力塌缩**：外层展开后 24 次迭代的 `ai`/`carry`/`uv` 同时存在于 SSA 中，
+   寄存器分配器被迫做出全局 spill 决策。外层不展开后，每次迭代的临时变量作用域独立，
+   寄存器分配近似最优。
+
+2. **VLIW 调度质量**：Adreno 的 3-way VLIW 调度器面对 1152 条操作时，搜索空间巨大，
+   启发式算法退化为局部贪心，打包效率下降。面对 50 条操作时，调度接近全局最优。
+
+3. **Loop-carried dependency 显式化**：外层展开使 `t[j]` 在 SSA 中出现 24 个独立版本
+   （`t_j_0`, `t_j_1`...），内存别名分析保守推断可能导致 false dependency。
+   外层不展开时，循环结构显式传达了迭代间的 RAW 依赖，SROA 能更激进地优化。
+
+**双向优化策略**：manual 版走手工标量化路径（v4 累计 +12%，距基线 -28%）；
+auto 版走编译器优化路径（内层 `#pragma unroll` + SRA，编译 5s，性能最优）。两者
+互补：低端设备用 manual 保障兼容性，高端设备用 auto 享受最佳性能。
+
+| 版本 | 形态 | Android 编译 | Android 相对基准 | 说明 |
+|------|------|-------------|-----------------|------|
+| auto (REV<15) | 双层 `#pragma unroll` | ~100s | **基准** | 过度展开，寄存器溢出严重 |
+| auto (REV 15+) | 仅内层 `#pragma unroll` | ~5s | **+20%** | 零溢出，VLIW 调度最优 |
+| manual v4 | 标量变量 + 消 D 数组 | ~10s | -8% | 手工寄存器控制 |
+
+> 注：REV 15+ 后 auto 版性能超越原版，manual 版仅作兼容性备选。
 
 v3→v4 优化原理：CIOS 最终减法阶段原本存储 24 个 `D_i = t_i - N[i] - borrow` 中间结果，
 再统一 mask-select 输出。改为第一遍减法链只计算 `need_sub`（不存中间值），第二遍重新
@@ -391,4 +426,5 @@ static const char *const kMontAliases_mul_unroll768manual[] = {
 入口 guard 改为对应位宽；special_mult 扩展为 192/256/384/512/768/1024b 固定位宽家族；`stage1_need_512_container`
 及 `kStage1Container512Limbs` 已移除；`stage1_container_limbs` 仅按 add/sub 的 max_container_limbs 升级；
 OpenCL 后端源文件（`cgbn_opencl.h`、`impl_opencl.cpp`）移至 `kernels/opencl/`；注册表字段从 `min_n_bits`/`max_n_bits`
-统一为 `min_limbs`/`max_limbs`；manual unroll 算子优化为标量变量 + 两遍减法 pass（消除 D 数组，降低寄存器压力）。
+统一为 `min_limbs`/`max_limbs`；auto unroll 外层循环去掉 `#pragma unroll`（仅保留内层 SRA 展开），
+编译 100s→5s，运行 +20%（消除寄存器溢出）；manual unroll 保留标量变体（标量变量 + 两遍减法 pass，累计 +12%）。
