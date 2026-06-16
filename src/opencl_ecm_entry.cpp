@@ -12,7 +12,8 @@ int opencl_ecm_stage1(mpz_t *factors,
                       const char *gpu_mul_path,
                       const char *gpu_sqr_path,
                       const char *gpu_add_path,
-                      const char *gpu_sub_path)
+                      const char *gpu_sub_path,
+                      const char *gpu_special_mult_path)
 {
     if (factors == nullptr || array_found == nullptr || sigma == nullptr || gputime == nullptr) {
         return -1;
@@ -34,5 +35,6 @@ int opencl_ecm_stage1(mpz_t *factors,
                            gpu_mul_path,
                            gpu_sqr_path,
                            gpu_add_path,
-                           gpu_sub_path);
+                           gpu_sub_path,
+                           gpu_special_mult_path);
 }

@@ -43,16 +43,23 @@
 ## Quick Start（Windows）
 
 ```powershell
-# 1. 构建（需 OpenCL、OpenSSL、GMP；见下方「构建」）
+# 1. Debug build (开发调试)
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --config Debug
 
-# 2. ECM stage-1（从 stdin 读 N）
-echo "(2^991-1)" | build\Debug\ecm.exe -v -gpu -gpucurves 384 1e6 0
+# 2. Release build (生产部署，MSVC /O2)
+#    需显式指定 vcpkg toolchain + OpenSSL 路径
+cmake -S . -B build_rel -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_TOOLCHAIN_FILE=D:/code/vcpkg/scripts/buildsystems/vcpkg.cmake `
+  -DOPENSSL_ROOT_DIR=D:/code/vcpkg/installed/x64-windows
+cmake --build build_rel --config Release
 
-# 3. 算子微基准（先 ecm 驱动，再 bench — 与下文 Windows 章节一致）
-build\Debug\opencl_ecm_addsub.exe --bits 512 10000 128 3
-build\Debug\opencl_ecm_montsqr.exe --bits 512 1000 128 1
+# 3. ECM stage-1（从 stdin 读 N）
+echo "(2^991-1)" | build_rel\Release\ecm.exe -v --go -gpu -gpucurves 384 1e6 0
+
+# 4. 算子微基准
+build_rel\Release\opencl_ecm_addsub.exe --bits 512 10000 128 3
+build_rel\Release\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 ```
 
 列出全部可切换内核路径：`build\Debug\ecm.exe --showkernel`
@@ -71,13 +78,23 @@ build\Debug\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 | GMP | `CMakeLists.txt` 中当前硬编码 vcpkg 路径，需按本机修改 |
 
 ```powershell
+# Debug
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
 cmake --build build --config Debug
+
+# Release (MSVC /O2, 运行性能最优)
+#   需显式指定 vcpkg toolchain 与 OpenSSL 路径
+cmake -S . -B build_rel -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_TOOLCHAIN_FILE=D:/code/vcpkg/scripts/buildsystems/vcpkg.cmake `
+  -DOPENSSL_ROOT_DIR=D:/code/vcpkg/installed/x64-windows
+cmake --build build_rel --config Release
 ```
 
-产物在 `build/Debug/`。主要目标：`ecm.exe`、`opencl_ecm_addsub.exe`、`opencl_ecm_montsqr.exe`、`opencl_asm_selftest.exe`、`opencl_*_isa_export.exe` 等。
+产物在 `build/Debug/` 或 `build_rel/Release/`。主要目标：`ecm.exe`、`opencl_ecm_addsub.exe`、`opencl_ecm_montsqr.exe`、`opencl_asm_selftest.exe`、`opencl_*_isa_export.exe` 等。
 
-可选：[Pari/GP](https://pari.math.u-bordeaux.fr/) + 环境变量 `ECM_GP_BIN`，配合 `ecm.exe --go` 做群阶诊断。
+> Release 构建后 CMake 自动将 `libcrypto-3-x64.dll`、`libssl-3-x64.dll`、`gmp.dll` 从 vcpkg 复制到输出目录，无需额外 PATH 设置。
+
+可选：[Pari/GP](https://pari.math.u-bordeaux.fr/) + `--gp <path>` 参数，配合 `ecm.exe --go` 做群阶诊断。
 
 ### 使用：ECM stage-1（`ecm.exe`）
 
@@ -87,14 +104,17 @@ cmake --build build --config Debug
 echo "(2^991-1)" | build\Debug\ecm.exe -v --go -gpu -gpucurves 384 1e6 0
 echo "(2^4003-1)" | build\Debug\ecm.exe -gpu -gpucurves 384 --add asm_b32 1e6 0
 build\Debug\ecm.exe --showkernel
+
+:: Release build
+echo "(2^991-1)" | build_rel\Release\ecm.exe -v --go -gpu -gpucurves 384 1e6 0
 ```
 
 | 选项 | 说明 |
 |------|------|
 | `-gpu` / `-gpucurves <n>` | GPU stage-1 与每批曲线数 |
-| `-d <index>` | OpenCL 设备（亦可用 `CGBN_OPENCL_DEVICE_INDEX`） |
-| `--mul` / `--sqr` / `--add` / `--sub <path>` | 覆盖 Montgomery / 模加模减内核路径 |
-| `--showkernel` | 列出 manifest 中全部路径 |
+| `-d <index>` | OpenCL 设备索引 |
+| `--mul` / `--sqr` / `--add` / `--sub` / `--special-mult <path>` | 覆盖各算子内核路径（id/别名/auto） |
+| `--showkernel` | 从注册表枚举全部算子（id、别名、文件、平台门控） |
 
 上游 `-param`、`-sigma` 等 ECM 参数语义见 [docs/README](docs/README) 第 6 节；本仓库 OpenCL stage-1 与 `ecm_params` / batch-32bit-`D` 参数的对应关系见 [docs/DEBUG_PARAMETERS_GUIDE.md](docs/DEBUG_PARAMETERS_GUIDE.md)。
 
@@ -111,7 +131,7 @@ build\Debug\opencl_ecm_addsub.exe --bits 512 10000 128 3
 build\Debug\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 ```
 
-- 追加 CSV：环境变量 `ECM_BENCH_CSV`
+- 追加 CSV：`--csv <file>`
 - 跨厂商 512/4096 对比报告：[bench/0530_report.md](bench/0530_report.md)
 
 ### 其他：OpenCL 与运行时
@@ -121,32 +141,38 @@ build\Debug\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 | OpenCL 实现总览 | stage-1 主机/内核分工、与 CUDA 差异 | [docs/OPENCL_IMPLEMENTATION.md](docs/OPENCL_IMPLEMENTATION.md) |
 | 程序二进制缓存 | FNV-1a 键、`/.opencl_cache/` | 实现见 `cgbn/backends/opencl/impl_opencl.cpp`；变量见下表 |
 | 内核树与 manifest | `.cl` 注册、路径枚举 | [kernels/opencl/bench/mp_addsub/README.md](kernels/opencl/bench/mp_addsub/README.md) |
-| 调试与 env | `ECM_PROFILE_OPS`、`ECM_VERIFY_GPU_*` 等 | [docs/DEBUG_PARAMETERS_GUIDE.md](docs/DEBUG_PARAMETERS_GUIDE.md) |
+| 调试参数 | `--profile-ops`、`--verify-gpu` 等 | [docs/DEBUG_PARAMETERS_GUIDE.md](docs/DEBUG_PARAMETERS_GUIDE.md) |
 
-### 环境变量
+### 命令行参数（已取代环境变量）
 
-| 变量 | 组件 | 说明 |
-|------|------|------|
-| `CGBN_KERNEL_ROOT` | 全局 | 覆盖 `.cl` 内核树目录 |
-| `CGBN_OPENCL_DEVICE_INDEX` | 全局 | 默认 OpenCL 设备索引 |
-| `CGBN_OPENCL_CACHE_DIR` | 桌面缓存 | `.opencl_cache/opencl_{hash}.bin` 目录 |
-| `CGBN_OPENCL_CACHE_DISABLE` | 桌面缓存 | 设置后禁用二进制缓存 |
-| `CGBN_OPENCL_CACHE_VERBOSE` | 桌面缓存 | 输出缓存命中/未命中详情 |
-| `CGBN_OPENCL_COMPILE_VERBOSE` | 桌面缓存 | 输出完整编译选项 |
-| `ECM_OPENCL_TPI` | Stage-1 | 每实例线程数（2 的幂；默认 8） |
-| `ECM_STAGE1_FORCE_NORMALIZE` | Stage-1 | 强制 normalize 路径 |
-| `ECM_MP_ADD_MOD_FUSED_UNROLL` | Stage-1 / addsub 基准 | 融合展开变体 |
-| `ECM_PROFILE_OPS` | Stage-1 | 打印各算子计数 |
-| `ECM_PROFILE_OPS_FILE` | Stage-1 | 算子 profile CSV（默认 `ecm_ops_profile.csv`） |
-| `ECM_VERIFY_GPU_RESULTS` | Stage-1 | CPU 交叉校验 GPU 结果 |
-| `ECM_VERIFY_GPU_STRICT` | Stage-1 | 校验不一致则失败 |
-| `ECM_BENCH_CSV` | 微基准 | 追加基准结果到 CSV |
-| `ECM_ADDSUB_ASM_DISABLE` | Addsub 基准 | 跳过 asm 路径 |
-| `ECM_MONT_WG_IMPL` | Mont 基准 | 工作组实现选择 |
-| `ECM_LOG_TIMESTAMP` | 日志 | 为日志行加时间戳前缀 |
-| `ECM_GP_BIN` | ecm 驱动 | `--go` 所用 `gp` 可执行文件路径 |
+所有自定义环境变量已移除，改为命令行参数（统一收敛到 `EcmRuntimeConfig`，见
+`include/opencl_ecm_runtime_config.h`）。`ecm` 主程序：
 
-OpenCL 后端骨架说明：[cgbn/backends/opencl/README.md](cgbn/backends/opencl/README.md)
+| 旧环境变量 | 新参数（`ecm`） | 说明 |
+|------------|----------------|------|
+| `CGBN_OPENCL_DEVICE_INDEX` | `-d <index>` | OpenCL 设备索引 |
+| `ECM_KERNEL_ROOT` / `CGBN_KERNEL_ROOT` | `--kernel-root <dir>` | 覆盖 `.cl` 内核树目录 |
+| `CGBN_OPENCL_CACHE_DIR` | `--kernel-cache-dir <dir>` | 二进制缓存目录 |
+| `CGBN_OPENCL_CACHE_DISABLE` | `--no-kernel-cache` | 禁用二进制缓存 |
+| `CGBN_OPENCL_CACHE_VERBOSE` | `--kernel-cache-verbose` | 缓存命中/未命中详情 |
+| `CGBN_OPENCL_COMPILE_VERBOSE` | `--compile-verbose` | 输出编译计时 |
+| `ECM_OPENCL_TPI` | `--tpi <1..32>` | 每实例线程数（默认 8） |
+| `ECM_STAGE1_FORCE_NORMALIZE` | `--force-normalize <0\|1>` | 强制 normalize 路径 |
+| `ECM_MP_ADD_MOD_FUSED_UNROLL` | `--addsub-fused-unroll <1\|2>` | add/sub 融合展开变体 |
+| `ECM_PROFILE_OPS` / `_FILE` | `--profile-ops` / `--profile-ops-file <f>` | 算子计数 / CSV |
+| `ECM_VERIFY_GPU_RESULTS` / `_STRICT` | `--verify-gpu` / `--verify-gpu-strict` | CPU 交叉校验 |
+| `ECM_SYNC_EACH_BATCH` | `--sync-each-batch` | 每批同步 |
+| `ECM_GPU_DUMP` / `_FILE` | `--gpu-dump` / `--gpu-dump-file <f>` | 转储 GPU 状态 |
+| `ECM_LOG_TIMESTAMP=0` | `--no-log-timestamp` | 关闭日志时间戳（默认开） |
+| `ECM_GP_BIN` / `PARI_GP_BIN` | `--gp <path>` | `--go` 所用 `gp` 路径 |
+
+基准 / 诊断工具：`opencl_ecm_addsub` 用 `--no-asm`、`--asm-b64`、`--addsub-fused-unroll`、`--csv`；
+`opencl_ecm_montsqr` 用 `--wg-impl`、`--wg-impl4-unroll`、`--csv`、`--kernel-root`、`-d`。
+
+> 仅 `LOGNAME` / `USERNAME` 等系统标准变量仍按系统约定读取（非本程序自定义）。
+> Android 无命令行：JNI 入口直接写入 `EcmRuntimeConfig`，缺省沿用默认值。
+
+OpenCL 后端骨架说明：[kernels/opencl/README.md](kernels/opencl/README.md)
 
 ---
 

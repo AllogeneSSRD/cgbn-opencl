@@ -1,4 +1,5 @@
 #include "cgbn_opencl.h"
+#include "opencl_ecm_runtime_config.h"
 
 #include <CL/cl.h>
 #include <gmp.h>
@@ -111,12 +112,12 @@ bool is_amd_gpu_device(cl_device_id dev, cl_platform_id platform) {
 }
 
 int resolve_impl4_unroll(cl_device_id dev) {
-    if (const char *v = std::getenv("ECM_MONT_WG_IMPL4_UNROLL")) {
-        int parsed = std::atoi(v);
+    if (ecm_runtime_config().mont_wg_impl4_unroll >= 0) {
+        int parsed = ecm_runtime_config().mont_wg_impl4_unroll;
         if (parsed == 1 || parsed == 2) {
             return parsed;
         }
-        std::cerr << "Warning: invalid ECM_MONT_WG_IMPL4_UNROLL=" << parsed
+        std::cerr << "Warning: invalid --wg-impl4-unroll=" << parsed
                   << ", fallback to auto" << std::endl;
     }
     std::string vendor = read_device_vendor(dev);
@@ -256,8 +257,8 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     cl_int buildErr = CL_SUCCESS;
     int wg_impl = 4;
     int impl4_unroll = resolve_impl4_unroll(ctx.device);
-    if (const char *v = std::getenv("ECM_MONT_WG_IMPL")) {
-        wg_impl = std::atoi(v);
+    if (ecm_runtime_config().mont_wg_impl >= 0) {
+        wg_impl = ecm_runtime_config().mont_wg_impl;
         if (wg_impl == 2 || wg_impl == 3) {
             std::cerr << "Warning: WG_IMPL=" << wg_impl
                       << " removed (only 0/1/4 supported), fallback to 4\n";
@@ -317,8 +318,8 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
         return false;
     }
 
-    const char *csv_path = std::getenv("ECM_BENCH_CSV");
-    bool csv_enabled = (csv_path && *csv_path);
+    const std::string &csv_path = ecm_runtime_config().bench_csv;
+    bool csv_enabled = !csv_path.empty();
     std::ofstream csv;
     if (csv_enabled) {
         csv.open(csv_path, std::ios::out | std::ios::trunc);
@@ -1746,9 +1747,12 @@ int main(int argc, char **argv) {
             << "  --iterations <n>         Kernel loop count (alias for 1st positional arg)\n"
             << "  --use-wg / --no-wg       Select WG or private benchmark mode\n"
             << "  --tpi <tpi>              Threads per instance for WG mode\n"
-            << "  -d, --device <index>     OpenCL device index (overrides default/env)\n"
-            << "  -h, --help               Show this help message\n"
-            << "  Set CGBN_KERNEL_ROOT to repo root if .cl files are not found.\n";
+            << "  -d, --device <index>     OpenCL device index\n"
+            << "  --wg-impl <0|1|4>        WG kernel impl (was ECM_MONT_WG_IMPL)\n"
+            << "  --wg-impl4-unroll <1|2>  impl4 unroll factor (was ECM_MONT_WG_IMPL4_UNROLL)\n"
+            << "  --csv <file>             Write results CSV (was ECM_BENCH_CSV)\n"
+            << "  --kernel-root <dir>      Kernel source root (was CGBN_KERNEL_ROOT)\n"
+            << "  -h, --help               Show this help message\n";
     };
     std::vector<std::string> pos;
     for (int i = 1; i < argc; ++i) {
@@ -1789,6 +1793,16 @@ int main(int argc, char **argv) {
             }
             continue;
         }
+        if (a == "--wg-impl" && i + 1 < argc) {
+            if (!parse_cli_int(argv[++i], "--wg-impl", ecm_runtime_config().mont_wg_impl)) return EXIT_FAILURE;
+            continue;
+        }
+        if (a == "--wg-impl4-unroll" && i + 1 < argc) {
+            if (!parse_cli_int(argv[++i], "--wg-impl4-unroll", ecm_runtime_config().mont_wg_impl4_unroll)) return EXIT_FAILURE;
+            continue;
+        }
+        if (a == "--csv" && i + 1 < argc) { ecm_runtime_config().bench_csv = argv[++i]; continue; }
+        if (a == "--kernel-root" && i + 1 < argc) { ecm_runtime_config().kernel_root = argv[++i]; continue; }
         if (!a.empty() && a[0] == '-') {
             std::cerr << "Unknown option: " << a << " (use --help)" << std::endl;
             return EXIT_FAILURE;
@@ -1805,13 +1819,8 @@ int main(int argc, char **argv) {
         return EXIT_FAILURE;
     }
     if (device_index >= 0) {
-        const std::string dev = std::to_string(device_index);
-#ifdef _WIN32
-        _putenv_s("CGBN_OPENCL_DEVICE_INDEX", dev.c_str());
-#else
-        setenv("CGBN_OPENCL_DEVICE_INDEX", dev.c_str(), 1);
-#endif
-        std::cout << "OpenCL device override: CGBN_OPENCL_DEVICE_INDEX=" << dev << std::endl;
+        ecm_runtime_config().device_index = device_index;
+        std::cout << "OpenCL device override: device=" << device_index << std::endl;
     }
     bool ok = runOpenClEcmMontSqrBenchmark(bits, kernel_iterations, instances, launch_repeats,
                                           use_wg, tpi);

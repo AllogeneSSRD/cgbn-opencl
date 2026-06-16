@@ -1,4 +1,5 @@
 #include "cgbn_opencl.h"
+#include "opencl_ecm_runtime_config.h"
 #include <chrono>
 #include <cstring>
 #include <cstdlib>
@@ -53,31 +54,20 @@ static uint64_t fnv1a64_string(uint64_t h, const std::string &s) {
 }
 
 static std::string cache_root_dir() {
-    if (const char *v = std::getenv("CGBN_OPENCL_CACHE_DIR")) {
-        if (*v) return std::string(v);
-    }
-    return ".opencl_cache";
+    const std::string &d = ecm_runtime_config().cache_dir;
+    return d.empty() ? std::string(".opencl_cache") : d;
 }
 
 static bool cache_enabled() {
-    if (const char *v = std::getenv("CGBN_OPENCL_CACHE_DISABLE")) {
-        if (*v == '1') return false;
-    }
-    return true;
+    return !ecm_runtime_config().cache_disable;
 }
 
 static bool cache_verbose() {
-    if (const char *v = std::getenv("CGBN_OPENCL_CACHE_VERBOSE")) {
-        return (*v == '1');
-    }
-    return false;
+    return ecm_runtime_config().cache_verbose;
 }
 
 static bool compile_verbose() {
-    if (const char *v = std::getenv("CGBN_OPENCL_COMPILE_VERBOSE")) {
-        return (*v == '1');
-    }
-    return false;
+    return ecm_runtime_config().compile_verbose;
 }
 
 static bool ensure_cache_dir_exists(const std::string &dir) {
@@ -197,16 +187,7 @@ cl_int create_context_with_device_index(context_t &out, int device_index) {
 }
 
 cl_int create_context(context_t &out) {
-    int device_index = 0;
-    const char *env_idx = std::getenv("CGBN_OPENCL_DEVICE_INDEX");
-    if (env_idx && *env_idx) {
-        try {
-            device_index = std::stoi(std::string(env_idx));
-        } catch (...) {
-            device_index = 0;
-        }
-    }
-    return create_context_impl(out, device_index);
+    return create_context_impl(out, ecm_runtime_config().device_index);
 }
 
 cl_int destroy_context(context_t &c) {
@@ -334,10 +315,9 @@ static std::string kernel_root_with_slash(const char *root) {
 }
 
 static std::string ecm_stage1_kernel_root() {
-    if (const char *root = std::getenv("ECM_KERNEL_ROOT")) {
-        if (*root) {
-            return kernel_root_with_slash(root);
-        }
+    const std::string &root = ecm_runtime_config().kernel_root;
+    if (!root.empty()) {
+        return kernel_root_with_slash(root.c_str());
     }
 #ifdef ECM_KERNEL_ROOT_DEFAULT
     return kernel_root_with_slash(ECM_KERNEL_ROOT_DEFAULT);
@@ -357,12 +337,11 @@ static std::string load_kernel_at_roots(const char *rel_path) {
             return content;
         }
     }
-    if (const char *root = std::getenv("ECM_KERNEL_ROOT")) {
-        if (*root) {
-            std::string content = load_text_file((kernel_root_with_slash(root) + rel_path).c_str());
-            if (!content.empty()) {
-                return content;
-            }
+    if (!ecm_runtime_config().kernel_root.empty()) {
+        std::string content = load_text_file(
+            (kernel_root_with_slash(ecm_runtime_config().kernel_root.c_str()) + rel_path).c_str());
+        if (!content.empty()) {
+            return content;
         }
     }
 #ifdef ECM_KERNEL_ROOT_DEFAULT
@@ -374,11 +353,6 @@ static std::string load_kernel_at_roots(const char *rel_path) {
         }
     }
 #endif
-    if (const char *root = std::getenv("CGBN_KERNEL_ROOT")) {
-        if (*root) {
-            return load_text_file((kernel_root_with_slash(root) + rel_path).c_str());
-        }
-    }
     return std::string();
 }
 

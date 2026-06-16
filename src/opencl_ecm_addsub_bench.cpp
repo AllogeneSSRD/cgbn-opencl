@@ -1,5 +1,6 @@
 #include "cgbn_opencl.h"
 #include "opencl_ecm_addsub_manifest.h"
+#include "opencl_ecm_runtime_config.h"
 
 #include <CL/cl.h>
 #include <gmp.h>
@@ -126,14 +127,10 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     }
     bool asm_enabled = false;
     bool asm_b64_enabled = false;
-    if (const char *asm_disable = std::getenv("ECM_ADDSUB_ASM_DISABLE")) {
-        if (*asm_disable == '1') {
-            std::cout << "ECM_ADDSUB_ASM_DISABLE=1: skipping AMD asm kernels\n";
-        }
+    if (ecm_runtime_config().addsub_asm_disable) {
+        std::cout << "--no-asm: skipping AMD asm kernels\n";
     } else if (WORDS == 8u || WORDS == 16u || WORDS == 128u) {
-        if (const char *asm_b64 = std::getenv("ECM_ADDSUB_ASM_B64")) {
-            asm_b64_enabled = (*asm_b64 == '1');
-        }
+        asm_b64_enabled = ecm_runtime_config().addsub_asm_b64;
         asm_enabled = true;
     }
     EcmAddSubBuildManifest build =
@@ -152,10 +149,10 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     }
     cl_int buildErr = CL_SUCCESS;
     int fused_unroll = 2;
-    if (const char *v = std::getenv("ECM_MP_ADD_MOD_FUSED_UNROLL")) {
-        fused_unroll = std::atoi(v);
+    {
+        fused_unroll = ecm_runtime_config().add_mod_fused_unroll;
         if (fused_unroll != 1 && fused_unroll != 2) {
-            std::cerr << "Warning: invalid ECM_MP_ADD_MOD_FUSED_UNROLL=" << fused_unroll
+            std::cerr << "Warning: invalid --fused-unroll=" << fused_unroll
                       << ", fallback to 2\n";
             fused_unroll = 2;
         }
@@ -211,8 +208,8 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     cl_uint limbs = WORDS;
     size_t global = (size_t)instances;
 
-    const char *csv_path = std::getenv("ECM_BENCH_CSV");
-    bool csv_enabled = (csv_path && *csv_path);
+    const std::string &csv_path = ecm_runtime_config().bench_csv;
+    bool csv_enabled = !csv_path.empty();
     std::ofstream csv;
     if (csv_enabled) {
         csv.open(csv_path, std::ios::out | std::ios::trunc);
@@ -1132,7 +1129,11 @@ int main(int argc, char **argv) {
                "[--unroll] [kernel_iterations] [instances] [launch_repeats]\n"
             << "  --bits <bits>            Benchmark bit width (multiple of 32, <= 8192)\n"
             << "  --unroll                 Only benchmark fused_unroll / asm unroll / lpt paths\n"
-            << "  -d, --device <index>     OpenCL device index (overrides default/env)\n"
+            << "  -d, --device <index>     OpenCL device index\n"
+            << "  --no-asm                 Skip AMD asm kernels (was ECM_ADDSUB_ASM_DISABLE)\n"
+            << "  --asm-b64                Enable b64 asm kernels (was ECM_ADDSUB_ASM_B64)\n"
+            << "  --addsub-fused-unroll <1|2>  add/sub fused-unroll mode\n"
+            << "  --csv <file>             Write results CSV (was ECM_BENCH_CSV)\n"
             << "  -h, --help               Show this help message\n";
     };
     std::vector<std::string> pos;
@@ -1154,8 +1155,13 @@ int main(int argc, char **argv) {
             device_index = std::stoi(std::string(argv[++i]));
             continue;
         }
+        if (a == "--no-asm") { ecm_runtime_config().addsub_asm_disable = true; continue; }
+        if (a == "--asm-b64") { ecm_runtime_config().addsub_asm_b64 = true; continue; }
+        if (a == "--addsub-fused-unroll" && i + 1 < argc) { ecm_runtime_config().add_mod_fused_unroll = std::stoi(std::string(argv[++i])); continue; }
+        if (a == "--csv" && i + 1 < argc) { ecm_runtime_config().bench_csv = argv[++i]; continue; }
         pos.push_back(a);
     }
+    if (device_index >= 0) { ecm_runtime_config().device_index = device_index; }
     if (pos.size() >= 1) kernel_iterations = std::stoi(pos[0]);
     if (pos.size() >= 2) instances = std::stoi(pos[1]);
     if (pos.size() >= 3) launch_repeats = std::stoi(pos[2]);

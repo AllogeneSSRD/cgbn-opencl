@@ -1,5 +1,6 @@
 #include "opencl_ecm_debug_utils.h"
 #include "opencl_ecm_log.h"
+#include "opencl_ecm_runtime_config.h"
 
 #include <cstdarg>
 #include <cstdio>
@@ -7,17 +8,6 @@
 #include <cstring>
 
 #include <gmp.h>
-
-bool env_flag_enabled(const char *name) {
-    const char *v = std::getenv(name);
-    if (!v || !*v) return false;
-    return !(strcmp(v, "0") == 0 || strcmp(v, "false") == 0 || strcmp(v, "FALSE") == 0);
-}
-
-const char *env_string_or_default(const char *name, const char *fallback) {
-    const char *v = std::getenv(name);
-    return (v && *v) ? v : fallback;
-}
 
 void ocl_log_verbose(int verbose, const char *fmt, ...) {
     if (verbose < 1) return;
@@ -28,10 +18,10 @@ void ocl_log_verbose(int verbose, const char *fmt, ...) {
 }
 
 void opencl_dump_begin(opencl_dump_ctx_t &ctx, int verbose) {
-    ctx.enabled = env_flag_enabled("ECM_GPU_DUMP");
+    ctx.enabled = ecm_runtime_config().gpu_dump;
     if (!ctx.enabled) return;
 
-    const char *dump_path = env_string_or_default("ECM_GPU_DUMP_FILE", "dump.csv");
+    const char *dump_path = ecm_runtime_config().gpu_dump_file.c_str();
     ctx.out.open(dump_path, std::ios::out | std::ios::trunc);
     if (!ctx.out.is_open()) {
         ctx.enabled = false;

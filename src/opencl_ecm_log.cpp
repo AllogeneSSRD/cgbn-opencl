@@ -1,4 +1,5 @@
 #include "opencl_ecm_log.h"
+#include "opencl_ecm_runtime_config.h"
 
 #include <chrono>
 #include <cstring>
@@ -66,9 +67,7 @@ bool g_installed = false;
 } // namespace
 
 bool ecm_log_timestamp_enabled() {
-    const char *v = std::getenv("ECM_LOG_TIMESTAMP");
-    if (!v || !*v) return true; // default ON
-    return !(strcmp(v, "0") == 0 || strcmp(v, "false") == 0 || strcmp(v, "FALSE") == 0);
+    return ecm_runtime_config().log_timestamp;  // default ON; CLI --no-log-timestamp 关闭
 }
 
 void ecm_install_timestamped_iostreams() {

@@ -8,8 +8,6 @@ struct opencl_dump_ctx_t {
     std::ofstream out;
 };
 
-bool env_flag_enabled(const char *name);
-const char *env_string_or_default(const char *name, const char *fallback);
 void ocl_log_verbose(int verbose, const char *fmt, ...);
 
 void opencl_dump_begin(opencl_dump_ctx_t &ctx, int verbose);

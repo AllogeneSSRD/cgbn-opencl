@@ -27,7 +27,8 @@ int opencl_ecm_stage1(mpz_t *factors,
                       const char *gpu_mul_path,
                       const char *gpu_sqr_path,
                       const char *gpu_add_path,
-                      const char *gpu_sub_path);
+                      const char *gpu_sub_path,
+                      const char *gpu_special_mult_path);
 
 #ifdef __cplusplus
 }

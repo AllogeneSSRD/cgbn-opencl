@@ -28,6 +28,7 @@
 #include "opencl_ecm_entry.h"
 #include "opencl_ecm_save.h"
 #include "opencl_ecm_path_registry.h"
+#include "opencl_ecm_runtime_config.h"
 #include "ecm.h"
 #include "cgbn_stage1.h"
 #include "opencl_ecm_log.h"
@@ -467,15 +468,9 @@ static std::string get_gp_executable(const std::string &explicit_path = "") {
     if (!explicit_path.empty()) {
         return normalize_gp_path(explicit_path);
     }
-    // 2. Try direct "gp" — works when gp is on PATH.
-    // 3. Fallback env vars for legacy compatibility.
-    const char *ecm_gp = std::getenv("ECM_GP_BIN");
-    if (ecm_gp && *ecm_gp) {
-        return normalize_gp_path(std::string(ecm_gp));
-    }
-    const char *pari_gp = std::getenv("PARI_GP_BIN");
-    if (pari_gp && *pari_gp) {
-        return normalize_gp_path(std::string(pari_gp));
+    // 2. Config (set from --gp). 3. Fall back to "gp" on PATH.
+    if (!ecm_runtime_config().gp_bin.empty()) {
+        return normalize_gp_path(ecm_runtime_config().gp_bin);
     }
     return "gp";
 }
@@ -666,8 +661,26 @@ static void print_ecm_usage(const char *prog) {
               << "  --sqr <path>         Montgomery sqr kernel path\n"
               << "  --add <path>         Modular add kernel path\n"
               << "  --sub <path>         Modular sub kernel path\n"
+              << "  --special-mult <path>  special_mult (R=2^32) kernel path\n"
               << "  --showkernel         List available OpenCL kernel paths and exit\n"
-              << "  -h, --help           Show this help and exit\n\n"
+              << "  -h, --help           Show this help and exit\n"
+              << "\nRuntime tuning (kebab-case; replaces former environment variables):\n"
+              << " Device / operators:\n"
+              << "  --tpi <1..32>              Threads per instance (default 8)\n"
+              << "  --force-normalize <0|1>    Stage1 force-normalize path\n"
+              << "  --addsub-fused-unroll <1|2>  add/sub fused-unroll mode\n"
+              << " Kernel source / cache:\n"
+              << "  --kernel-root <dir>        Kernel source root\n"
+              << "  --kernel-cache-dir <dir>   OpenCL binary cache directory\n"
+              << "  --no-kernel-cache          Disable kernel binary cache\n"
+              << "  --kernel-cache-verbose     Verbose cache hit/miss logging\n"
+              << "  --compile-verbose          Verbose compile timing\n"
+              << " Logging / debug / verify:\n"
+              << "  --no-log-timestamp         Disable log timestamps (default on)\n"
+              << "  --gpu-dump [--gpu-dump-file <f>]      Dump GPU state to CSV\n"
+              << "  --profile-ops [--profile-ops-file <f>]  Operator-count profiling\n"
+              << "  --sync-each-batch          Synchronize after each batch\n"
+              << "  --verify-gpu [--verify-gpu-strict]   CPU cross-check GPU results\n\n"
               << "Examples:\n"
               << "  echo '(2^991-1)' | " << name << " -v --go -gpu -gpucurves 384 1e6 0\n"
               << "  echo '(2^421-1)' | " << name << " -gpu -gpucurves 256 -d 1 1e5 0\n"
@@ -706,7 +719,8 @@ int main(int argc, char **argv){
         return 0;
     }
 
-    ecm_install_timestamped_iostreams();
+    // Timestamped-stream install is deferred until after argv parsing / config fill,
+    // so --no-log-timestamp takes effect.
     bool verbose = false;
     bool use_gpu = false;
     uint32_t gpucurves = 0;
@@ -723,6 +737,7 @@ int main(int argc, char **argv){
     std::string gpu_sqr_path;
     std::string gpu_add_path;
     std::string gpu_sub_path;
+    std::string gpu_special_mult_path;
     bool show_kernels = false;
     // parse args simple
     std::vector<std::string> pos;
@@ -796,15 +811,55 @@ int main(int argc, char **argv){
             gpu_sub_path = argv[++i];
             continue;
         }
+        if(a == "--special-mult" && i+1<argc) {
+            gpu_special_mult_path = argv[++i];
+            continue;
+        }
         if(a == "--showkernel") {
             show_kernels = true;
             continue;
+        }
+        // ---- runtime tuning flags (replace former environment variables) ----
+        // Naming convention (kebab-case):
+        //   value flags:  --<group>-<noun> <value>   (e.g. --kernel-cache-dir)
+        //   enable flags: --<feature>                (default-off feature on)
+        //   disable flags:--no-<feature>             (turn a default-on feature off)
+        {
+            EcmRuntimeConfig &cfg = ecm_runtime_config();
+            // device / launch
+            if(a == "--tpi" && i+1<argc){ cfg.tpi = (uint32_t)std::stoul(argv[++i]); continue; }
+            // operator tuning
+            if(a == "--force-normalize" && i+1<argc){ cfg.stage1_force_normalize = std::stoi(argv[++i]); continue; }
+            if(a == "--addsub-fused-unroll" && i+1<argc){ cfg.add_mod_fused_unroll = std::stoi(argv[++i]); continue; }
+            // kernel source / cache group
+            if(a == "--kernel-root" && i+1<argc){ cfg.kernel_root = argv[++i]; continue; }
+            if(a == "--kernel-cache-dir" && i+1<argc){ cfg.cache_dir = argv[++i]; continue; }
+            if(a == "--no-kernel-cache"){ cfg.cache_disable = true; continue; }
+            if(a == "--kernel-cache-verbose"){ cfg.cache_verbose = true; continue; }
+            if(a == "--compile-verbose"){ cfg.compile_verbose = true; continue; }
+            // logging / debug / verification
+            if(a == "--no-log-timestamp"){ cfg.log_timestamp = false; continue; }
+            if(a == "--gpu-dump"){ cfg.gpu_dump = true; continue; }
+            if(a == "--gpu-dump-file" && i+1<argc){ cfg.gpu_dump = true; cfg.gpu_dump_file = argv[++i]; continue; }
+            if(a == "--profile-ops"){ cfg.profile_ops = true; continue; }
+            if(a == "--profile-ops-file" && i+1<argc){ cfg.profile_ops = true; cfg.profile_ops_file = argv[++i]; continue; }
+            if(a == "--sync-each-batch"){ cfg.sync_each_batch = true; continue; }
+            if(a == "--verify-gpu"){ cfg.verify_gpu_results = true; continue; }
+            if(a == "--verify-gpu-strict"){ cfg.verify_gpu_results = true; cfg.verify_gpu_strict = true; continue; }
         }
         if(a == "-h" || a == "--help" || a == "/?") {
             continue;
         }
         pos.push_back(a);
     }
+
+    // Argv parsed: fold driver-level args into the runtime config (single source),
+    // then install timestamped streams.
+    ecm_runtime_config().device_index = gpu_device_index;
+    if (!gp_bin_path.empty()) {
+        ecm_runtime_config().gp_bin = gp_bin_path;
+    }
+    ecm_install_timestamped_iostreams();
 
     if (show_kernels) {
         opencl_ecm_print_available_kernels(stdout);
@@ -867,17 +922,20 @@ int main(int argc, char **argv){
     if (!gpu_sub_path.empty()) {
         std::cout << ", sub=" << gpu_sub_path;
     }
+    if (!gpu_special_mult_path.empty()) {
+        std::cout << ", special_mult=" << gpu_special_mult_path;
+    }
     if (!gp_bin_path.empty()) {
         std::cout << ", gp=" << gp_bin_path;
     }
     std::cout << std::endl;
-    if(!pos.empty()){
-        std::cout << "  B1=" << pos[0];
-        if(pos.size() >= 2){
-            std::cout << ", B2=" << pos[1];
-        }
-        std::cout << std::endl;
-    }
+    // if(!pos.empty()){
+    //     std::cout << "  B1=" << pos[0];
+    //     if(pos.size() >= 2){
+    //         std::cout << ", B2=" << pos[1];
+    //     }
+    //     std::cout << std::endl;
+    // }
 
     // read N from stdin
     std::string nline;
@@ -912,7 +970,7 @@ int main(int argc, char **argv){
         return 1;
     }
 
-    std::cout << "Parsed N bit-size: " << mpz_sizeinbase(N, 2) << std::endl;
+    // std::cout << "Parsed N bit-size: " << mpz_sizeinbase(N, 2) << std::endl;
     // if (verbose) {
     //     std::cout << "Parsed N = ";
     //     mpz_out_str(stdout, 10, N);
@@ -941,6 +999,11 @@ int main(int argc, char **argv){
         strncpy(params->gpu_sub_path, gpu_sub_path.c_str(), sizeof(params->gpu_sub_path) - 1u);
         params->gpu_sub_path[sizeof(params->gpu_sub_path) - 1u] = '\0';
     }
+    if (!gpu_special_mult_path.empty()) {
+        strncpy(params->gpu_special_mult_path, gpu_special_mult_path.c_str(),
+                sizeof(params->gpu_special_mult_path) - 1u);
+        params->gpu_special_mult_path[sizeof(params->gpu_special_mult_path) - 1u] = '\0';
+    }
     params->verbose = verbose ? 1 : 0;
     params->param = ECM_PARAM_BATCH_32BITS_D; // GPU expects batch 32bits d
 
@@ -950,7 +1013,7 @@ int main(int argc, char **argv){
         std::cerr << "Failed to compute batch_s"<<std::endl;
         return 1;
     }
-    std::cout << "batch_s bit-size: " << mpz_sizeinbase(batch_s, 2) << std::endl;
+    // std::cout << "batch_s bit-size: " << mpz_sizeinbase(batch_s, 2) << std::endl;
     mpz_set(params->batch_s, batch_s);
     params->batch_last_B1_used = B1;
 
@@ -973,7 +1036,8 @@ int main(int argc, char **argv){
                                       params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr,
                                       params->gpu_add_path[0] ? params->gpu_add_path : nullptr,
                                       params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr,
-                                      nullptr);
+                                      params->gpu_special_mult_path[0] ? params->gpu_special_mult_path
+                                                                       : nullptr);
         if (prep != 0) {
             std::cerr << "GPU: OpenCL prepare failed" << std::endl;
             mpz_clear(N);
@@ -1034,7 +1098,9 @@ int main(int argc, char **argv){
                                 params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
                                 params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr,
                                 params->gpu_add_path[0] ? params->gpu_add_path : nullptr,
-                                params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr);
+                                params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr,
+                                params->gpu_special_mult_path[0] ? params->gpu_special_mult_path
+                                                                 : nullptr);
 
     std::cout << "opencl_ecm_stage1 returned: "<< ret <<" gputime="<< gputime <<" ms\n";
     for(uint32_t i=0;i<curves;i++){

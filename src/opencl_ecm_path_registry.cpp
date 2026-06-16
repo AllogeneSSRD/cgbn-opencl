@@ -1083,10 +1083,159 @@ const EcmAddSubPathDescriptor *opencl_ecm_resolve_addsub_sub_path(const char *pa
     return opencl_ecm_resolve_submod_path(path, ctx);
 }
 
+namespace {
+
+std::string showkernel_fmt_aliases(const char *const *aliases, const char *id) {
+    std::string s;
+    if (aliases != nullptr) {
+        for (const char *const *p = aliases; *p != nullptr; ++p) {
+            if (id != nullptr && std::strcmp(*p, id) == 0) {
+                continue;  // primary id is shown separately; skip it in the alias list
+            }
+            if (!s.empty()) {
+                s += ", ";
+            }
+            s += *p;
+        }
+    }
+    return s;
+}
+
+const char *showkernel_os_name(uint32_t bit) {
+    switch (bit) {
+    case ECM_OS_WINDOWS: return "win";
+    case ECM_OS_ANDROID: return "android";
+    case ECM_OS_LINUX: return "linux";
+    case ECM_OS_MACOS: return "mac";
+    default: return "?";
+    }
+}
+
+const char *showkernel_gpu_name(uint32_t bit) {
+    switch (bit) {
+    case ECM_GPU_AMD: return "amd";
+    case ECM_GPU_NVIDIA: return "nvidia";
+    case ECM_GPU_INTEL: return "intel";
+    case ECM_GPU_QUALCOMM: return "qualcomm";
+    case ECM_GPU_HUAWEI: return "huawei";
+    case ECM_GPU_APPLE: return "apple";
+    default: return "?";
+    }
+}
+
+std::string showkernel_join_bits(uint32_t mask, const char *(*nm)(uint32_t)) {
+    std::string s;
+    for (uint32_t b = mask; b != 0u; b &= (b - 1u)) {
+        const uint32_t lb = b & (0u - b);
+        if (!s.empty()) {
+            s += "|";
+        }
+        s += nm(lb);
+    }
+    return s.empty() ? std::string("-") : s;
+}
+
+// Decode os/gpu whitelist masks plus the exclude mask (which may hold OS and/or GPU bits).
+std::string showkernel_platform(uint32_t os_mask, uint32_t gpu_mask, uint32_t excl) {
+    std::string s = "os=";
+    s += (os_mask == 0u || os_mask == ECM_OS_ANY)
+             ? "any"
+             : showkernel_join_bits(os_mask & ECM_OS_ANY, showkernel_os_name);
+    s += " gpu=";
+    s += (gpu_mask == 0u || gpu_mask == ECM_GPU_ANY)
+             ? "any"
+             : showkernel_join_bits(gpu_mask & ECM_GPU_ANY, showkernel_gpu_name);
+    const uint32_t ex_os = excl & ECM_OS_ANY;
+    const uint32_t ex_gpu = excl & ECM_GPU_ANY;
+    if (ex_os != 0u || ex_gpu != 0u) {
+        s += " excl=";
+        if (ex_os != 0u) {
+            s += showkernel_join_bits(ex_os, showkernel_os_name);
+        }
+        if (ex_gpu != 0u) {
+            if (ex_os != 0u) {
+                s += "|";
+            }
+            s += showkernel_join_bits(ex_gpu, showkernel_gpu_name);
+        }
+    }
+    return s;
+}
+
+void showkernel_print_row(FILE *out, const char *id, const char *cl_name, const char *kernel_path,
+                          const char *const *aliases, int prio, uint32_t min_limbs,
+                          uint32_t max_limbs, const std::string &platform) {
+    const std::string al = showkernel_fmt_aliases(aliases, id);
+    fprintf(out, "  %-20s -> %s\n", id != nullptr ? id : "(null)",
+            cl_name != nullptr ? cl_name : "(null)");
+    fprintf(out, "      file=%s  prio=%d  limbs=%u..%u  %s\n",
+            kernel_path != nullptr ? kernel_path : "-", prio, min_limbs, max_limbs,
+            platform.c_str());
+    if (!al.empty()) {
+        fprintf(out, "      aliases: %s\n", al.c_str());
+    }
+}
+
+} // namespace
+
 void opencl_ecm_print_available_kernels(FILE *out) {
     if (out == nullptr) {
         out = stdout;
     }
-    fprintf(out, "ECM OpenCL kernels: mul/sqr and add/sub paths are resolved independently.\n");
-    fprintf(out, "See docs/DEV_OPERATOR_PATH_REGISTRY.md\n");
+    fprintf(out, "ECM OpenCL operator registry (mul/sqr, add, sub, special_mult resolved "
+                 "independently).\n");
+    fprintf(out, "Select with --mul/--sqr/--add/--sub/--special-mult <id|alias> (or auto/default).\n");
+    fprintf(out, "prio: lower = preferred by auto-select (-1 = manual only); limbs: container "
+                 "range; excl: excluded OS/GPU.\n\n");
+
+    fprintf(out, "== Montgomery mul (--mul) ==\n");
+    for (size_t i = 0; i < opencl_ecm_mont_mul_registry_count(); ++i) {
+        const EcmMontPathDescriptor *d = opencl_ecm_mont_mul_registry_entry(i);
+        if (d == nullptr) continue;
+        showkernel_print_row(out, d->id, d->cl_name, d->kernel_path, d->aliases, d->auto_priority,
+                             d->min_limbs, d->max_limbs,
+                             showkernel_platform(d->os_mask, d->gpu_vendor_mask,
+                                                 d->gpu_vendor_exclude_mask));
+    }
+
+    fprintf(out, "\n== Montgomery sqr (--sqr) ==\n");
+    for (size_t i = 0; i < opencl_ecm_mont_sqr_registry_count(); ++i) {
+        const EcmMontPathDescriptor *d = opencl_ecm_mont_sqr_registry_entry(i);
+        if (d == nullptr) continue;
+        showkernel_print_row(out, d->id, d->cl_name, d->kernel_path, d->aliases, d->auto_priority,
+                             d->min_limbs, d->max_limbs,
+                             showkernel_platform(d->os_mask, d->gpu_vendor_mask,
+                                                 d->gpu_vendor_exclude_mask));
+    }
+
+    fprintf(out, "\n== Modular add (--add) ==\n");
+    for (size_t i = 0; i < opencl_ecm_addmod_registry_count(); ++i) {
+        const EcmAddSubPathDescriptor *d = opencl_ecm_addmod_registry_entry(i);
+        if (d == nullptr) continue;
+        showkernel_print_row(out, d->id, d->cl_name, d->kernel_path, d->aliases, d->auto_priority,
+                             d->min_limbs, d->max_limbs,
+                             showkernel_platform(d->os_mask, d->gpu_vendor_mask,
+                                                 d->gpu_vendor_exclude_mask));
+    }
+
+    fprintf(out, "\n== Modular sub (--sub) ==\n");
+    for (size_t i = 0; i < opencl_ecm_submod_registry_count(); ++i) {
+        const EcmAddSubPathDescriptor *d = opencl_ecm_submod_registry_entry(i);
+        if (d == nullptr) continue;
+        showkernel_print_row(out, d->id, d->cl_name, d->kernel_path, d->aliases, d->auto_priority,
+                             d->min_limbs, d->max_limbs,
+                             showkernel_platform(d->os_mask, d->gpu_vendor_mask,
+                                                 d->gpu_vendor_exclude_mask));
+    }
+
+    fprintf(out, "\n== special_mult (--special-mult) ==\n");
+    for (size_t i = 0; i < opencl_ecm_special_mult_registry_count(); ++i) {
+        const EcmSpecialMultPathDescriptor *d = opencl_ecm_special_mult_registry_entry(i);
+        if (d == nullptr) continue;
+        showkernel_print_row(out, d->id, d->cl_name, d->kernel_path, d->aliases, d->auto_priority,
+                             d->min_limbs, d->max_limbs,
+                             showkernel_platform(d->os_mask, d->gpu_vendor_mask,
+                                                 d->gpu_vendor_exclude_mask));
+    }
+    fprintf(out, "\nSee docs/DEV_OPERATOR_PATH_REGISTRY.md for details.\n");
 }

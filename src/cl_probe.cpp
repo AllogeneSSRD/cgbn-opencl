@@ -1,4 +1,5 @@
 #include "cl_probe.h"
+#include "opencl_ecm_runtime_config.h"
 #include <iostream>
 #include <vector>
 #include <string>
@@ -242,12 +243,7 @@ bool configureOpenclDeviceIndex(int deviceIndex, bool printDevices) {
             return false;
         }
     }
-    std::string v = std::to_string(deviceIndex);
-#ifdef _WIN32
-    _putenv_s("CGBN_OPENCL_DEVICE_INDEX", v.c_str());
-#else
-    setenv("CGBN_OPENCL_DEVICE_INDEX", v.c_str(), 1);
-#endif
+    ecm_runtime_config().device_index = deviceIndex;
     return true;
 }
 

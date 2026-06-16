@@ -51,6 +51,7 @@ extern "C" void ecm_init(ecm_params q)
     q->gpu_sqr_path[0] = '\0';
     q->gpu_add_path[0] = '\0';
     q->gpu_sub_path[0] = '\0';
+    q->gpu_special_mult_path[0] = '\0';
     q->gw_k = 0.0;
     q->gw_b = 0;
     q->gw_n = 0;

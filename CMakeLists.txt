@@ -31,9 +31,11 @@ function(ecm_target_link_gmp target)
     target_link_libraries(${target} ${GMP_LIBRARY})
 endfunction()
 
-# OpenCL backend library (static) for tests and later integration
+# OpenCL backend library (static) for tests and later integration.
+# Includes the runtime-config TU so every linker of this lib gets ecm_runtime_config().
 add_library(cgbn_opencl STATIC
     kernels/opencl/impl_opencl.cpp
+    src/opencl_ecm_runtime_config.cpp
 )
 
 target_include_directories(cgbn_opencl PUBLIC
@@ -90,6 +92,24 @@ target_link_libraries(ecm
 )
 
 ecm_target_link_gmp(ecm)
+
+# Copy OpenSSL + GMP runtime DLLs from vcpkg to output dir
+if(MSVC AND EXISTS "${OPENSSL_ROOT_DIR}/bin")
+    set(_vcpkg_bin "${OPENSSL_ROOT_DIR}/bin")
+    # add_custom_command(TARGET ecm POST_BUILD
+    #     COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    #         "${_vcpkg_bin}/libcrypto-3-x64.dll"
+    #         "${_vcpkg_bin}/libssl-3-x64.dll"
+    #         "$<TARGET_FILE_DIR:ecm>"
+    #     COMMENT "Copying OpenSSL DLLs to output dir")
+    if(EXISTS "${_vcpkg_bin}/gmp-10.dll")
+        add_custom_command(TARGET ecm POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${_vcpkg_bin}/gmp-10.dll"
+                "$<TARGET_FILE_DIR:ecm>"
+            COMMENT "Copying GMP DLL to output dir")
+    endif()
+endif()
 
 add_executable(main
     src/cl_probe.cpp

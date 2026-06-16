@@ -8,6 +8,7 @@
 #include "opencl_ecm_log.h"
 #include "opencl_ecm_mont.h"
 #include "opencl_ecm_path_registry.h"
+#include "opencl_ecm_runtime_config.h"
 #include "opencl_ecm_selftest.h"
 
 #include <CL/cl.h>
@@ -47,29 +48,16 @@ static EcmStage1KernelBuildPlan g_kernel_build_plan{};
 static bool g_device_info_printed = false;
 
 static int selected_device_index_from_env() {
-    const char *v = std::getenv("CGBN_OPENCL_DEVICE_INDEX");
-    if (!v || !*v) {
-        return 0;
-    }
-    try {
-        return std::stoi(v);
-    } catch (...) {
-        return 0;
-    }
+    return ecm_runtime_config().device_index;
 }
 
 static uint32_t requested_tpi_from_env() {
-    const char *v = std::getenv("ECM_OPENCL_TPI");
-    if (!v || !*v) {
+    uint32_t parsed = ecm_runtime_config().tpi;
+    if (parsed == 0u || parsed > 32u) {
+        ecm_ts_fprintf(stderr, "OpenCL: invalid --tpi=%u, fallback to 8\n", parsed);
         return 8u;
     }
-    char *endp = nullptr;
-    unsigned long parsed = std::strtoul(v, &endp, 10);
-    if (endp == v || *endp != '\0' || parsed == 0ul || parsed > 32ul) {
-        ecm_ts_fprintf(stderr, "OpenCL: invalid ECM_OPENCL_TPI=%s, fallback to 8\n", v);
-        return 8u;
-    }
-    return (uint32_t)parsed;
+    return parsed;
 }
 
 static bool is_power_of_two_u32(uint32_t x) {
@@ -251,10 +239,10 @@ static void emit_ops_profile(const ecm_ops_profile_counts_t &c, uint32_t curves,
             (unsigned long long)c.mp_shift_left_1_mod);
     fflush(stdout);
 
-    if (!env_flag_enabled("ECM_PROFILE_OPS")) {
+    if (!ecm_runtime_config().profile_ops) {
         return;
     }
-    const char *csv_path = env_string_or_default("ECM_PROFILE_OPS_FILE", "ecm_ops_profile.csv");
+    const char *csv_path = ecm_runtime_config().profile_ops_file.c_str();
     std::ofstream out(csv_path, std::ios::out | std::ios::app);
     if (!out.is_open()) {
         ecm_ts_fprintf(stderr, "ECM_PROFILE_OPS: failed to open %s for append\n", csv_path);
@@ -443,8 +431,8 @@ static int process_results(mpz_t *factors, int *array_found, const mpz_t N,
     mpz_init(x_std);
     mpz_init(z_std);
 
-    const bool verify_results = env_flag_enabled("ECM_VERIFY_GPU_RESULTS");
-    const bool verify_strict = env_flag_enabled("ECM_VERIFY_GPU_STRICT");
+    const bool verify_results = ecm_runtime_config().verify_gpu_results;
+    const bool verify_strict = ecm_runtime_config().verify_gpu_strict;
 
     int youpi = ECM_NO_FACTOR_FOUND;
     int errors = 0;
@@ -646,11 +634,9 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
         return -1;
     }
     EcmStage1KernelBuildPlan build_plan = plan;
-    if (const char *v = std::getenv("ECM_STAGE1_FORCE_NORMALIZE")) {
-        build_plan.stage1_force_normalize = std::atoi(v);
-    }
-    if (const char *v = std::getenv("ECM_MP_ADD_MOD_FUSED_UNROLL")) {
-        int fused = std::atoi(v);
+    build_plan.stage1_force_normalize = ecm_runtime_config().stage1_force_normalize;
+    {
+        int fused = ecm_runtime_config().add_mod_fused_unroll;
         build_plan.add_mod_fused_unroll = (fused == 1 || fused == 2) ? fused : 2;
     }
     const std::string opts = opencl_ecm_stage1_generate_build_options(build_plan);
@@ -795,7 +781,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
                     uint32_t curves, uint32_t *sigma_ptr,
                     unsigned long checkpoint_interval_ms, float *gputime, int verbose,
                     const char *gpu_mul_path, const char *gpu_sqr_path, const char *gpu_add_path,
-                    const char *gpu_sub_path) {
+                    const char *gpu_sub_path, const char *gpu_special_mult_path) {
     uint32_t sigma = *sigma_ptr;
     if (sigma == 0 || (uint64_t)sigma + curves > 0xFFFFFFFFull) {
         ecm_ts_fprintf(stderr, "Invalid sigma/curves range\n");
@@ -902,7 +888,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     EcmPathContext ctx_sm2 = make_path_context(limbs, g_ctx.device);
     ctx_sm2.n_bit_size = n_log2;
     const EcmSpecialMultPathDescriptor *special_mult2 =
-        opencl_ecm_resolve_special_mult(nullptr, ctx_sm2);
+        opencl_ecm_resolve_special_mult(gpu_special_mult_path, ctx_sm2);
     const EcmStage1KernelBuildPlan build_plan =
         opencl_ecm_stage1_make_build_plan(limbs, tpi, mul, sqr, add, sub, special_mult2, 1, 2);
 
@@ -953,10 +939,19 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
 
     auto t_global_start = std::chrono::high_resolution_clock::now();
 
+    const uint32_t container_limbs = limbs;
+    const uint32_t wg_threads = (
+        (mul != nullptr && mul->coop_work_group_size > 1u) ||
+        (sqr != nullptr && sqr->coop_work_group_size > 1u))
+        ? std::max<uint32_t>(
+              mul != nullptr ? mul->coop_work_group_size : 1u,
+              sqr != nullptr ? sqr->coop_work_group_size : 1u)
+        : 1u;
+
     ecm_ts_fprintf(stdout,
-            "GPU: CGBN<%u,%u> kernel, %zu-bit N, %u curves, sigma=%u-%u, s=%llu bits, np0=0x%08x\n",
-            BITS, tpi, n_log2, curves, sigma, sigma + curves - 1,
-            (unsigned long long)s_num_bits, np0);
+            "GPU: OpenCL<%u limbs, %u thread%s> kernel, %zu-bit N, s=%llu bits, np0=0x%08x\n",
+            container_limbs, wg_threads, wg_threads > 1u ? "s" : "",
+            n_log2, (unsigned long long)s_num_bits, np0);
     const char *mont_mul_op = opencl_ecm_mont_mul_cl_name(mul);
     const char *mont_sqr_op = opencl_ecm_mont_sqr_cl_name(sqr);
     const char *add_op = add != nullptr ? add->cl_name : "unknown";
@@ -995,7 +990,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
 
     opencl_dump_begin(g_dump_ctx, verbose);
 
-    const bool sync_each_batch = g_dump_ctx.enabled || env_flag_enabled("ECM_SYNC_EACH_BATCH");
+    const bool sync_each_batch = g_dump_ctx.enabled || ecm_runtime_config().sync_each_batch;
 
     using steady_clock = std::chrono::steady_clock;
     const auto checkpoint_epoch = steady_clock::now();
@@ -1159,7 +1154,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
                        .count();
     }
     const uint64_t kernel_bits_processed = (s_partial > 0u) ? (s_partial - 1u) : 0u;
-    if (env_flag_enabled("ECM_PROFILE_OPS")) {
+    if (ecm_runtime_config().profile_ops) {
         const float gputime_local = gputime ? *gputime : 0.0f;
         const ecm_ops_profile_counts_t counts =
             compute_ops_profile_counts(kernel_bits_processed, curves);

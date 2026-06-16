@@ -4,6 +4,7 @@
 #include "opencl_android_shim.h"
 #include "opencl_loader.h"
 #include "opencl_ecm_log.h"
+#include "opencl_ecm_runtime_config.h"
 #include "opencl_program_cache.h"
 
 #include <sstream>
@@ -55,9 +56,9 @@ bool configure_device_index(int device_index, std::string& log) {
         log += "Invalid device index\n";
         return false;
     }
-    const std::string v = std::to_string(device_index);
-    setenv("CGBN_OPENCL_DEVICE_INDEX", v.c_str(), 1);
-    setenv("CGBN_OPENCL_CACHE_DIR", get_opencl_cache_dir().c_str(), 1);
+    // Android 无命令行：直接写入运行时配置（替代旧的 setenv 环境变量）。
+    ecm_runtime_config().device_index = device_index;
+    ecm_runtime_config().cache_dir = get_opencl_cache_dir();
     return true;
 }
 
@@ -245,7 +246,8 @@ std::string run_ecm_android(const EcmAndroidRunRequest& req) {
         params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
         params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr,
         params->gpu_add_path[0] ? params->gpu_add_path : nullptr,
-        params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr);
+        params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr,
+        params->gpu_special_mult_path[0] ? params->gpu_special_mult_path : nullptr);
 
     ecm_ts_fprintf(stdout, "opencl_ecm_stage1 returned: %d gputime=%.3f ms\n", ret, gputime);
 

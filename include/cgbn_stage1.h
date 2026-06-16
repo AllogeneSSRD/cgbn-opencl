@@ -35,7 +35,8 @@ int cgbn_ecm_stage1(mpz_t *factors, int *array_found,
              unsigned long checkpoint_interval_ms,
              float *gputime, int verbose,
              const char *gpu_mul_path, const char *gpu_sqr_path,
-             const char *gpu_add_path, const char *gpu_sub_path);
+             const char *gpu_add_path, const char *gpu_sub_path,
+             const char *gpu_special_mult_path);
 
 /* Pick a random starting sigma for ECM_PARAM_BATCH_32BITS_D (uint32 range). */
 uint32_t gpu_pick_random_sigma(uint32_t curves);

@@ -1,13 +1,13 @@
 param(
     [string]$N_expr  = "2^421-1",
-    [string]$B1_list = "1e4 1e5" #1e4 1e5
+    [string]$B1_list = "1e5" #1e4 1e5
 )
 
 $curves = @(1, 32, 64, 128, 256, 384, 512, 1024, 1536, 2048, 3072, 4096, 6144, 9216, 12288, 16384)
 
 $exe    = Join-Path $PSScriptRoot "build\Debug\ecm.exe"
 $sigma  = "2026"
-$device = 0
+$device = 1
 
 if (-not (Test-Path $exe)) {
     Write-Host "[ERROR] $exe not found"
