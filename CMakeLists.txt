@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 project(main)
 
+# MSVC Debug CRT (MDd) has an incompatibility with GMP's custom allocator
+# and our timestamped-log mutex contention pattern. Use Release CRT (/MD)
+# for all configurations to avoid crashes. Debug symbols still available.
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
+    add_compile_definitions($<$<CONFIG:Debug>:_ITERATOR_DEBUG_LEVEL=0>)
+    add_compile_definitions($<$<CONFIG:Debug>:_HAS_ITERATOR_DEBUGGING=0>)
+endif()
+
 # set(CMAKE_CXX_STANDARD 17)
 
 find_package(OpenCL REQUIRED)

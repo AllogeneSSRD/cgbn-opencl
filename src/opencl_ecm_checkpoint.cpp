@@ -133,9 +133,15 @@ const char *opencl_ecm_checkpoint_filename(const mpz_t N) {
     const size_t len = strlen(N_str);
     char first_hex[16] = {0};
     char last_hex[16] = {0};
+    // Use memcpy to avoid MSVC Debug CRT strncpy /GS interaction with
+    // GMP-allocated N_str (GMP uses its own allocator; CRT secure-strncpy
+    // may probe the buffer length through CRT heap metadata and crash).
+    // This fix is not needed for Release CRT (/MD) builds.
     strncpy(first_hex, N_str, (len >= 8u) ? 8u : len);
+    // std::memcpy(first_hex, N_str, (len >= 8u) ? 8u : len);
     if (len > 8u) {
         strncpy(last_hex, N_str + len - 8u, 8u);
+        // std::memcpy(last_hex, N_str + len - 8u, 8u);
     }
 
     char basename[512];

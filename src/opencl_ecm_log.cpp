@@ -67,7 +67,7 @@ bool g_installed = false;
 } // namespace
 
 bool ecm_log_timestamp_enabled() {
-    return ecm_runtime_config().log_timestamp;  // default ON; CLI --no-log-timestamp 关闭
+    return ecm_runtime_config().log_timestamp;  // default ON; Use --no-log-timestamp to disable
 }
 
 void ecm_install_timestamped_iostreams() {
