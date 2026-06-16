@@ -33,6 +33,7 @@
     <string name="hint_sub_path">--sub</string>
     <string name="hint_special_mult_path">--special-mult</string>
     <string name="btn_run_ecm">运行 ECM (-gpu)</string>
+    <string name="btn_worktodo">Worktodo 批量执行</string>
     <string name="chk_verbose">-v 详细输出</string>
     <string name="ecm_advanced_title">高级选项</string>
     <string name="toast_ecm_invalid">请检查 N、B1、gpucurves 等参数</string>

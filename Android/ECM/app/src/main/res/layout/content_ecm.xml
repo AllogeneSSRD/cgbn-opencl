@@ -325,6 +325,14 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:text="@string/btn_run_ecm" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_worktodo"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/btn_worktodo" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 

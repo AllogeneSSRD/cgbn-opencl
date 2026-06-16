@@ -12,6 +12,8 @@ class RunLogStore(context: Context) {
     enum class Channel {
         ECM,
         BENCH,
+        WORKTODO_SELFTEST,
+        WORKTODO_BENCHMARK,
     }
 
     private val logDir: File = AppStoragePaths.logsDir(context.applicationContext)
@@ -51,6 +53,8 @@ class RunLogStore(context: Context) {
         return when (channel) {
             Channel.ECM -> ECM_FILE_NAME
             Channel.BENCH -> BENCH_FILE_NAME
+            Channel.WORKTODO_SELFTEST -> "worktodo_selftest.log"
+            Channel.WORKTODO_BENCHMARK -> "worktodo_benchmark.log"
         }
     }
 

@@ -2,6 +2,7 @@ package com.example.ecm
 
 import android.content.Intent
 import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -31,6 +32,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
 
 class MainActivity : AppCompatActivity() {
 
@@ -91,6 +95,35 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val worktodoFilePicker = registerForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri: Uri? ->
+        if (uri == null) return@registerForActivityResult
+        runWorktodo(uri)
+    }
+
+    /**
+     * Copy worktodo templates from APK assets to externalFilesDir on first launch.
+     * Users can then modify these files via file manager or adb pull/push.
+     */
+    private fun ensureWorktodoTemplates() {
+        val dir = getExternalFilesDir(null) ?: return
+        val templates = listOf("worktodo_selftest.txt", "worktodo_benchmark.txt")
+        for (name in templates) {
+            val dest = File(dir, name)
+            if (dest.exists()) continue
+            try {
+                assets.open(name).use { input ->
+                    dest.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            } catch (_: Exception) {
+                // Template file missing from assets — skip silently
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -143,6 +176,9 @@ class MainActivity : AppCompatActivity() {
             val show = ecmAdvancedPanel.visibility != View.VISIBLE
             ecmAdvancedPanel.visibility = if (show) View.VISIBLE else View.GONE
         }
+        findViewById<MaterialButton>(R.id.btn_worktodo).setOnClickListener {
+            worktodoFilePicker.launch(arrayOf("*/*"))
+        }
         findViewById<MaterialButton>(R.id.btn_run_ecm).setOnClickListener {
             runEcm()
         }
@@ -177,6 +213,8 @@ class MainActivity : AppCompatActivity() {
 
         setupBottomNav()
         showTab(Tab.ECM)
+
+        ensureWorktodoTemplates()
         scroll.post { preventInitialKeyboard() }
         runNative(Tab.ECM, sessionHeader = "OpenCL probe", showSavedToast = false) {
             nativeProbe(openClLoadError)
@@ -510,6 +548,200 @@ class MainActivity : AppCompatActivity() {
                 scrollToOutput(Tab.ECM)
                 if (AppSettings.isLogSavedToastEnabled(this)) {
                     notifyLogSaved(Tab.ECM)
+                }
+            }
+        }
+    }
+
+    /** Regex keywords for mode detection in first non-blank line. */
+    private val SELFTEST_KEYWORD  = Regex("""selftest""", RegexOption.IGNORE_CASE)
+    private val BENCHMARK_KEYWORD = Regex("""benchmark""", RegexOption.IGNORE_CASE)
+
+    /**
+     * Detect worktodo mode from the FIRST non-blank line only.
+     * Returns: (channel, isBenchmark, isRaw)
+     *   - Comment line with "selftest" → WORKTODO_SELFTEST, isBenchmark=false, isRaw=false
+     *   - Comment line with "benchmark" → WORKTODO_BENCHMARK, isBenchmark=true, isRaw=false
+     *   - Comment line with no keyword → ECM (raw mode, full output)
+     *   - Command line (starts with echo) → ECM (raw mode, full output)
+     */
+    private fun detectWorktodoMode(lines: List<String>): Triple<RunLogStore.Channel, Boolean, Boolean> {
+        val first = lines.firstOrNull { it.isNotBlank() }?.trim() ?: ""
+        if (first.startsWith("#")) {
+            if (SELFTEST_KEYWORD.containsMatchIn(first)) {
+                return Triple(RunLogStore.Channel.WORKTODO_SELFTEST, false, false)
+            }
+            if (BENCHMARK_KEYWORD.containsMatchIn(first)) {
+                return Triple(RunLogStore.Channel.WORKTODO_BENCHMARK, true, false)
+            }
+        }
+        // No keyword or first line is a command → raw ECM mode
+        return Triple(RunLogStore.Channel.ECM, false, true)
+    }
+
+    /** Extract factor[N]=value from native output. */
+    private fun extractFactor(output: String): String? {
+        val re = Regex("""factor\[\d+\]\s*=\s*(\d+)""")
+        return re.find(output)?.groupValues?.get(1)
+    }
+
+    /** Extract gputime=xxx ms from native output. */
+    private fun extractGputime(output: String): String? {
+        val re = Regex("""gputime=([\d.]+)\s*ms""")
+        return re.find(output)?.groupValues?.get(1)
+    }
+
+    /**
+     * Parse worktodo file from URI and execute each line sequentially.
+     * Mode is detected from the FIRST non-blank line:
+     *   "# selftest"   → selftest  (factor comparison, PASS/FAIL per line)
+     *   "# benchmark"  → benchmark (gputime only, no factor output)
+     *   anything else  → raw       (full output dumped to scroll window, like regular ECM)
+     * All output is written to the log system in real-time.
+     */
+    private fun runWorktodo(uri: Uri) {
+        outputTextEcm.text = ""
+        setBusy(true, Tab.ECM)
+        benchExecutor.execute {
+            try {
+                val lines = contentResolver.openInputStream(uri)?.use { stream ->
+                    BufferedReader(InputStreamReader(stream)).readLines()
+                } ?: emptyList()
+                if (lines.isEmpty()) {
+                    runOnUiThread {
+                        outputTextEcm.text = "Error: empty file"
+                        setBusy(false, Tab.ECM)
+                    }
+                    return@execute
+                }
+
+                val (channel, isBenchmark, isRaw) = detectWorktodoMode(lines)
+                val modeName = when {
+                    isRaw -> "raw"
+                    isBenchmark -> "benchmark"
+                    else -> "selftest"
+                }
+                val header = "=== Worktodo: ${uri.lastPathSegment ?: "unknown"} ($modeName) ==="
+
+                // Start log session
+                if (AppSettings.isLogToFileEnabled(this)) {
+                    logStore.beginSession(channel, header)
+                }
+
+                val sb = StringBuilder()
+                sb.appendLine(header)
+                var pass = 0
+                var fail = 0
+                var total = 0
+
+                var i = 0
+                while (i < lines.size) {
+                    val cur = lines[i].trim()
+                    if (cur.isEmpty() || (cur.startsWith("#") && total == 0)) {
+                        i++
+                        continue
+                    }
+                    if (!cur.startsWith("echo")) {
+                        i++
+                        continue
+                    }
+                    val nextLine = if (i + 1 < lines.size) lines[i + 1].trim() else null
+                    val wl = WorktodoLine.parse(cur, nextLine) ?: run {
+                        val skipMsg = "  [SKIP] $cur\n"
+                        sb.append(skipMsg)
+                        logStore.append(channel, skipMsg)
+                        i++
+                        continue
+                    }
+                    total++
+                    val progress = "[$total]"
+                    val detail = "$progress N=${wl.nExpr} σ=${wl.sigma} curves=${wl.gpuCurves} B1=${wl.b1}\n"
+                    sb.append(detail)
+                    logStore.append(channel, detail)
+                    runOnUiThread { outputTextEcm.text = sb.toString() }
+
+                    val capture = StringBuilder()
+                    val logCallback = EcmLogCallback { line ->
+                        val t = line.trim()
+                        if (isRaw) {
+                            // Raw mode: dump all output to scroll window
+                            capture.appendLine(t)
+                        } else if (isBenchmark) {
+                            if (t.contains("gputime=")) {
+                                capture.append("  ").appendLine(t)
+                            }
+                        } else {
+                            // Selftest
+                            if (t.contains("factor[") || t.contains("gputime=")) {
+                                capture.append("  ").appendLine(t)
+                            }
+                        }
+                    }
+
+                    val startTime = System.currentTimeMillis()
+                    val tail = try {
+                        nativeRunEcm(
+                            wl.nExpr, wl.b1, wl.b2, wl.gpuCurves, wl.deviceIndex,
+                            wl.verbose, 600.0, wl.sigma,
+                            wl.mulPath, wl.sqrPath, wl.addPath, wl.subPath, wl.specialMultPath,
+                            "", false, logCallback,
+                        )
+                    } catch (e: Exception) {
+                        "Error: ${e.message}"
+                    }
+                    val elapsed = (System.currentTimeMillis() - startTime) / 1000.0
+
+                    val resultLine: String
+                    if (isRaw) {
+                        resultLine = "  done (${elapsed}s)\n"
+                    } else if (isBenchmark) {
+                        resultLine = "  done (${elapsed}s)\n"
+                    } else {
+                        // Selftest: nativeRunEcm returns only "RESULT: OK" when logCallback
+                        // is active (full output goes to callback). Extract factor from
+                        // the captured callback lines, not from tail.
+                        val factorFound = extractFactor(capture.toString())
+                        if (factorFound != null && factorFound == wl.expectedFactor && wl.expectedFactor.isNotEmpty()) {
+                            pass++
+                            resultLine = "  PASS (${elapsed}s)\n"
+                        } else if (wl.expectedFactor.isNotEmpty()) {
+                            fail++
+                            resultLine = "  FAIL expected=${wl.expectedFactor} got=${factorFound ?: "(none)"} (${elapsed}s)\n"
+                        } else {
+                            resultLine = "  done (${elapsed}s)\n"
+                        }
+                    }
+
+                    val blk = capture.toString() + resultLine
+                    sb.append(blk)
+                    logStore.append(channel, blk)
+
+                    runOnUiThread {
+                        outputTextEcm.text = sb.toString()
+                        scrollToOutput(Tab.ECM)
+                    }
+                    i++
+                }
+
+                val summary = "\n=== Results: $pass PASS, $fail FAIL, $total TOTAL ===\n"
+                sb.append(summary)
+                logStore.append(channel, summary)
+
+                runOnUiThread {
+                    outputTextEcm.text = sb.toString()
+                    setBusy(false, Tab.ECM)
+                    scrollToOutput(Tab.ECM)
+                    if (AppSettings.isLogSavedToastEnabled(this)) {
+                        val path = logStore.displayPath(channel)
+                        Toast.makeText(
+                            this, getString(R.string.log_saved_toast, path), Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    outputTextEcm.text = "Error reading file: ${e.message}"
+                    setBusy(false, Tab.ECM)
                 }
             }
         }

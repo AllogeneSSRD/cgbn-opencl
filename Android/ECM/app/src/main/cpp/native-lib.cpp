@@ -246,7 +246,10 @@ Java_com_example_ecm_MainActivity_nativeRunEcm(
     if (!sigma.empty()) {
         try {
             req.sigma_fixed = true;
-            req.sigma = static_cast<uint32_t>(std::stoul(sigma));
+            // Desktop sigma format: "3:N" (param:value). Extract only the value.
+            auto colon = sigma.find(':');
+            std::string value_str = (colon != std::string::npos) ? sigma.substr(colon + 1) : sigma;
+            req.sigma = static_cast<uint32_t>(std::stoul(value_str));
         } catch (...) {
             return new_jstring_utf8(env, "Invalid sigma value");
         }
