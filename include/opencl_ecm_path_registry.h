@@ -183,17 +183,10 @@ bool opencl_ecm_stage1_build_plan_equal(const EcmStage1KernelBuildPlan &a,
                                         const EcmStage1KernelBuildPlan &b);
 int opencl_ecm_parse_mont4096_path(const char *path, size_t n_bit_size);
 const EcmMontPathDescriptor *opencl_ecm_stage1_compatible_mont_fallback(size_t n_bit_size, uint32_t limbs);
-const char *opencl_ecm_mont_path_cl_name(const EcmMontPathDescriptor *desc,
-                                         const char *fallback_cl_name);
 const char *opencl_ecm_mont_mul_cl_name(const EcmMontPathDescriptor *desc);
 const char *opencl_ecm_mont_sqr_cl_name(const EcmMontPathDescriptor *desc);
 const char *opencl_ecm_special_mult_cl_name(const EcmSpecialMultPathDescriptor *desc,
                                              const char *fallback_cl_name);
-const char *opencl_ecm_stage1_mont_mode_name(ecm_stage1_mont_mode mode);
-const char *opencl_ecm_stage1_mont_sqr_mode_name(ecm_stage1_mont_mode mode);
-ecm_stage1_mont_mode opencl_ecm_resolve_stage1_mont_mode(const char *gpu_mul_path,
-                                                         const char *gpu_sqr_path,
-                                                         size_t n_bit_size);
 int opencl_ecm_parse_addsub_path(const char *path);
 const char *opencl_ecm_addsub_path_name(int path_id);
 bool opencl_ecm_addsub_path_needs_asm_b32(int path_id);

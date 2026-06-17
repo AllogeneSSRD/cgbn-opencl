@@ -337,20 +337,71 @@ int mont_id_kernel_path(const char *id) {
     return ECM_MONT4096_PATH_UNROLL64;
 }
 
-std::vector<const EcmMontPathDescriptor *> auto_sorted_mont(const EcmMontPathDescriptor *registry,
-                                                            size_t count) {
-    std::vector<const EcmMontPathDescriptor *> out;
+// -----------------------------------------------------------------------------
+// Generic operator resolver (shared by mul/sqr, add/sub, special_mult).
+//
+// All descriptor types expose `.id`, `.aliases`, `.auto_priority`; the only
+// family-specific piece is the `fits(desc, limbs, runtime_mask)` predicate, which
+// is passed in. Resolution is uniform:
+//
+//   * "auto"/"default"/empty -> first descriptor that fits, in auto_priority order
+//     (manual-only entries, auto_priority < 0, are skipped).
+//   * explicit id/alias      -> first alias match that fits this platform/container;
+//                               if an alias matched but none fit, fall back to the
+//                               same auto best-fit (NO hardcoded per-family fallback
+//                               id such as priv_opt / fused_unroll / generic).
+//   * unknown alias          -> nullptr, *unknown_path = true.
+//
+// Registry contract: every family includes one unconstrained, auto-eligible
+// catch-all (e.g. priv_opt / fused_unroll / generic) so auto best-fit always
+// resolves; that contract -- not special-case code -- guarantees a fallback.
+// -----------------------------------------------------------------------------
+template <class D, class FitsFn>
+const D *resolve_operator_path(const D *reg, size_t count, const char *path, uint32_t limbs,
+                               uint32_t runtime_mask, FitsFn fits, bool *unknown_path) {
+    if (unknown_path != nullptr) {
+        *unknown_path = false;
+    }
+    auto first_fitting_by_priority = [&]() -> const D * {
+        std::vector<const D *> ordered;
+        ordered.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            if (reg[i].auto_priority >= 0) {
+                ordered.push_back(&reg[i]);
+            }
+        }
+        std::stable_sort(ordered.begin(), ordered.end(),
+                         [](const D *a, const D *b) { return a->auto_priority < b->auto_priority; });
+        for (const D *d : ordered) {
+            if (fits(d, limbs, runtime_mask)) {
+                return d;
+            }
+        }
+        return nullptr;
+    };
+
+    if (opencl_ecm_path_is_auto(path)) {
+        return first_fitting_by_priority();
+    }
+    const D *matched = nullptr;
     for (size_t i = 0; i < count; ++i) {
-        if (registry[i].auto_priority < 0) {
+        if (!aliases_contain(reg[i].aliases, path)) {
             continue;
         }
-        out.push_back(&registry[i]);
+        if (fits(&reg[i], limbs, runtime_mask)) {
+            return &reg[i];
+        }
+        if (matched == nullptr) {
+            matched = &reg[i];
+        }
     }
-    std::sort(out.begin(), out.end(),
-              [](const EcmMontPathDescriptor *a, const EcmMontPathDescriptor *b) {
-                  return a->auto_priority < b->auto_priority;
-              });
-    return out;
+    if (matched != nullptr) {
+        return first_fitting_by_priority();
+    }
+    if (unknown_path != nullptr) {
+        *unknown_path = true;
+    }
+    return nullptr;
 }
 
 const EcmMontPathDescriptor *find_mont_by_id(const EcmMontPathDescriptor *registry, size_t count,
@@ -382,74 +433,6 @@ const EcmMontPathDescriptor *find_mont_legacy_mode(const EcmMontPathDescriptor *
     }
 }
 
-const EcmMontPathDescriptor *resolve_mont_side(const EcmMontPathDescriptor *registry, size_t count,
-                                               const char *path, uint32_t limbs,
-                                               uint32_t runtime_mask,
-                                               bool *unknown_path) {
-    if (unknown_path != nullptr) {
-        *unknown_path = false;
-    }
-    const EcmMontPathDescriptor *priv_opt = find_mont_by_id(registry, count, "priv_opt");
-    const EcmMontPathDescriptor *unroll512 = find_mont_by_id(registry, count, "unroll_512b");
-
-    if (opencl_ecm_path_is_auto(path)) {
-        for (const EcmMontPathDescriptor *desc : auto_sorted_mont(registry, count)) {
-            if (ecm_mont_path_fits(desc, limbs, runtime_mask)) {
-                return desc;
-            }
-        }
-        return priv_opt != nullptr ? priv_opt : unroll512;
-    }
-
-    // An alias (e.g. "unroll_only_512") may map to several descriptors that differ only by
-    // platform gating — the auto (#pragma unroll) variant for desktop and the manual
-    // constant-index variant for Android. Scan all alias matches and return the first that
-    // actually fits this platform/container; only fall back if none fit.
-    const EcmMontPathDescriptor *alias_hit = nullptr;
-    for (size_t i = 0; i < count; ++i) {
-        const EcmMontPathDescriptor &desc = registry[i];
-        if (!aliases_contain(desc.aliases, path)) {
-            continue;
-        }
-        if (ecm_mont_path_fits(&desc, limbs, runtime_mask)) {
-            return &desc;
-        }
-        if (alias_hit == nullptr) {
-            alias_hit = &desc;
-        }
-    }
-    if (alias_hit != nullptr) {
-        const int min_pri = alias_hit->auto_priority >= 0 ? alias_hit->auto_priority + 1 : 0;
-        for (const EcmMontPathDescriptor *fb : auto_sorted_mont(registry, count)) {
-            if (fb->auto_priority < min_pri) {
-                continue;
-            }
-            if (ecm_mont_path_fits(fb, limbs, runtime_mask)) {
-                return fb;
-            }
-        }
-        return priv_opt != nullptr ? priv_opt : unroll512;
-    }
-
-    if (unknown_path != nullptr) {
-        *unknown_path = true;
-    }
-    return nullptr;
-}
-
-const EcmAddSubPathDescriptor *find_addsub_by_id(const EcmAddSubPathDescriptor *registry,
-                                                 size_t count, const char *id) {
-    if (id == nullptr) {
-        return nullptr;
-    }
-    for (size_t i = 0; i < count; ++i) {
-        if (registry[i].id != nullptr && strcmp(registry[i].id, id) == 0) {
-            return &registry[i];
-        }
-    }
-    return nullptr;
-}
-
 const EcmAddSubPathDescriptor *find_addsub_by_kernel_path(const EcmAddSubPathDescriptor *registry,
                                                           size_t count, int kernel_path) {
     for (size_t i = 0; i < count; ++i) {
@@ -458,34 +441,6 @@ const EcmAddSubPathDescriptor *find_addsub_by_kernel_path(const EcmAddSubPathDes
         }
     }
     return nullptr;
-}
-
-const EcmAddSubPathDescriptor *resolve_addsub_side(const EcmAddSubPathDescriptor *registry,
-                                                   size_t count, const char *path,
-                                                   uint32_t limbs, uint32_t runtime_mask) {
-    if (!opencl_ecm_path_is_auto(path)) {
-        for (size_t i = 0; i < count; ++i) {
-            if (aliases_contain(registry[i].aliases, path)) {
-                return &registry[i];
-            }
-        }
-        return nullptr;
-    }
-    std::vector<const EcmAddSubPathDescriptor *> ordered;
-    ordered.reserve(count);
-    for (size_t i = 0; i < count; ++i) {
-        ordered.push_back(&registry[i]);
-    }
-    std::sort(ordered.begin(), ordered.end(),
-              [](const EcmAddSubPathDescriptor *a, const EcmAddSubPathDescriptor *b) {
-                  return a->auto_priority < b->auto_priority;
-              });
-    for (const EcmAddSubPathDescriptor *desc : ordered) {
-        if (ecm_addsub_path_fits(desc, limbs, runtime_mask)) {
-            return desc;
-        }
-    }
-    return find_addsub_by_id(registry, count, "fused_unroll");
 }
 
 void append_define(std::string &opts, const char *macro, int value) {
@@ -755,14 +710,16 @@ const EcmMontPathDescriptor *opencl_ecm_mont_sqr_descriptor(ecm_stage1_mont_mode
 
 const EcmMontPathDescriptor *opencl_ecm_resolve_mont_mul(const char *path, const EcmPathContext &ctx,
                                                          bool *unknown_path) {
-    return resolve_mont_side(kMontMulRegistry, opencl_ecm_mont_mul_registry_count(), path,
-                             ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask, unknown_path);
+    return resolve_operator_path(kMontMulRegistry, opencl_ecm_mont_mul_registry_count(), path,
+                                 ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask, ecm_mont_path_fits,
+                                 unknown_path);
 }
 
 const EcmMontPathDescriptor *opencl_ecm_resolve_mont_sqr(const char *path, const EcmPathContext &ctx,
                                                          bool *unknown_path) {
-    return resolve_mont_side(kMontSqrRegistry, opencl_ecm_mont_sqr_registry_count(), path,
-                             ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask, unknown_path);
+    return resolve_operator_path(kMontSqrRegistry, opencl_ecm_mont_sqr_registry_count(), path,
+                                 ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask, ecm_mont_path_fits,
+                                 unknown_path);
 }
 
 size_t opencl_ecm_addmod_registry_count() {
@@ -783,8 +740,9 @@ const EcmAddSubPathDescriptor *opencl_ecm_addmod_descriptor_by_kernel_path(int k
 
 const EcmAddSubPathDescriptor *opencl_ecm_resolve_addmod_path(const char *path,
                                                               const EcmPathContext &ctx) {
-    return resolve_addsub_side(kAddModRegistry, opencl_ecm_addmod_registry_count(), path,
-                               ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask);
+    return resolve_operator_path(kAddModRegistry, opencl_ecm_addmod_registry_count(), path,
+                                 ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask, ecm_addsub_path_fits,
+                                 nullptr);
 }
 
 size_t opencl_ecm_submod_registry_count() {
@@ -805,8 +763,9 @@ const EcmAddSubPathDescriptor *opencl_ecm_submod_descriptor_by_kernel_path(int k
 
 const EcmAddSubPathDescriptor *opencl_ecm_resolve_submod_path(const char *path,
                                                               const EcmPathContext &ctx) {
-    return resolve_addsub_side(kSubModRegistry, opencl_ecm_submod_registry_count(), path,
-                               ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask);
+    return resolve_operator_path(kSubModRegistry, opencl_ecm_submod_registry_count(), path,
+                                 ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask, ecm_addsub_path_fits,
+                                 nullptr);
 }
 
 size_t opencl_ecm_special_mult_registry_count() {
@@ -822,36 +781,9 @@ const EcmSpecialMultPathDescriptor *opencl_ecm_special_mult_registry_entry(size_
 
 const EcmSpecialMultPathDescriptor *opencl_ecm_resolve_special_mult(const char *path,
                                                                      const EcmPathContext &ctx) {
-    if (!opencl_ecm_path_is_auto(path) && path != nullptr && strcmp(path, "generic") != 0) {
-        for (size_t i = 0; i < opencl_ecm_special_mult_registry_count(); ++i) {
-            if (aliases_contain(kSpecialMultRegistry[i].aliases, path)) {
-                return &kSpecialMultRegistry[i];
-            }
-        }
-    }
-    std::vector<const EcmSpecialMultPathDescriptor *> ordered;
-    ordered.reserve(opencl_ecm_special_mult_registry_count());
-    for (size_t i = 0; i < opencl_ecm_special_mult_registry_count(); ++i) {
-        ordered.push_back(&kSpecialMultRegistry[i]);
-    }
-    std::sort(ordered.begin(), ordered.end(),
-              [](const EcmSpecialMultPathDescriptor *a, const EcmSpecialMultPathDescriptor *b) {
-                  return a->auto_priority < b->auto_priority;
-              });
-    uint32_t runtime_mask = ctx.os_mask | ctx.gpu_vendor_mask;
-    for (const EcmSpecialMultPathDescriptor *desc : ordered) {
-        if (ecm_special_mult_path_fits(desc, ctx.limbs, runtime_mask)) {
-            return desc;
-        }
-    }
-    // Fallback to generic
-    static const char *kGenericId = "generic";
-    for (size_t i = 0; i < opencl_ecm_special_mult_registry_count(); ++i) {
-        if (kSpecialMultRegistry[i].id != nullptr && strcmp(kSpecialMultRegistry[i].id, kGenericId) == 0) {
-            return &kSpecialMultRegistry[i];
-        }
-    }
-    return nullptr;
+    return resolve_operator_path(kSpecialMultRegistry, opencl_ecm_special_mult_registry_count(),
+                                 path, ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask,
+                                 ecm_special_mult_path_fits, nullptr);
 }
 
 int ecm_special_mult_descriptor_kernel_path(const EcmSpecialMultPathDescriptor *desc) {
@@ -931,20 +863,12 @@ const EcmMontPathDescriptor *opencl_ecm_stage1_compatible_mont_fallback(size_t n
     return opencl_ecm_resolve_mont_mul(nullptr, ctx, nullptr);
 }
 
-const char *opencl_ecm_mont_path_cl_name(const EcmMontPathDescriptor *desc,
-                                         const char *fallback_cl_name) {
-    if (desc != nullptr && desc->cl_name != nullptr) {
-        return desc->cl_name;
-    }
-    return fallback_cl_name;
-}
-
 const char *opencl_ecm_mont_mul_cl_name(const EcmMontPathDescriptor *desc) {
-    return opencl_ecm_mont_path_cl_name(desc, "mont_mul_priv_unroll_only_512");
+    return (desc != nullptr && desc->cl_name != nullptr) ? desc->cl_name : "mont_mul_unroll_512b";
 }
 
 const char *opencl_ecm_mont_sqr_cl_name(const EcmMontPathDescriptor *desc) {
-    return opencl_ecm_mont_path_cl_name(desc, "mont_sqr_priv_unroll_only_512");
+    return (desc != nullptr && desc->cl_name != nullptr) ? desc->cl_name : "mont_sqr_unroll_512b";
 }
 
 const char *opencl_ecm_special_mult_cl_name(const EcmSpecialMultPathDescriptor *desc,
@@ -965,47 +889,6 @@ int opencl_ecm_parse_mont4096_path(const char *path, size_t n_bit_size) {
         return ECM_MONT4096_PATH_UNROLL64;
     }
     return ecm_mont_descriptor_kernel_path(desc);
-}
-
-namespace {
-
-ecm_stage1_mont_mode mont_desc_legacy_mode(const EcmMontPathDescriptor *d) {
-    if (d == nullptr || d->id == nullptr) {
-        return ECM_STAGE1_MONT_UNROLL512;
-    }
-    if (strcmp(d->id, "unroll_only_384") == 0) {
-        return ECM_STAGE1_MONT_UNROLL384;
-    }
-    if (strcmp(d->id, "unroll_only_512") == 0) {
-        return ECM_STAGE1_MONT_UNROLL512;
-    }
-    if (strcmp(d->id, "unroll32") == 0) {
-        return ECM_STAGE1_MONT_UNROLL32;
-    }
-    if (strcmp(d->id, "priv_opt") == 0) {
-        return ECM_STAGE1_MONT_PRIV_OPT;
-    }
-    return ECM_STAGE1_MONT_UNROLL512;
-}
-
-} // namespace
-
-ecm_stage1_mont_mode opencl_ecm_resolve_stage1_mont_mode(const char *gpu_mul_path,
-                                                         const char *gpu_sqr_path,
-                                                         size_t n_bit_size) {
-    (void)gpu_sqr_path;
-    EcmPathContext ctx{};
-    ctx.limbs = static_cast<uint32_t>((n_bit_size + 31u) / 32u);
-    ctx.n_bit_size = n_bit_size;
-    return mont_desc_legacy_mode(opencl_ecm_resolve_mont_mul(gpu_mul_path, ctx, nullptr));
-}
-
-const char *opencl_ecm_stage1_mont_mode_name(ecm_stage1_mont_mode mode) {
-    return opencl_ecm_mont_mul_cl_name(opencl_ecm_mont_mul_descriptor(mode));
-}
-
-const char *opencl_ecm_stage1_mont_sqr_mode_name(ecm_stage1_mont_mode mode) {
-    return opencl_ecm_mont_sqr_cl_name(opencl_ecm_mont_sqr_descriptor(mode));
 }
 
 int opencl_ecm_parse_addsub_path(const char *path) {
