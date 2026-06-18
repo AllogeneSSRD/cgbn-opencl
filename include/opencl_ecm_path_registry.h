@@ -10,34 +10,30 @@
 #include "opencl_ecm_mont.h"
 
 // OS and GPU vendor share a single 32-bit "platform mask" but occupy DISJOINT bit ranges:
-//   OS  -> low  16 bits (mask ECM_OS_ANY)
-//   GPU -> high 16 bits (mask ECM_GPU_ANY)
-// so a runtime mask = os_bits | gpu_bits never aliases (previously ECM_OS_ANDROID collided with
-// ECM_GPU_NVIDIA). A descriptor's gpu_vendor_exclude_mask is tested against the FULL runtime mask,
-// so it can exclude by OS (e.g. ECM_OS_ANDROID) or by GPU (e.g. ECM_GPU_AMD) — any combination.
+//   OS  -> low  16 bits (mask OS_ANY)
+//   GPU -> high 16 bits (mask GPU_ANY)
+// so a runtime mask = os_bits | gpu_bits never aliases (previously OS_ANDROID collided with
+// GPU_NVIDIA). A descriptor's gpu_vendor_exclude_mask is tested against the FULL runtime mask,
+// so it can exclude by OS (e.g. OS_ANDROID) or by GPU (e.g. GPU_AMD) — any combination.
 enum EcmPathOs : uint32_t {
-    ECM_OS_WINDOWS = 1u << 0,
-    ECM_OS_ANDROID = 1u << 1,
-    ECM_OS_LINUX = 1u << 2,
-    ECM_OS_MACOS = 1u << 3,
+    OS_WINDOWS = 1u << 0,
+    OS_ANDROID = 1u << 1,
+    OS_LINUX = 1u << 2,
+    OS_MACOS = 1u << 3,
 };
-constexpr uint32_t ECM_OS_ANY = 0x0000FFFFu;
+constexpr uint32_t OS_ANY = 0x0000FFFFu;
 
 enum EcmPathGpuVendor : uint32_t {
-    ECM_GPU_AMD = 1u << 16,
-    ECM_GPU_NVIDIA = 1u << 17,
-    ECM_GPU_INTEL = 1u << 18,
-    ECM_GPU_QUALCOMM = 1u << 19,
-    ECM_GPU_HUAWEI = 1u << 20,
-    ECM_GPU_APPLE = 1u << 21,
+    GPU_AMD = 1u << 16,
+    GPU_NVIDIA = 1u << 17,
+    GPU_INTEL = 1u << 18,
+    GPU_QUALCOMM = 1u << 19,
+    GPU_HUAWEI = 1u << 20,
+    GPU_APPLE = 1u << 21,
 };
-constexpr uint32_t ECM_GPU_ANY = 0xFFFF0000u;
+constexpr uint32_t GPU_ANY = 0xFFFF0000u;
 
 constexpr size_t ECM_STAGE1_MONT_CARRY_BITS = 6u;
-constexpr size_t ECM_STAGE1_UNROLL384_MAX_BITS = 384u;
-constexpr size_t ECM_STAGE1_UNROLL512_CONTAINER_BITS = 512u;
-constexpr size_t ECM_PATH_4096_AUTO_MIN_BITS = 3072u;
-constexpr size_t ECM_PATH_4096_CONTAINER_BITS = 4096u;
 
 struct EcmPathContext {
     uint32_t limbs;
@@ -52,7 +48,7 @@ struct EcmMontPathDescriptor {
     const char *cl_name;
     const char *const *aliases;
     const char *kernel_path;
-    int8_t auto_priority;
+    uint16_t auto_priority;
     uint32_t min_limbs;
     uint32_t max_limbs;
     uint32_t max_container_limbs;
@@ -69,7 +65,7 @@ struct EcmAddSubPathDescriptor {
     const char *cl_name;
     const char *const *aliases;
     const char *kernel_path;
-    int8_t auto_priority;
+    uint16_t auto_priority;
     uint32_t min_limbs;
     uint32_t max_limbs;
     uint32_t max_container_limbs;
@@ -83,7 +79,7 @@ struct EcmSpecialMultPathDescriptor {
     const char *cl_name;
     const char *const *aliases;
     const char *kernel_path;
-    int8_t auto_priority;
+    uint16_t auto_priority;
     uint32_t min_limbs;
     uint32_t max_limbs;
     uint32_t os_mask;
@@ -98,12 +94,11 @@ enum ecm_stage1_mont_mode {
     ECM_STAGE1_MONT_PRIV_OPT = 5,
 };
 
-enum {
-    ECM_MONT4096_PATH_UNROLL64 = 0,
-    ECM_MONT4096_PATH_FIPS4096 = 2,
-    ECM_MONT4096_PATH_FIPS4096_MT8 = 3,
-    ECM_MONT4096_PATH_FIPS4096_MT16 = 4,
-};
+// Injected as -DECM_STAGE1_{MUL,SQR}_PATH so ecm_stage1_coop.cl can #if
+// select the right multi-threaded inner function. Zero means "no coop".
+// Derived from desc->cl_name, not stored in the descriptor struct.
+enum { EcmCoopKernelPath_None = 0, EcmCoopKernelPath_FIPS4096 = 2,
+       EcmCoopKernelPath_FIPS4096_MT8 = 3, EcmCoopKernelPath_FIPS4096_MT16 = 4 };
 
 enum {
     ECM_ADDSUB_PATH_FUSED = 0,
@@ -143,18 +138,16 @@ bool ecm_addsub_path_fits(const EcmAddSubPathDescriptor *desc, uint32_t limbs, u
 bool ecm_special_mult_path_fits(const EcmSpecialMultPathDescriptor *desc, uint32_t limbs, uint32_t runtime_mask);
 bool opencl_ecm_path_is_auto(const char *path);
 int ecm_addsub_descriptor_kernel_path(const EcmAddSubPathDescriptor *desc);
-int ecm_mont_descriptor_kernel_path(const EcmMontPathDescriptor *desc);
 int ecm_special_mult_descriptor_kernel_path(const EcmSpecialMultPathDescriptor *desc);
+int ecm_coop_kernel_path_from_desc(const EcmMontPathDescriptor *desc);
 std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(const EcmStage1KernelBuildPlan &plan);
 std::string opencl_ecm_stage1_assemble_kernel_source(
     const EcmStage1KernelBuildPlan &plan,
     const std::function<std::string(const char *rel_path)> &load_file);
 size_t opencl_ecm_mont_mul_registry_count();
 const EcmMontPathDescriptor *opencl_ecm_mont_mul_registry_entry(size_t index);
-const EcmMontPathDescriptor *opencl_ecm_mont_mul_descriptor(ecm_stage1_mont_mode mode);
 size_t opencl_ecm_mont_sqr_registry_count();
 const EcmMontPathDescriptor *opencl_ecm_mont_sqr_registry_entry(size_t index);
-const EcmMontPathDescriptor *opencl_ecm_mont_sqr_descriptor(ecm_stage1_mont_mode mode);
 const EcmMontPathDescriptor *opencl_ecm_resolve_mont_mul(const char *path, const EcmPathContext &ctx,
                                                          bool *unknown_path);
 const EcmMontPathDescriptor *opencl_ecm_resolve_mont_sqr(const char *path, const EcmPathContext &ctx,
@@ -181,10 +174,9 @@ EcmStage1KernelBuildPlan opencl_ecm_stage1_make_build_plan(
 std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildPlan &plan);
 bool opencl_ecm_stage1_build_plan_equal(const EcmStage1KernelBuildPlan &a,
                                         const EcmStage1KernelBuildPlan &b);
-int opencl_ecm_parse_mont4096_path(const char *path, size_t n_bit_size);
 const EcmMontPathDescriptor *opencl_ecm_stage1_compatible_mont_fallback(size_t n_bit_size, uint32_t limbs);
-const char *opencl_ecm_mont_mul_cl_name(const EcmMontPathDescriptor *desc);
-const char *opencl_ecm_mont_sqr_cl_name(const EcmMontPathDescriptor *desc);
+const EcmMontPathDescriptor *mont_auto_fallback(const EcmMontPathDescriptor *registry, size_t count,
+                                                uint32_t limbs, uint32_t runtime_mask);
 const char *opencl_ecm_special_mult_cl_name(const EcmSpecialMultPathDescriptor *desc,
                                              const char *fallback_cl_name);
 int opencl_ecm_parse_addsub_path(const char *path);

@@ -530,39 +530,38 @@ static void stage1_clamp_mont_desc(const EcmMontPathDescriptor *&mul,
                                  uint32_t limbs) {
     EcmPathContext ctx = make_path_context(limbs, g_ctx.device);
     ctx.n_bit_size = n_bit_size;
-    if (mul != nullptr && !ecm_mont_path_fits(mul, ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask)) {
+    const uint32_t runtime_mask = ctx.os_mask | ctx.gpu_vendor_mask;
+    if (mul != nullptr && !ecm_mont_path_fits(mul, ctx.limbs, runtime_mask)) {
+        const EcmMontPathDescriptor *fb = mont_auto_fallback(
+            opencl_ecm_mont_mul_registry_entry(0),
+            opencl_ecm_mont_mul_registry_count(), limbs, runtime_mask);
+        const char *new_name = fb ? fb->cl_name : "?";
         if (!ecm_path_limbs_fits(mul->min_limbs, mul->max_limbs, limbs)) {
             ecm_ts_fprintf(stderr,
                            "Warning: mul %s requires limbs [%u,%u], got %u; using %s\n", mul->id,
-                           mul->min_limbs, mul->max_limbs, limbs,
-                           opencl_ecm_mont_mul_cl_name(
-                               opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_UNROLL512)));
-            mul = opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_UNROLL512);
-        } else if (!ecm_mont_path_fits(mul, ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask)) {
+                           mul->min_limbs, mul->max_limbs, limbs, new_name);
+        } else {
             ecm_ts_fprintf(stderr,
                            "Warning: mul %s does not fit %u-limb container; using %s\n",
-                           mul->id, limbs,
-                           opencl_ecm_mont_mul_cl_name(
-                               opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_PRIV_OPT)));
-            mul = opencl_ecm_mont_mul_descriptor(ECM_STAGE1_MONT_PRIV_OPT);
+                           mul->id, limbs, new_name);
         }
+        mul = fb;
     }
-    if (sqr != nullptr && !ecm_mont_path_fits(sqr, ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask)) {
+    if (sqr != nullptr && !ecm_mont_path_fits(sqr, ctx.limbs, runtime_mask)) {
+        const EcmMontPathDescriptor *fb = mont_auto_fallback(
+            opencl_ecm_mont_sqr_registry_entry(0),
+            opencl_ecm_mont_sqr_registry_count(), limbs, runtime_mask);
+        const char *new_name = fb ? fb->cl_name : "?";
         if (!ecm_path_limbs_fits(sqr->min_limbs, sqr->max_limbs, limbs)) {
             ecm_ts_fprintf(stderr,
                            "Warning: sqr %s requires limbs [%u,%u], got %u; using %s\n", sqr->id,
-                           sqr->min_limbs, sqr->max_limbs, limbs,
-                           opencl_ecm_mont_sqr_cl_name(
-                               opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_UNROLL512)));
-            sqr = opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_UNROLL512);
-        } else if (!ecm_mont_path_fits(sqr, ctx.limbs, ctx.os_mask | ctx.gpu_vendor_mask)) {
+                           sqr->min_limbs, sqr->max_limbs, limbs, new_name);
+        } else {
             ecm_ts_fprintf(stderr,
                            "Warning: sqr %s does not fit %u-limb container; using %s\n",
-                           sqr->id, limbs,
-                           opencl_ecm_mont_sqr_cl_name(
-                               opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_PRIV_OPT)));
-            sqr = opencl_ecm_mont_sqr_descriptor(ECM_STAGE1_MONT_PRIV_OPT);
+                           sqr->id, limbs, new_name);
         }
+        sqr = fb;
     }
 }
 
@@ -952,8 +951,8 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             "GPU: OpenCL<%u limbs, %u thread%s> kernel, %zu-bit N, s=%llu bits, np0=0x%08x\n",
             container_limbs, wg_threads, wg_threads > 1u ? "s" : "",
             n_log2, (unsigned long long)s_num_bits, np0);
-    const char *mont_mul_op = opencl_ecm_mont_mul_cl_name(mul);
-    const char *mont_sqr_op = opencl_ecm_mont_sqr_cl_name(sqr);
+    const char *mont_mul_op = (mul != nullptr && mul->cl_name) ? mul->cl_name : "?";
+    const char *mont_sqr_op = (sqr != nullptr && sqr->cl_name) ? sqr->cl_name : "?";
     const char *add_op = add != nullptr ? add->cl_name : "unknown";
     const char *sub_op = sub != nullptr ? sub->cl_name : "unknown";
     const char *special_op = special_mult2 != nullptr ? special_mult2->cl_name : "special_mult_ui32_generic";
