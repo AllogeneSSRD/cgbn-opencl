@@ -92,6 +92,525 @@ static inline void c_fix_add_n16(
     s = (ulong)*r15 + (ulong)n15 + c; c = s >> 32; *r15 = (uint)s;
 }
 #endif
+#ifndef ASM_COMMON_C_FIX_ADD_N24_DEFINED
+#define ASM_COMMON_C_FIX_ADD_N24_DEFINED
+static inline void c_fix_add_n24(
+    uint *r0,     uint *r1,     uint *r2,     uint *r3,     uint *r4,     uint *r5,     uint *r6,     uint *r7,     uint *r8,     uint *r9,     uint *r10,     uint *r11,     uint *r12,     uint *r13,     uint *r14,     uint *r15,     uint *r16,     uint *r17,     uint *r18,     uint *r19,     uint *r20,     uint *r21,     uint *r22,     uint *r23,
+    uint n0,    uint n1,    uint n2,    uint n3,    uint n4,    uint n5,    uint n6,    uint n7,    uint n8,    uint n9,    uint n10,    uint n11,    uint n12,    uint n13,    uint n14,    uint n15,    uint n16,    uint n17,    uint n18,    uint n19,    uint n20,    uint n21,    uint n22,    uint n23) {
+    ulong c = 0ul;
+    ulong s;
+    s = (ulong)*r0 + (ulong)n0 + c; c = s >> 32; *r0 = (uint)s;
+    s = (ulong)*r1 + (ulong)n1 + c; c = s >> 32; *r1 = (uint)s;
+    s = (ulong)*r2 + (ulong)n2 + c; c = s >> 32; *r2 = (uint)s;
+    s = (ulong)*r3 + (ulong)n3 + c; c = s >> 32; *r3 = (uint)s;
+    s = (ulong)*r4 + (ulong)n4 + c; c = s >> 32; *r4 = (uint)s;
+    s = (ulong)*r5 + (ulong)n5 + c; c = s >> 32; *r5 = (uint)s;
+    s = (ulong)*r6 + (ulong)n6 + c; c = s >> 32; *r6 = (uint)s;
+    s = (ulong)*r7 + (ulong)n7 + c; c = s >> 32; *r7 = (uint)s;
+    s = (ulong)*r8 + (ulong)n8 + c; c = s >> 32; *r8 = (uint)s;
+    s = (ulong)*r9 + (ulong)n9 + c; c = s >> 32; *r9 = (uint)s;
+    s = (ulong)*r10 + (ulong)n10 + c; c = s >> 32; *r10 = (uint)s;
+    s = (ulong)*r11 + (ulong)n11 + c; c = s >> 32; *r11 = (uint)s;
+    s = (ulong)*r12 + (ulong)n12 + c; c = s >> 32; *r12 = (uint)s;
+    s = (ulong)*r13 + (ulong)n13 + c; c = s >> 32; *r13 = (uint)s;
+    s = (ulong)*r14 + (ulong)n14 + c; c = s >> 32; *r14 = (uint)s;
+    s = (ulong)*r15 + (ulong)n15 + c; c = s >> 32; *r15 = (uint)s;
+    s = (ulong)*r16 + (ulong)n16 + c; c = s >> 32; *r16 = (uint)s;
+    s = (ulong)*r17 + (ulong)n17 + c; c = s >> 32; *r17 = (uint)s;
+    s = (ulong)*r18 + (ulong)n18 + c; c = s >> 32; *r18 = (uint)s;
+    s = (ulong)*r19 + (ulong)n19 + c; c = s >> 32; *r19 = (uint)s;
+    s = (ulong)*r20 + (ulong)n20 + c; c = s >> 32; *r20 = (uint)s;
+    s = (ulong)*r21 + (ulong)n21 + c; c = s >> 32; *r21 = (uint)s;
+    s = (ulong)*r22 + (ulong)n22 + c; c = s >> 32; *r22 = (uint)s;
+    s = (ulong)*r23 + (ulong)n23 + c; c = s >> 32; *r23 = (uint)s;
+}
+#endif
+#ifndef ASM_COMMON_C_FIX_ADD_N32_DEFINED
+#define ASM_COMMON_C_FIX_ADD_N32_DEFINED
+static inline void c_fix_add_n32(
+    uint *r0,     uint *r1,     uint *r2,     uint *r3,     uint *r4,     uint *r5,     uint *r6,     uint *r7,     uint *r8,     uint *r9,     uint *r10,     uint *r11,     uint *r12,     uint *r13,     uint *r14,     uint *r15,     uint *r16,     uint *r17,     uint *r18,     uint *r19,     uint *r20,     uint *r21,     uint *r22,     uint *r23,     uint *r24,     uint *r25,     uint *r26,     uint *r27,     uint *r28,     uint *r29,     uint *r30,     uint *r31,
+    uint n0,    uint n1,    uint n2,    uint n3,    uint n4,    uint n5,    uint n6,    uint n7,    uint n8,    uint n9,    uint n10,    uint n11,    uint n12,    uint n13,    uint n14,    uint n15,    uint n16,    uint n17,    uint n18,    uint n19,    uint n20,    uint n21,    uint n22,    uint n23,    uint n24,    uint n25,    uint n26,    uint n27,    uint n28,    uint n29,    uint n30,    uint n31) {
+    ulong c = 0ul;
+    ulong s;
+    s = (ulong)*r0 + (ulong)n0 + c; c = s >> 32; *r0 = (uint)s;
+    s = (ulong)*r1 + (ulong)n1 + c; c = s >> 32; *r1 = (uint)s;
+    s = (ulong)*r2 + (ulong)n2 + c; c = s >> 32; *r2 = (uint)s;
+    s = (ulong)*r3 + (ulong)n3 + c; c = s >> 32; *r3 = (uint)s;
+    s = (ulong)*r4 + (ulong)n4 + c; c = s >> 32; *r4 = (uint)s;
+    s = (ulong)*r5 + (ulong)n5 + c; c = s >> 32; *r5 = (uint)s;
+    s = (ulong)*r6 + (ulong)n6 + c; c = s >> 32; *r6 = (uint)s;
+    s = (ulong)*r7 + (ulong)n7 + c; c = s >> 32; *r7 = (uint)s;
+    s = (ulong)*r8 + (ulong)n8 + c; c = s >> 32; *r8 = (uint)s;
+    s = (ulong)*r9 + (ulong)n9 + c; c = s >> 32; *r9 = (uint)s;
+    s = (ulong)*r10 + (ulong)n10 + c; c = s >> 32; *r10 = (uint)s;
+    s = (ulong)*r11 + (ulong)n11 + c; c = s >> 32; *r11 = (uint)s;
+    s = (ulong)*r12 + (ulong)n12 + c; c = s >> 32; *r12 = (uint)s;
+    s = (ulong)*r13 + (ulong)n13 + c; c = s >> 32; *r13 = (uint)s;
+    s = (ulong)*r14 + (ulong)n14 + c; c = s >> 32; *r14 = (uint)s;
+    s = (ulong)*r15 + (ulong)n15 + c; c = s >> 32; *r15 = (uint)s;
+    s = (ulong)*r16 + (ulong)n16 + c; c = s >> 32; *r16 = (uint)s;
+    s = (ulong)*r17 + (ulong)n17 + c; c = s >> 32; *r17 = (uint)s;
+    s = (ulong)*r18 + (ulong)n18 + c; c = s >> 32; *r18 = (uint)s;
+    s = (ulong)*r19 + (ulong)n19 + c; c = s >> 32; *r19 = (uint)s;
+    s = (ulong)*r20 + (ulong)n20 + c; c = s >> 32; *r20 = (uint)s;
+    s = (ulong)*r21 + (ulong)n21 + c; c = s >> 32; *r21 = (uint)s;
+    s = (ulong)*r22 + (ulong)n22 + c; c = s >> 32; *r22 = (uint)s;
+    s = (ulong)*r23 + (ulong)n23 + c; c = s >> 32; *r23 = (uint)s;
+    s = (ulong)*r24 + (ulong)n24 + c; c = s >> 32; *r24 = (uint)s;
+    s = (ulong)*r25 + (ulong)n25 + c; c = s >> 32; *r25 = (uint)s;
+    s = (ulong)*r26 + (ulong)n26 + c; c = s >> 32; *r26 = (uint)s;
+    s = (ulong)*r27 + (ulong)n27 + c; c = s >> 32; *r27 = (uint)s;
+    s = (ulong)*r28 + (ulong)n28 + c; c = s >> 32; *r28 = (uint)s;
+    s = (ulong)*r29 + (ulong)n29 + c; c = s >> 32; *r29 = (uint)s;
+    s = (ulong)*r30 + (ulong)n30 + c; c = s >> 32; *r30 = (uint)s;
+    s = (ulong)*r31 + (ulong)n31 + c; c = s >> 32; *r31 = (uint)s;
+}
+#endif
+#ifndef ASM_COMMON_C_FIX_ADD_N48_DEFINED
+#define ASM_COMMON_C_FIX_ADD_N48_DEFINED
+static inline void c_fix_add_n48(
+    uint *r0,     uint *r1,     uint *r2,     uint *r3,     uint *r4,     uint *r5,     uint *r6,     uint *r7,     uint *r8,     uint *r9,     uint *r10,     uint *r11,     uint *r12,     uint *r13,     uint *r14,     uint *r15,     uint *r16,     uint *r17,     uint *r18,     uint *r19,     uint *r20,     uint *r21,     uint *r22,     uint *r23,     uint *r24,     uint *r25,     uint *r26,     uint *r27,     uint *r28,     uint *r29,     uint *r30,     uint *r31,     uint *r32,     uint *r33,     uint *r34,     uint *r35,     uint *r36,     uint *r37,     uint *r38,     uint *r39,     uint *r40,     uint *r41,     uint *r42,     uint *r43,     uint *r44,     uint *r45,     uint *r46,     uint *r47,
+    uint n0,    uint n1,    uint n2,    uint n3,    uint n4,    uint n5,    uint n6,    uint n7,    uint n8,    uint n9,    uint n10,    uint n11,    uint n12,    uint n13,    uint n14,    uint n15,    uint n16,    uint n17,    uint n18,    uint n19,    uint n20,    uint n21,    uint n22,    uint n23,    uint n24,    uint n25,    uint n26,    uint n27,    uint n28,    uint n29,    uint n30,    uint n31,    uint n32,    uint n33,    uint n34,    uint n35,    uint n36,    uint n37,    uint n38,    uint n39,    uint n40,    uint n41,    uint n42,    uint n43,    uint n44,    uint n45,    uint n46,    uint n47) {
+    ulong c = 0ul;
+    ulong s;
+    s = (ulong)*r0 + (ulong)n0 + c; c = s >> 32; *r0 = (uint)s;
+    s = (ulong)*r1 + (ulong)n1 + c; c = s >> 32; *r1 = (uint)s;
+    s = (ulong)*r2 + (ulong)n2 + c; c = s >> 32; *r2 = (uint)s;
+    s = (ulong)*r3 + (ulong)n3 + c; c = s >> 32; *r3 = (uint)s;
+    s = (ulong)*r4 + (ulong)n4 + c; c = s >> 32; *r4 = (uint)s;
+    s = (ulong)*r5 + (ulong)n5 + c; c = s >> 32; *r5 = (uint)s;
+    s = (ulong)*r6 + (ulong)n6 + c; c = s >> 32; *r6 = (uint)s;
+    s = (ulong)*r7 + (ulong)n7 + c; c = s >> 32; *r7 = (uint)s;
+    s = (ulong)*r8 + (ulong)n8 + c; c = s >> 32; *r8 = (uint)s;
+    s = (ulong)*r9 + (ulong)n9 + c; c = s >> 32; *r9 = (uint)s;
+    s = (ulong)*r10 + (ulong)n10 + c; c = s >> 32; *r10 = (uint)s;
+    s = (ulong)*r11 + (ulong)n11 + c; c = s >> 32; *r11 = (uint)s;
+    s = (ulong)*r12 + (ulong)n12 + c; c = s >> 32; *r12 = (uint)s;
+    s = (ulong)*r13 + (ulong)n13 + c; c = s >> 32; *r13 = (uint)s;
+    s = (ulong)*r14 + (ulong)n14 + c; c = s >> 32; *r14 = (uint)s;
+    s = (ulong)*r15 + (ulong)n15 + c; c = s >> 32; *r15 = (uint)s;
+    s = (ulong)*r16 + (ulong)n16 + c; c = s >> 32; *r16 = (uint)s;
+    s = (ulong)*r17 + (ulong)n17 + c; c = s >> 32; *r17 = (uint)s;
+    s = (ulong)*r18 + (ulong)n18 + c; c = s >> 32; *r18 = (uint)s;
+    s = (ulong)*r19 + (ulong)n19 + c; c = s >> 32; *r19 = (uint)s;
+    s = (ulong)*r20 + (ulong)n20 + c; c = s >> 32; *r20 = (uint)s;
+    s = (ulong)*r21 + (ulong)n21 + c; c = s >> 32; *r21 = (uint)s;
+    s = (ulong)*r22 + (ulong)n22 + c; c = s >> 32; *r22 = (uint)s;
+    s = (ulong)*r23 + (ulong)n23 + c; c = s >> 32; *r23 = (uint)s;
+    s = (ulong)*r24 + (ulong)n24 + c; c = s >> 32; *r24 = (uint)s;
+    s = (ulong)*r25 + (ulong)n25 + c; c = s >> 32; *r25 = (uint)s;
+    s = (ulong)*r26 + (ulong)n26 + c; c = s >> 32; *r26 = (uint)s;
+    s = (ulong)*r27 + (ulong)n27 + c; c = s >> 32; *r27 = (uint)s;
+    s = (ulong)*r28 + (ulong)n28 + c; c = s >> 32; *r28 = (uint)s;
+    s = (ulong)*r29 + (ulong)n29 + c; c = s >> 32; *r29 = (uint)s;
+    s = (ulong)*r30 + (ulong)n30 + c; c = s >> 32; *r30 = (uint)s;
+    s = (ulong)*r31 + (ulong)n31 + c; c = s >> 32; *r31 = (uint)s;
+    s = (ulong)*r32 + (ulong)n32 + c; c = s >> 32; *r32 = (uint)s;
+    s = (ulong)*r33 + (ulong)n33 + c; c = s >> 32; *r33 = (uint)s;
+    s = (ulong)*r34 + (ulong)n34 + c; c = s >> 32; *r34 = (uint)s;
+    s = (ulong)*r35 + (ulong)n35 + c; c = s >> 32; *r35 = (uint)s;
+    s = (ulong)*r36 + (ulong)n36 + c; c = s >> 32; *r36 = (uint)s;
+    s = (ulong)*r37 + (ulong)n37 + c; c = s >> 32; *r37 = (uint)s;
+    s = (ulong)*r38 + (ulong)n38 + c; c = s >> 32; *r38 = (uint)s;
+    s = (ulong)*r39 + (ulong)n39 + c; c = s >> 32; *r39 = (uint)s;
+    s = (ulong)*r40 + (ulong)n40 + c; c = s >> 32; *r40 = (uint)s;
+    s = (ulong)*r41 + (ulong)n41 + c; c = s >> 32; *r41 = (uint)s;
+    s = (ulong)*r42 + (ulong)n42 + c; c = s >> 32; *r42 = (uint)s;
+    s = (ulong)*r43 + (ulong)n43 + c; c = s >> 32; *r43 = (uint)s;
+    s = (ulong)*r44 + (ulong)n44 + c; c = s >> 32; *r44 = (uint)s;
+    s = (ulong)*r45 + (ulong)n45 + c; c = s >> 32; *r45 = (uint)s;
+    s = (ulong)*r46 + (ulong)n46 + c; c = s >> 32; *r46 = (uint)s;
+    s = (ulong)*r47 + (ulong)n47 + c; c = s >> 32; *r47 = (uint)s;
+}
+#endif
+#ifndef ASM_COMMON_C_FIX_ADD_N64_DEFINED
+#define ASM_COMMON_C_FIX_ADD_N64_DEFINED
+static inline void c_fix_add_n64(
+    uint *r0,     uint *r1,     uint *r2,     uint *r3,     uint *r4,     uint *r5,     uint *r6,     uint *r7,     uint *r8,     uint *r9,     uint *r10,     uint *r11,     uint *r12,     uint *r13,     uint *r14,     uint *r15,     uint *r16,     uint *r17,     uint *r18,     uint *r19,     uint *r20,     uint *r21,     uint *r22,     uint *r23,     uint *r24,     uint *r25,     uint *r26,     uint *r27,     uint *r28,     uint *r29,     uint *r30,     uint *r31,     uint *r32,     uint *r33,     uint *r34,     uint *r35,     uint *r36,     uint *r37,     uint *r38,     uint *r39,     uint *r40,     uint *r41,     uint *r42,     uint *r43,     uint *r44,     uint *r45,     uint *r46,     uint *r47,     uint *r48,     uint *r49,     uint *r50,     uint *r51,     uint *r52,     uint *r53,     uint *r54,     uint *r55,     uint *r56,     uint *r57,     uint *r58,     uint *r59,     uint *r60,     uint *r61,     uint *r62,     uint *r63,
+    uint n0,    uint n1,    uint n2,    uint n3,    uint n4,    uint n5,    uint n6,    uint n7,    uint n8,    uint n9,    uint n10,    uint n11,    uint n12,    uint n13,    uint n14,    uint n15,    uint n16,    uint n17,    uint n18,    uint n19,    uint n20,    uint n21,    uint n22,    uint n23,    uint n24,    uint n25,    uint n26,    uint n27,    uint n28,    uint n29,    uint n30,    uint n31,    uint n32,    uint n33,    uint n34,    uint n35,    uint n36,    uint n37,    uint n38,    uint n39,    uint n40,    uint n41,    uint n42,    uint n43,    uint n44,    uint n45,    uint n46,    uint n47,    uint n48,    uint n49,    uint n50,    uint n51,    uint n52,    uint n53,    uint n54,    uint n55,    uint n56,    uint n57,    uint n58,    uint n59,    uint n60,    uint n61,    uint n62,    uint n63) {
+    ulong c = 0ul;
+    ulong s;
+    s = (ulong)*r0 + (ulong)n0 + c; c = s >> 32; *r0 = (uint)s;
+    s = (ulong)*r1 + (ulong)n1 + c; c = s >> 32; *r1 = (uint)s;
+    s = (ulong)*r2 + (ulong)n2 + c; c = s >> 32; *r2 = (uint)s;
+    s = (ulong)*r3 + (ulong)n3 + c; c = s >> 32; *r3 = (uint)s;
+    s = (ulong)*r4 + (ulong)n4 + c; c = s >> 32; *r4 = (uint)s;
+    s = (ulong)*r5 + (ulong)n5 + c; c = s >> 32; *r5 = (uint)s;
+    s = (ulong)*r6 + (ulong)n6 + c; c = s >> 32; *r6 = (uint)s;
+    s = (ulong)*r7 + (ulong)n7 + c; c = s >> 32; *r7 = (uint)s;
+    s = (ulong)*r8 + (ulong)n8 + c; c = s >> 32; *r8 = (uint)s;
+    s = (ulong)*r9 + (ulong)n9 + c; c = s >> 32; *r9 = (uint)s;
+    s = (ulong)*r10 + (ulong)n10 + c; c = s >> 32; *r10 = (uint)s;
+    s = (ulong)*r11 + (ulong)n11 + c; c = s >> 32; *r11 = (uint)s;
+    s = (ulong)*r12 + (ulong)n12 + c; c = s >> 32; *r12 = (uint)s;
+    s = (ulong)*r13 + (ulong)n13 + c; c = s >> 32; *r13 = (uint)s;
+    s = (ulong)*r14 + (ulong)n14 + c; c = s >> 32; *r14 = (uint)s;
+    s = (ulong)*r15 + (ulong)n15 + c; c = s >> 32; *r15 = (uint)s;
+    s = (ulong)*r16 + (ulong)n16 + c; c = s >> 32; *r16 = (uint)s;
+    s = (ulong)*r17 + (ulong)n17 + c; c = s >> 32; *r17 = (uint)s;
+    s = (ulong)*r18 + (ulong)n18 + c; c = s >> 32; *r18 = (uint)s;
+    s = (ulong)*r19 + (ulong)n19 + c; c = s >> 32; *r19 = (uint)s;
+    s = (ulong)*r20 + (ulong)n20 + c; c = s >> 32; *r20 = (uint)s;
+    s = (ulong)*r21 + (ulong)n21 + c; c = s >> 32; *r21 = (uint)s;
+    s = (ulong)*r22 + (ulong)n22 + c; c = s >> 32; *r22 = (uint)s;
+    s = (ulong)*r23 + (ulong)n23 + c; c = s >> 32; *r23 = (uint)s;
+    s = (ulong)*r24 + (ulong)n24 + c; c = s >> 32; *r24 = (uint)s;
+    s = (ulong)*r25 + (ulong)n25 + c; c = s >> 32; *r25 = (uint)s;
+    s = (ulong)*r26 + (ulong)n26 + c; c = s >> 32; *r26 = (uint)s;
+    s = (ulong)*r27 + (ulong)n27 + c; c = s >> 32; *r27 = (uint)s;
+    s = (ulong)*r28 + (ulong)n28 + c; c = s >> 32; *r28 = (uint)s;
+    s = (ulong)*r29 + (ulong)n29 + c; c = s >> 32; *r29 = (uint)s;
+    s = (ulong)*r30 + (ulong)n30 + c; c = s >> 32; *r30 = (uint)s;
+    s = (ulong)*r31 + (ulong)n31 + c; c = s >> 32; *r31 = (uint)s;
+    s = (ulong)*r32 + (ulong)n32 + c; c = s >> 32; *r32 = (uint)s;
+    s = (ulong)*r33 + (ulong)n33 + c; c = s >> 32; *r33 = (uint)s;
+    s = (ulong)*r34 + (ulong)n34 + c; c = s >> 32; *r34 = (uint)s;
+    s = (ulong)*r35 + (ulong)n35 + c; c = s >> 32; *r35 = (uint)s;
+    s = (ulong)*r36 + (ulong)n36 + c; c = s >> 32; *r36 = (uint)s;
+    s = (ulong)*r37 + (ulong)n37 + c; c = s >> 32; *r37 = (uint)s;
+    s = (ulong)*r38 + (ulong)n38 + c; c = s >> 32; *r38 = (uint)s;
+    s = (ulong)*r39 + (ulong)n39 + c; c = s >> 32; *r39 = (uint)s;
+    s = (ulong)*r40 + (ulong)n40 + c; c = s >> 32; *r40 = (uint)s;
+    s = (ulong)*r41 + (ulong)n41 + c; c = s >> 32; *r41 = (uint)s;
+    s = (ulong)*r42 + (ulong)n42 + c; c = s >> 32; *r42 = (uint)s;
+    s = (ulong)*r43 + (ulong)n43 + c; c = s >> 32; *r43 = (uint)s;
+    s = (ulong)*r44 + (ulong)n44 + c; c = s >> 32; *r44 = (uint)s;
+    s = (ulong)*r45 + (ulong)n45 + c; c = s >> 32; *r45 = (uint)s;
+    s = (ulong)*r46 + (ulong)n46 + c; c = s >> 32; *r46 = (uint)s;
+    s = (ulong)*r47 + (ulong)n47 + c; c = s >> 32; *r47 = (uint)s;
+    s = (ulong)*r48 + (ulong)n48 + c; c = s >> 32; *r48 = (uint)s;
+    s = (ulong)*r49 + (ulong)n49 + c; c = s >> 32; *r49 = (uint)s;
+    s = (ulong)*r50 + (ulong)n50 + c; c = s >> 32; *r50 = (uint)s;
+    s = (ulong)*r51 + (ulong)n51 + c; c = s >> 32; *r51 = (uint)s;
+    s = (ulong)*r52 + (ulong)n52 + c; c = s >> 32; *r52 = (uint)s;
+    s = (ulong)*r53 + (ulong)n53 + c; c = s >> 32; *r53 = (uint)s;
+    s = (ulong)*r54 + (ulong)n54 + c; c = s >> 32; *r54 = (uint)s;
+    s = (ulong)*r55 + (ulong)n55 + c; c = s >> 32; *r55 = (uint)s;
+    s = (ulong)*r56 + (ulong)n56 + c; c = s >> 32; *r56 = (uint)s;
+    s = (ulong)*r57 + (ulong)n57 + c; c = s >> 32; *r57 = (uint)s;
+    s = (ulong)*r58 + (ulong)n58 + c; c = s >> 32; *r58 = (uint)s;
+    s = (ulong)*r59 + (ulong)n59 + c; c = s >> 32; *r59 = (uint)s;
+    s = (ulong)*r60 + (ulong)n60 + c; c = s >> 32; *r60 = (uint)s;
+    s = (ulong)*r61 + (ulong)n61 + c; c = s >> 32; *r61 = (uint)s;
+    s = (ulong)*r62 + (ulong)n62 + c; c = s >> 32; *r62 = (uint)s;
+    s = (ulong)*r63 + (ulong)n63 + c; c = s >> 32; *r63 = (uint)s;
+}
+#endif
+#ifndef ASM_COMMON_C_FIX_ADD_N80_DEFINED
+#define ASM_COMMON_C_FIX_ADD_N80_DEFINED
+static inline void c_fix_add_n80(
+    uint *r0,     uint *r1,     uint *r2,     uint *r3,     uint *r4,     uint *r5,     uint *r6,     uint *r7,     uint *r8,     uint *r9,     uint *r10,     uint *r11,     uint *r12,     uint *r13,     uint *r14,     uint *r15,     uint *r16,     uint *r17,     uint *r18,     uint *r19,     uint *r20,     uint *r21,     uint *r22,     uint *r23,     uint *r24,     uint *r25,     uint *r26,     uint *r27,     uint *r28,     uint *r29,     uint *r30,     uint *r31,     uint *r32,     uint *r33,     uint *r34,     uint *r35,     uint *r36,     uint *r37,     uint *r38,     uint *r39,     uint *r40,     uint *r41,     uint *r42,     uint *r43,     uint *r44,     uint *r45,     uint *r46,     uint *r47,     uint *r48,     uint *r49,     uint *r50,     uint *r51,     uint *r52,     uint *r53,     uint *r54,     uint *r55,     uint *r56,     uint *r57,     uint *r58,     uint *r59,     uint *r60,     uint *r61,     uint *r62,     uint *r63,     uint *r64,     uint *r65,     uint *r66,     uint *r67,     uint *r68,     uint *r69,     uint *r70,     uint *r71,     uint *r72,     uint *r73,     uint *r74,     uint *r75,     uint *r76,     uint *r77,     uint *r78,     uint *r79,
+    uint n0,    uint n1,    uint n2,    uint n3,    uint n4,    uint n5,    uint n6,    uint n7,    uint n8,    uint n9,    uint n10,    uint n11,    uint n12,    uint n13,    uint n14,    uint n15,    uint n16,    uint n17,    uint n18,    uint n19,    uint n20,    uint n21,    uint n22,    uint n23,    uint n24,    uint n25,    uint n26,    uint n27,    uint n28,    uint n29,    uint n30,    uint n31,    uint n32,    uint n33,    uint n34,    uint n35,    uint n36,    uint n37,    uint n38,    uint n39,    uint n40,    uint n41,    uint n42,    uint n43,    uint n44,    uint n45,    uint n46,    uint n47,    uint n48,    uint n49,    uint n50,    uint n51,    uint n52,    uint n53,    uint n54,    uint n55,    uint n56,    uint n57,    uint n58,    uint n59,    uint n60,    uint n61,    uint n62,    uint n63,    uint n64,    uint n65,    uint n66,    uint n67,    uint n68,    uint n69,    uint n70,    uint n71,    uint n72,    uint n73,    uint n74,    uint n75,    uint n76,    uint n77,    uint n78,    uint n79) {
+    ulong c = 0ul;
+    ulong s;
+    s = (ulong)*r0 + (ulong)n0 + c; c = s >> 32; *r0 = (uint)s;
+    s = (ulong)*r1 + (ulong)n1 + c; c = s >> 32; *r1 = (uint)s;
+    s = (ulong)*r2 + (ulong)n2 + c; c = s >> 32; *r2 = (uint)s;
+    s = (ulong)*r3 + (ulong)n3 + c; c = s >> 32; *r3 = (uint)s;
+    s = (ulong)*r4 + (ulong)n4 + c; c = s >> 32; *r4 = (uint)s;
+    s = (ulong)*r5 + (ulong)n5 + c; c = s >> 32; *r5 = (uint)s;
+    s = (ulong)*r6 + (ulong)n6 + c; c = s >> 32; *r6 = (uint)s;
+    s = (ulong)*r7 + (ulong)n7 + c; c = s >> 32; *r7 = (uint)s;
+    s = (ulong)*r8 + (ulong)n8 + c; c = s >> 32; *r8 = (uint)s;
+    s = (ulong)*r9 + (ulong)n9 + c; c = s >> 32; *r9 = (uint)s;
+    s = (ulong)*r10 + (ulong)n10 + c; c = s >> 32; *r10 = (uint)s;
+    s = (ulong)*r11 + (ulong)n11 + c; c = s >> 32; *r11 = (uint)s;
+    s = (ulong)*r12 + (ulong)n12 + c; c = s >> 32; *r12 = (uint)s;
+    s = (ulong)*r13 + (ulong)n13 + c; c = s >> 32; *r13 = (uint)s;
+    s = (ulong)*r14 + (ulong)n14 + c; c = s >> 32; *r14 = (uint)s;
+    s = (ulong)*r15 + (ulong)n15 + c; c = s >> 32; *r15 = (uint)s;
+    s = (ulong)*r16 + (ulong)n16 + c; c = s >> 32; *r16 = (uint)s;
+    s = (ulong)*r17 + (ulong)n17 + c; c = s >> 32; *r17 = (uint)s;
+    s = (ulong)*r18 + (ulong)n18 + c; c = s >> 32; *r18 = (uint)s;
+    s = (ulong)*r19 + (ulong)n19 + c; c = s >> 32; *r19 = (uint)s;
+    s = (ulong)*r20 + (ulong)n20 + c; c = s >> 32; *r20 = (uint)s;
+    s = (ulong)*r21 + (ulong)n21 + c; c = s >> 32; *r21 = (uint)s;
+    s = (ulong)*r22 + (ulong)n22 + c; c = s >> 32; *r22 = (uint)s;
+    s = (ulong)*r23 + (ulong)n23 + c; c = s >> 32; *r23 = (uint)s;
+    s = (ulong)*r24 + (ulong)n24 + c; c = s >> 32; *r24 = (uint)s;
+    s = (ulong)*r25 + (ulong)n25 + c; c = s >> 32; *r25 = (uint)s;
+    s = (ulong)*r26 + (ulong)n26 + c; c = s >> 32; *r26 = (uint)s;
+    s = (ulong)*r27 + (ulong)n27 + c; c = s >> 32; *r27 = (uint)s;
+    s = (ulong)*r28 + (ulong)n28 + c; c = s >> 32; *r28 = (uint)s;
+    s = (ulong)*r29 + (ulong)n29 + c; c = s >> 32; *r29 = (uint)s;
+    s = (ulong)*r30 + (ulong)n30 + c; c = s >> 32; *r30 = (uint)s;
+    s = (ulong)*r31 + (ulong)n31 + c; c = s >> 32; *r31 = (uint)s;
+    s = (ulong)*r32 + (ulong)n32 + c; c = s >> 32; *r32 = (uint)s;
+    s = (ulong)*r33 + (ulong)n33 + c; c = s >> 32; *r33 = (uint)s;
+    s = (ulong)*r34 + (ulong)n34 + c; c = s >> 32; *r34 = (uint)s;
+    s = (ulong)*r35 + (ulong)n35 + c; c = s >> 32; *r35 = (uint)s;
+    s = (ulong)*r36 + (ulong)n36 + c; c = s >> 32; *r36 = (uint)s;
+    s = (ulong)*r37 + (ulong)n37 + c; c = s >> 32; *r37 = (uint)s;
+    s = (ulong)*r38 + (ulong)n38 + c; c = s >> 32; *r38 = (uint)s;
+    s = (ulong)*r39 + (ulong)n39 + c; c = s >> 32; *r39 = (uint)s;
+    s = (ulong)*r40 + (ulong)n40 + c; c = s >> 32; *r40 = (uint)s;
+    s = (ulong)*r41 + (ulong)n41 + c; c = s >> 32; *r41 = (uint)s;
+    s = (ulong)*r42 + (ulong)n42 + c; c = s >> 32; *r42 = (uint)s;
+    s = (ulong)*r43 + (ulong)n43 + c; c = s >> 32; *r43 = (uint)s;
+    s = (ulong)*r44 + (ulong)n44 + c; c = s >> 32; *r44 = (uint)s;
+    s = (ulong)*r45 + (ulong)n45 + c; c = s >> 32; *r45 = (uint)s;
+    s = (ulong)*r46 + (ulong)n46 + c; c = s >> 32; *r46 = (uint)s;
+    s = (ulong)*r47 + (ulong)n47 + c; c = s >> 32; *r47 = (uint)s;
+    s = (ulong)*r48 + (ulong)n48 + c; c = s >> 32; *r48 = (uint)s;
+    s = (ulong)*r49 + (ulong)n49 + c; c = s >> 32; *r49 = (uint)s;
+    s = (ulong)*r50 + (ulong)n50 + c; c = s >> 32; *r50 = (uint)s;
+    s = (ulong)*r51 + (ulong)n51 + c; c = s >> 32; *r51 = (uint)s;
+    s = (ulong)*r52 + (ulong)n52 + c; c = s >> 32; *r52 = (uint)s;
+    s = (ulong)*r53 + (ulong)n53 + c; c = s >> 32; *r53 = (uint)s;
+    s = (ulong)*r54 + (ulong)n54 + c; c = s >> 32; *r54 = (uint)s;
+    s = (ulong)*r55 + (ulong)n55 + c; c = s >> 32; *r55 = (uint)s;
+    s = (ulong)*r56 + (ulong)n56 + c; c = s >> 32; *r56 = (uint)s;
+    s = (ulong)*r57 + (ulong)n57 + c; c = s >> 32; *r57 = (uint)s;
+    s = (ulong)*r58 + (ulong)n58 + c; c = s >> 32; *r58 = (uint)s;
+    s = (ulong)*r59 + (ulong)n59 + c; c = s >> 32; *r59 = (uint)s;
+    s = (ulong)*r60 + (ulong)n60 + c; c = s >> 32; *r60 = (uint)s;
+    s = (ulong)*r61 + (ulong)n61 + c; c = s >> 32; *r61 = (uint)s;
+    s = (ulong)*r62 + (ulong)n62 + c; c = s >> 32; *r62 = (uint)s;
+    s = (ulong)*r63 + (ulong)n63 + c; c = s >> 32; *r63 = (uint)s;
+    s = (ulong)*r64 + (ulong)n64 + c; c = s >> 32; *r64 = (uint)s;
+    s = (ulong)*r65 + (ulong)n65 + c; c = s >> 32; *r65 = (uint)s;
+    s = (ulong)*r66 + (ulong)n66 + c; c = s >> 32; *r66 = (uint)s;
+    s = (ulong)*r67 + (ulong)n67 + c; c = s >> 32; *r67 = (uint)s;
+    s = (ulong)*r68 + (ulong)n68 + c; c = s >> 32; *r68 = (uint)s;
+    s = (ulong)*r69 + (ulong)n69 + c; c = s >> 32; *r69 = (uint)s;
+    s = (ulong)*r70 + (ulong)n70 + c; c = s >> 32; *r70 = (uint)s;
+    s = (ulong)*r71 + (ulong)n71 + c; c = s >> 32; *r71 = (uint)s;
+    s = (ulong)*r72 + (ulong)n72 + c; c = s >> 32; *r72 = (uint)s;
+    s = (ulong)*r73 + (ulong)n73 + c; c = s >> 32; *r73 = (uint)s;
+    s = (ulong)*r74 + (ulong)n74 + c; c = s >> 32; *r74 = (uint)s;
+    s = (ulong)*r75 + (ulong)n75 + c; c = s >> 32; *r75 = (uint)s;
+    s = (ulong)*r76 + (ulong)n76 + c; c = s >> 32; *r76 = (uint)s;
+    s = (ulong)*r77 + (ulong)n77 + c; c = s >> 32; *r77 = (uint)s;
+    s = (ulong)*r78 + (ulong)n78 + c; c = s >> 32; *r78 = (uint)s;
+    s = (ulong)*r79 + (ulong)n79 + c; c = s >> 32; *r79 = (uint)s;
+}
+#endif
+#ifndef ASM_COMMON_C_FIX_ADD_N96_DEFINED
+#define ASM_COMMON_C_FIX_ADD_N96_DEFINED
+static inline void c_fix_add_n96(
+    uint *r0,     uint *r1,     uint *r2,     uint *r3,     uint *r4,     uint *r5,     uint *r6,     uint *r7,     uint *r8,     uint *r9,     uint *r10,     uint *r11,     uint *r12,     uint *r13,     uint *r14,     uint *r15,     uint *r16,     uint *r17,     uint *r18,     uint *r19,     uint *r20,     uint *r21,     uint *r22,     uint *r23,     uint *r24,     uint *r25,     uint *r26,     uint *r27,     uint *r28,     uint *r29,     uint *r30,     uint *r31,     uint *r32,     uint *r33,     uint *r34,     uint *r35,     uint *r36,     uint *r37,     uint *r38,     uint *r39,     uint *r40,     uint *r41,     uint *r42,     uint *r43,     uint *r44,     uint *r45,     uint *r46,     uint *r47,     uint *r48,     uint *r49,     uint *r50,     uint *r51,     uint *r52,     uint *r53,     uint *r54,     uint *r55,     uint *r56,     uint *r57,     uint *r58,     uint *r59,     uint *r60,     uint *r61,     uint *r62,     uint *r63,     uint *r64,     uint *r65,     uint *r66,     uint *r67,     uint *r68,     uint *r69,     uint *r70,     uint *r71,     uint *r72,     uint *r73,     uint *r74,     uint *r75,     uint *r76,     uint *r77,     uint *r78,     uint *r79,     uint *r80,     uint *r81,     uint *r82,     uint *r83,     uint *r84,     uint *r85,     uint *r86,     uint *r87,     uint *r88,     uint *r89,     uint *r90,     uint *r91,     uint *r92,     uint *r93,     uint *r94,     uint *r95,
+    uint n0,    uint n1,    uint n2,    uint n3,    uint n4,    uint n5,    uint n6,    uint n7,    uint n8,    uint n9,    uint n10,    uint n11,    uint n12,    uint n13,    uint n14,    uint n15,    uint n16,    uint n17,    uint n18,    uint n19,    uint n20,    uint n21,    uint n22,    uint n23,    uint n24,    uint n25,    uint n26,    uint n27,    uint n28,    uint n29,    uint n30,    uint n31,    uint n32,    uint n33,    uint n34,    uint n35,    uint n36,    uint n37,    uint n38,    uint n39,    uint n40,    uint n41,    uint n42,    uint n43,    uint n44,    uint n45,    uint n46,    uint n47,    uint n48,    uint n49,    uint n50,    uint n51,    uint n52,    uint n53,    uint n54,    uint n55,    uint n56,    uint n57,    uint n58,    uint n59,    uint n60,    uint n61,    uint n62,    uint n63,    uint n64,    uint n65,    uint n66,    uint n67,    uint n68,    uint n69,    uint n70,    uint n71,    uint n72,    uint n73,    uint n74,    uint n75,    uint n76,    uint n77,    uint n78,    uint n79,    uint n80,    uint n81,    uint n82,    uint n83,    uint n84,    uint n85,    uint n86,    uint n87,    uint n88,    uint n89,    uint n90,    uint n91,    uint n92,    uint n93,    uint n94,    uint n95) {
+    ulong c = 0ul;
+    ulong s;
+    s = (ulong)*r0 + (ulong)n0 + c; c = s >> 32; *r0 = (uint)s;
+    s = (ulong)*r1 + (ulong)n1 + c; c = s >> 32; *r1 = (uint)s;
+    s = (ulong)*r2 + (ulong)n2 + c; c = s >> 32; *r2 = (uint)s;
+    s = (ulong)*r3 + (ulong)n3 + c; c = s >> 32; *r3 = (uint)s;
+    s = (ulong)*r4 + (ulong)n4 + c; c = s >> 32; *r4 = (uint)s;
+    s = (ulong)*r5 + (ulong)n5 + c; c = s >> 32; *r5 = (uint)s;
+    s = (ulong)*r6 + (ulong)n6 + c; c = s >> 32; *r6 = (uint)s;
+    s = (ulong)*r7 + (ulong)n7 + c; c = s >> 32; *r7 = (uint)s;
+    s = (ulong)*r8 + (ulong)n8 + c; c = s >> 32; *r8 = (uint)s;
+    s = (ulong)*r9 + (ulong)n9 + c; c = s >> 32; *r9 = (uint)s;
+    s = (ulong)*r10 + (ulong)n10 + c; c = s >> 32; *r10 = (uint)s;
+    s = (ulong)*r11 + (ulong)n11 + c; c = s >> 32; *r11 = (uint)s;
+    s = (ulong)*r12 + (ulong)n12 + c; c = s >> 32; *r12 = (uint)s;
+    s = (ulong)*r13 + (ulong)n13 + c; c = s >> 32; *r13 = (uint)s;
+    s = (ulong)*r14 + (ulong)n14 + c; c = s >> 32; *r14 = (uint)s;
+    s = (ulong)*r15 + (ulong)n15 + c; c = s >> 32; *r15 = (uint)s;
+    s = (ulong)*r16 + (ulong)n16 + c; c = s >> 32; *r16 = (uint)s;
+    s = (ulong)*r17 + (ulong)n17 + c; c = s >> 32; *r17 = (uint)s;
+    s = (ulong)*r18 + (ulong)n18 + c; c = s >> 32; *r18 = (uint)s;
+    s = (ulong)*r19 + (ulong)n19 + c; c = s >> 32; *r19 = (uint)s;
+    s = (ulong)*r20 + (ulong)n20 + c; c = s >> 32; *r20 = (uint)s;
+    s = (ulong)*r21 + (ulong)n21 + c; c = s >> 32; *r21 = (uint)s;
+    s = (ulong)*r22 + (ulong)n22 + c; c = s >> 32; *r22 = (uint)s;
+    s = (ulong)*r23 + (ulong)n23 + c; c = s >> 32; *r23 = (uint)s;
+    s = (ulong)*r24 + (ulong)n24 + c; c = s >> 32; *r24 = (uint)s;
+    s = (ulong)*r25 + (ulong)n25 + c; c = s >> 32; *r25 = (uint)s;
+    s = (ulong)*r26 + (ulong)n26 + c; c = s >> 32; *r26 = (uint)s;
+    s = (ulong)*r27 + (ulong)n27 + c; c = s >> 32; *r27 = (uint)s;
+    s = (ulong)*r28 + (ulong)n28 + c; c = s >> 32; *r28 = (uint)s;
+    s = (ulong)*r29 + (ulong)n29 + c; c = s >> 32; *r29 = (uint)s;
+    s = (ulong)*r30 + (ulong)n30 + c; c = s >> 32; *r30 = (uint)s;
+    s = (ulong)*r31 + (ulong)n31 + c; c = s >> 32; *r31 = (uint)s;
+    s = (ulong)*r32 + (ulong)n32 + c; c = s >> 32; *r32 = (uint)s;
+    s = (ulong)*r33 + (ulong)n33 + c; c = s >> 32; *r33 = (uint)s;
+    s = (ulong)*r34 + (ulong)n34 + c; c = s >> 32; *r34 = (uint)s;
+    s = (ulong)*r35 + (ulong)n35 + c; c = s >> 32; *r35 = (uint)s;
+    s = (ulong)*r36 + (ulong)n36 + c; c = s >> 32; *r36 = (uint)s;
+    s = (ulong)*r37 + (ulong)n37 + c; c = s >> 32; *r37 = (uint)s;
+    s = (ulong)*r38 + (ulong)n38 + c; c = s >> 32; *r38 = (uint)s;
+    s = (ulong)*r39 + (ulong)n39 + c; c = s >> 32; *r39 = (uint)s;
+    s = (ulong)*r40 + (ulong)n40 + c; c = s >> 32; *r40 = (uint)s;
+    s = (ulong)*r41 + (ulong)n41 + c; c = s >> 32; *r41 = (uint)s;
+    s = (ulong)*r42 + (ulong)n42 + c; c = s >> 32; *r42 = (uint)s;
+    s = (ulong)*r43 + (ulong)n43 + c; c = s >> 32; *r43 = (uint)s;
+    s = (ulong)*r44 + (ulong)n44 + c; c = s >> 32; *r44 = (uint)s;
+    s = (ulong)*r45 + (ulong)n45 + c; c = s >> 32; *r45 = (uint)s;
+    s = (ulong)*r46 + (ulong)n46 + c; c = s >> 32; *r46 = (uint)s;
+    s = (ulong)*r47 + (ulong)n47 + c; c = s >> 32; *r47 = (uint)s;
+    s = (ulong)*r48 + (ulong)n48 + c; c = s >> 32; *r48 = (uint)s;
+    s = (ulong)*r49 + (ulong)n49 + c; c = s >> 32; *r49 = (uint)s;
+    s = (ulong)*r50 + (ulong)n50 + c; c = s >> 32; *r50 = (uint)s;
+    s = (ulong)*r51 + (ulong)n51 + c; c = s >> 32; *r51 = (uint)s;
+    s = (ulong)*r52 + (ulong)n52 + c; c = s >> 32; *r52 = (uint)s;
+    s = (ulong)*r53 + (ulong)n53 + c; c = s >> 32; *r53 = (uint)s;
+    s = (ulong)*r54 + (ulong)n54 + c; c = s >> 32; *r54 = (uint)s;
+    s = (ulong)*r55 + (ulong)n55 + c; c = s >> 32; *r55 = (uint)s;
+    s = (ulong)*r56 + (ulong)n56 + c; c = s >> 32; *r56 = (uint)s;
+    s = (ulong)*r57 + (ulong)n57 + c; c = s >> 32; *r57 = (uint)s;
+    s = (ulong)*r58 + (ulong)n58 + c; c = s >> 32; *r58 = (uint)s;
+    s = (ulong)*r59 + (ulong)n59 + c; c = s >> 32; *r59 = (uint)s;
+    s = (ulong)*r60 + (ulong)n60 + c; c = s >> 32; *r60 = (uint)s;
+    s = (ulong)*r61 + (ulong)n61 + c; c = s >> 32; *r61 = (uint)s;
+    s = (ulong)*r62 + (ulong)n62 + c; c = s >> 32; *r62 = (uint)s;
+    s = (ulong)*r63 + (ulong)n63 + c; c = s >> 32; *r63 = (uint)s;
+    s = (ulong)*r64 + (ulong)n64 + c; c = s >> 32; *r64 = (uint)s;
+    s = (ulong)*r65 + (ulong)n65 + c; c = s >> 32; *r65 = (uint)s;
+    s = (ulong)*r66 + (ulong)n66 + c; c = s >> 32; *r66 = (uint)s;
+    s = (ulong)*r67 + (ulong)n67 + c; c = s >> 32; *r67 = (uint)s;
+    s = (ulong)*r68 + (ulong)n68 + c; c = s >> 32; *r68 = (uint)s;
+    s = (ulong)*r69 + (ulong)n69 + c; c = s >> 32; *r69 = (uint)s;
+    s = (ulong)*r70 + (ulong)n70 + c; c = s >> 32; *r70 = (uint)s;
+    s = (ulong)*r71 + (ulong)n71 + c; c = s >> 32; *r71 = (uint)s;
+    s = (ulong)*r72 + (ulong)n72 + c; c = s >> 32; *r72 = (uint)s;
+    s = (ulong)*r73 + (ulong)n73 + c; c = s >> 32; *r73 = (uint)s;
+    s = (ulong)*r74 + (ulong)n74 + c; c = s >> 32; *r74 = (uint)s;
+    s = (ulong)*r75 + (ulong)n75 + c; c = s >> 32; *r75 = (uint)s;
+    s = (ulong)*r76 + (ulong)n76 + c; c = s >> 32; *r76 = (uint)s;
+    s = (ulong)*r77 + (ulong)n77 + c; c = s >> 32; *r77 = (uint)s;
+    s = (ulong)*r78 + (ulong)n78 + c; c = s >> 32; *r78 = (uint)s;
+    s = (ulong)*r79 + (ulong)n79 + c; c = s >> 32; *r79 = (uint)s;
+    s = (ulong)*r80 + (ulong)n80 + c; c = s >> 32; *r80 = (uint)s;
+    s = (ulong)*r81 + (ulong)n81 + c; c = s >> 32; *r81 = (uint)s;
+    s = (ulong)*r82 + (ulong)n82 + c; c = s >> 32; *r82 = (uint)s;
+    s = (ulong)*r83 + (ulong)n83 + c; c = s >> 32; *r83 = (uint)s;
+    s = (ulong)*r84 + (ulong)n84 + c; c = s >> 32; *r84 = (uint)s;
+    s = (ulong)*r85 + (ulong)n85 + c; c = s >> 32; *r85 = (uint)s;
+    s = (ulong)*r86 + (ulong)n86 + c; c = s >> 32; *r86 = (uint)s;
+    s = (ulong)*r87 + (ulong)n87 + c; c = s >> 32; *r87 = (uint)s;
+    s = (ulong)*r88 + (ulong)n88 + c; c = s >> 32; *r88 = (uint)s;
+    s = (ulong)*r89 + (ulong)n89 + c; c = s >> 32; *r89 = (uint)s;
+    s = (ulong)*r90 + (ulong)n90 + c; c = s >> 32; *r90 = (uint)s;
+    s = (ulong)*r91 + (ulong)n91 + c; c = s >> 32; *r91 = (uint)s;
+    s = (ulong)*r92 + (ulong)n92 + c; c = s >> 32; *r92 = (uint)s;
+    s = (ulong)*r93 + (ulong)n93 + c; c = s >> 32; *r93 = (uint)s;
+    s = (ulong)*r94 + (ulong)n94 + c; c = s >> 32; *r94 = (uint)s;
+    s = (ulong)*r95 + (ulong)n95 + c; c = s >> 32; *r95 = (uint)s;
+}
+#endif
+#ifndef ASM_COMMON_C_FIX_ADD_N112_DEFINED
+#define ASM_COMMON_C_FIX_ADD_N112_DEFINED
+static inline void c_fix_add_n112(
+    uint *r0,     uint *r1,     uint *r2,     uint *r3,     uint *r4,     uint *r5,     uint *r6,     uint *r7,     uint *r8,     uint *r9,     uint *r10,     uint *r11,     uint *r12,     uint *r13,     uint *r14,     uint *r15,     uint *r16,     uint *r17,     uint *r18,     uint *r19,     uint *r20,     uint *r21,     uint *r22,     uint *r23,     uint *r24,     uint *r25,     uint *r26,     uint *r27,     uint *r28,     uint *r29,     uint *r30,     uint *r31,     uint *r32,     uint *r33,     uint *r34,     uint *r35,     uint *r36,     uint *r37,     uint *r38,     uint *r39,     uint *r40,     uint *r41,     uint *r42,     uint *r43,     uint *r44,     uint *r45,     uint *r46,     uint *r47,     uint *r48,     uint *r49,     uint *r50,     uint *r51,     uint *r52,     uint *r53,     uint *r54,     uint *r55,     uint *r56,     uint *r57,     uint *r58,     uint *r59,     uint *r60,     uint *r61,     uint *r62,     uint *r63,     uint *r64,     uint *r65,     uint *r66,     uint *r67,     uint *r68,     uint *r69,     uint *r70,     uint *r71,     uint *r72,     uint *r73,     uint *r74,     uint *r75,     uint *r76,     uint *r77,     uint *r78,     uint *r79,     uint *r80,     uint *r81,     uint *r82,     uint *r83,     uint *r84,     uint *r85,     uint *r86,     uint *r87,     uint *r88,     uint *r89,     uint *r90,     uint *r91,     uint *r92,     uint *r93,     uint *r94,     uint *r95,     uint *r96,     uint *r97,     uint *r98,     uint *r99,     uint *r100,     uint *r101,     uint *r102,     uint *r103,     uint *r104,     uint *r105,     uint *r106,     uint *r107,     uint *r108,     uint *r109,     uint *r110,     uint *r111,
+    uint n0,    uint n1,    uint n2,    uint n3,    uint n4,    uint n5,    uint n6,    uint n7,    uint n8,    uint n9,    uint n10,    uint n11,    uint n12,    uint n13,    uint n14,    uint n15,    uint n16,    uint n17,    uint n18,    uint n19,    uint n20,    uint n21,    uint n22,    uint n23,    uint n24,    uint n25,    uint n26,    uint n27,    uint n28,    uint n29,    uint n30,    uint n31,    uint n32,    uint n33,    uint n34,    uint n35,    uint n36,    uint n37,    uint n38,    uint n39,    uint n40,    uint n41,    uint n42,    uint n43,    uint n44,    uint n45,    uint n46,    uint n47,    uint n48,    uint n49,    uint n50,    uint n51,    uint n52,    uint n53,    uint n54,    uint n55,    uint n56,    uint n57,    uint n58,    uint n59,    uint n60,    uint n61,    uint n62,    uint n63,    uint n64,    uint n65,    uint n66,    uint n67,    uint n68,    uint n69,    uint n70,    uint n71,    uint n72,    uint n73,    uint n74,    uint n75,    uint n76,    uint n77,    uint n78,    uint n79,    uint n80,    uint n81,    uint n82,    uint n83,    uint n84,    uint n85,    uint n86,    uint n87,    uint n88,    uint n89,    uint n90,    uint n91,    uint n92,    uint n93,    uint n94,    uint n95,    uint n96,    uint n97,    uint n98,    uint n99,    uint n100,    uint n101,    uint n102,    uint n103,    uint n104,    uint n105,    uint n106,    uint n107,    uint n108,    uint n109,    uint n110,    uint n111) {
+    ulong c = 0ul;
+    ulong s;
+    s = (ulong)*r0 + (ulong)n0 + c; c = s >> 32; *r0 = (uint)s;
+    s = (ulong)*r1 + (ulong)n1 + c; c = s >> 32; *r1 = (uint)s;
+    s = (ulong)*r2 + (ulong)n2 + c; c = s >> 32; *r2 = (uint)s;
+    s = (ulong)*r3 + (ulong)n3 + c; c = s >> 32; *r3 = (uint)s;
+    s = (ulong)*r4 + (ulong)n4 + c; c = s >> 32; *r4 = (uint)s;
+    s = (ulong)*r5 + (ulong)n5 + c; c = s >> 32; *r5 = (uint)s;
+    s = (ulong)*r6 + (ulong)n6 + c; c = s >> 32; *r6 = (uint)s;
+    s = (ulong)*r7 + (ulong)n7 + c; c = s >> 32; *r7 = (uint)s;
+    s = (ulong)*r8 + (ulong)n8 + c; c = s >> 32; *r8 = (uint)s;
+    s = (ulong)*r9 + (ulong)n9 + c; c = s >> 32; *r9 = (uint)s;
+    s = (ulong)*r10 + (ulong)n10 + c; c = s >> 32; *r10 = (uint)s;
+    s = (ulong)*r11 + (ulong)n11 + c; c = s >> 32; *r11 = (uint)s;
+    s = (ulong)*r12 + (ulong)n12 + c; c = s >> 32; *r12 = (uint)s;
+    s = (ulong)*r13 + (ulong)n13 + c; c = s >> 32; *r13 = (uint)s;
+    s = (ulong)*r14 + (ulong)n14 + c; c = s >> 32; *r14 = (uint)s;
+    s = (ulong)*r15 + (ulong)n15 + c; c = s >> 32; *r15 = (uint)s;
+    s = (ulong)*r16 + (ulong)n16 + c; c = s >> 32; *r16 = (uint)s;
+    s = (ulong)*r17 + (ulong)n17 + c; c = s >> 32; *r17 = (uint)s;
+    s = (ulong)*r18 + (ulong)n18 + c; c = s >> 32; *r18 = (uint)s;
+    s = (ulong)*r19 + (ulong)n19 + c; c = s >> 32; *r19 = (uint)s;
+    s = (ulong)*r20 + (ulong)n20 + c; c = s >> 32; *r20 = (uint)s;
+    s = (ulong)*r21 + (ulong)n21 + c; c = s >> 32; *r21 = (uint)s;
+    s = (ulong)*r22 + (ulong)n22 + c; c = s >> 32; *r22 = (uint)s;
+    s = (ulong)*r23 + (ulong)n23 + c; c = s >> 32; *r23 = (uint)s;
+    s = (ulong)*r24 + (ulong)n24 + c; c = s >> 32; *r24 = (uint)s;
+    s = (ulong)*r25 + (ulong)n25 + c; c = s >> 32; *r25 = (uint)s;
+    s = (ulong)*r26 + (ulong)n26 + c; c = s >> 32; *r26 = (uint)s;
+    s = (ulong)*r27 + (ulong)n27 + c; c = s >> 32; *r27 = (uint)s;
+    s = (ulong)*r28 + (ulong)n28 + c; c = s >> 32; *r28 = (uint)s;
+    s = (ulong)*r29 + (ulong)n29 + c; c = s >> 32; *r29 = (uint)s;
+    s = (ulong)*r30 + (ulong)n30 + c; c = s >> 32; *r30 = (uint)s;
+    s = (ulong)*r31 + (ulong)n31 + c; c = s >> 32; *r31 = (uint)s;
+    s = (ulong)*r32 + (ulong)n32 + c; c = s >> 32; *r32 = (uint)s;
+    s = (ulong)*r33 + (ulong)n33 + c; c = s >> 32; *r33 = (uint)s;
+    s = (ulong)*r34 + (ulong)n34 + c; c = s >> 32; *r34 = (uint)s;
+    s = (ulong)*r35 + (ulong)n35 + c; c = s >> 32; *r35 = (uint)s;
+    s = (ulong)*r36 + (ulong)n36 + c; c = s >> 32; *r36 = (uint)s;
+    s = (ulong)*r37 + (ulong)n37 + c; c = s >> 32; *r37 = (uint)s;
+    s = (ulong)*r38 + (ulong)n38 + c; c = s >> 32; *r38 = (uint)s;
+    s = (ulong)*r39 + (ulong)n39 + c; c = s >> 32; *r39 = (uint)s;
+    s = (ulong)*r40 + (ulong)n40 + c; c = s >> 32; *r40 = (uint)s;
+    s = (ulong)*r41 + (ulong)n41 + c; c = s >> 32; *r41 = (uint)s;
+    s = (ulong)*r42 + (ulong)n42 + c; c = s >> 32; *r42 = (uint)s;
+    s = (ulong)*r43 + (ulong)n43 + c; c = s >> 32; *r43 = (uint)s;
+    s = (ulong)*r44 + (ulong)n44 + c; c = s >> 32; *r44 = (uint)s;
+    s = (ulong)*r45 + (ulong)n45 + c; c = s >> 32; *r45 = (uint)s;
+    s = (ulong)*r46 + (ulong)n46 + c; c = s >> 32; *r46 = (uint)s;
+    s = (ulong)*r47 + (ulong)n47 + c; c = s >> 32; *r47 = (uint)s;
+    s = (ulong)*r48 + (ulong)n48 + c; c = s >> 32; *r48 = (uint)s;
+    s = (ulong)*r49 + (ulong)n49 + c; c = s >> 32; *r49 = (uint)s;
+    s = (ulong)*r50 + (ulong)n50 + c; c = s >> 32; *r50 = (uint)s;
+    s = (ulong)*r51 + (ulong)n51 + c; c = s >> 32; *r51 = (uint)s;
+    s = (ulong)*r52 + (ulong)n52 + c; c = s >> 32; *r52 = (uint)s;
+    s = (ulong)*r53 + (ulong)n53 + c; c = s >> 32; *r53 = (uint)s;
+    s = (ulong)*r54 + (ulong)n54 + c; c = s >> 32; *r54 = (uint)s;
+    s = (ulong)*r55 + (ulong)n55 + c; c = s >> 32; *r55 = (uint)s;
+    s = (ulong)*r56 + (ulong)n56 + c; c = s >> 32; *r56 = (uint)s;
+    s = (ulong)*r57 + (ulong)n57 + c; c = s >> 32; *r57 = (uint)s;
+    s = (ulong)*r58 + (ulong)n58 + c; c = s >> 32; *r58 = (uint)s;
+    s = (ulong)*r59 + (ulong)n59 + c; c = s >> 32; *r59 = (uint)s;
+    s = (ulong)*r60 + (ulong)n60 + c; c = s >> 32; *r60 = (uint)s;
+    s = (ulong)*r61 + (ulong)n61 + c; c = s >> 32; *r61 = (uint)s;
+    s = (ulong)*r62 + (ulong)n62 + c; c = s >> 32; *r62 = (uint)s;
+    s = (ulong)*r63 + (ulong)n63 + c; c = s >> 32; *r63 = (uint)s;
+    s = (ulong)*r64 + (ulong)n64 + c; c = s >> 32; *r64 = (uint)s;
+    s = (ulong)*r65 + (ulong)n65 + c; c = s >> 32; *r65 = (uint)s;
+    s = (ulong)*r66 + (ulong)n66 + c; c = s >> 32; *r66 = (uint)s;
+    s = (ulong)*r67 + (ulong)n67 + c; c = s >> 32; *r67 = (uint)s;
+    s = (ulong)*r68 + (ulong)n68 + c; c = s >> 32; *r68 = (uint)s;
+    s = (ulong)*r69 + (ulong)n69 + c; c = s >> 32; *r69 = (uint)s;
+    s = (ulong)*r70 + (ulong)n70 + c; c = s >> 32; *r70 = (uint)s;
+    s = (ulong)*r71 + (ulong)n71 + c; c = s >> 32; *r71 = (uint)s;
+    s = (ulong)*r72 + (ulong)n72 + c; c = s >> 32; *r72 = (uint)s;
+    s = (ulong)*r73 + (ulong)n73 + c; c = s >> 32; *r73 = (uint)s;
+    s = (ulong)*r74 + (ulong)n74 + c; c = s >> 32; *r74 = (uint)s;
+    s = (ulong)*r75 + (ulong)n75 + c; c = s >> 32; *r75 = (uint)s;
+    s = (ulong)*r76 + (ulong)n76 + c; c = s >> 32; *r76 = (uint)s;
+    s = (ulong)*r77 + (ulong)n77 + c; c = s >> 32; *r77 = (uint)s;
+    s = (ulong)*r78 + (ulong)n78 + c; c = s >> 32; *r78 = (uint)s;
+    s = (ulong)*r79 + (ulong)n79 + c; c = s >> 32; *r79 = (uint)s;
+    s = (ulong)*r80 + (ulong)n80 + c; c = s >> 32; *r80 = (uint)s;
+    s = (ulong)*r81 + (ulong)n81 + c; c = s >> 32; *r81 = (uint)s;
+    s = (ulong)*r82 + (ulong)n82 + c; c = s >> 32; *r82 = (uint)s;
+    s = (ulong)*r83 + (ulong)n83 + c; c = s >> 32; *r83 = (uint)s;
+    s = (ulong)*r84 + (ulong)n84 + c; c = s >> 32; *r84 = (uint)s;
+    s = (ulong)*r85 + (ulong)n85 + c; c = s >> 32; *r85 = (uint)s;
+    s = (ulong)*r86 + (ulong)n86 + c; c = s >> 32; *r86 = (uint)s;
+    s = (ulong)*r87 + (ulong)n87 + c; c = s >> 32; *r87 = (uint)s;
+    s = (ulong)*r88 + (ulong)n88 + c; c = s >> 32; *r88 = (uint)s;
+    s = (ulong)*r89 + (ulong)n89 + c; c = s >> 32; *r89 = (uint)s;
+    s = (ulong)*r90 + (ulong)n90 + c; c = s >> 32; *r90 = (uint)s;
+    s = (ulong)*r91 + (ulong)n91 + c; c = s >> 32; *r91 = (uint)s;
+    s = (ulong)*r92 + (ulong)n92 + c; c = s >> 32; *r92 = (uint)s;
+    s = (ulong)*r93 + (ulong)n93 + c; c = s >> 32; *r93 = (uint)s;
+    s = (ulong)*r94 + (ulong)n94 + c; c = s >> 32; *r94 = (uint)s;
+    s = (ulong)*r95 + (ulong)n95 + c; c = s >> 32; *r95 = (uint)s;
+    s = (ulong)*r96 + (ulong)n96 + c; c = s >> 32; *r96 = (uint)s;
+    s = (ulong)*r97 + (ulong)n97 + c; c = s >> 32; *r97 = (uint)s;
+    s = (ulong)*r98 + (ulong)n98 + c; c = s >> 32; *r98 = (uint)s;
+    s = (ulong)*r99 + (ulong)n99 + c; c = s >> 32; *r99 = (uint)s;
+    s = (ulong)*r100 + (ulong)n100 + c; c = s >> 32; *r100 = (uint)s;
+    s = (ulong)*r101 + (ulong)n101 + c; c = s >> 32; *r101 = (uint)s;
+    s = (ulong)*r102 + (ulong)n102 + c; c = s >> 32; *r102 = (uint)s;
+    s = (ulong)*r103 + (ulong)n103 + c; c = s >> 32; *r103 = (uint)s;
+    s = (ulong)*r104 + (ulong)n104 + c; c = s >> 32; *r104 = (uint)s;
+    s = (ulong)*r105 + (ulong)n105 + c; c = s >> 32; *r105 = (uint)s;
+    s = (ulong)*r106 + (ulong)n106 + c; c = s >> 32; *r106 = (uint)s;
+    s = (ulong)*r107 + (ulong)n107 + c; c = s >> 32; *r107 = (uint)s;
+    s = (ulong)*r108 + (ulong)n108 + c; c = s >> 32; *r108 = (uint)s;
+    s = (ulong)*r109 + (ulong)n109 + c; c = s >> 32; *r109 = (uint)s;
+    s = (ulong)*r110 + (ulong)n110 + c; c = s >> 32; *r110 = (uint)s;
+    s = (ulong)*r111 + (ulong)n111 + c; c = s >> 32; *r111 = (uint)s;
+}
+#endif
 #ifndef ASM_COMMON_FUSED_BLOCK4_PRIV_DEFINED
 #define ASM_COMMON_FUSED_BLOCK4_PRIV_DEFINED
 // 4-limb fused add-mod block (private stage1).
@@ -709,6 +1228,3611 @@ static inline void asm_fused_block16_priv(const uint *a, const uint *b,
 
 }
 #endif
+#ifndef ASM_COMMON_FUSED_BLOCK24_PRIV_DEFINED
+#define ASM_COMMON_FUSED_BLOCK24_PRIV_DEFINED
+// 24-limb fused add-mod block (private stage1).
+
+static inline void asm_fused_block24_priv(const uint *a, const uint *b,
+
+                                   const uint *n, uint *r, uint ca_in,
+
+                                   uint cs_in, uint *ca_out, uint *cs_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21, s22, s23;
+
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23;
+
+    uint n0n, n1n, n2n, n3n, n4n, n5n, n6n, n7n, n8n, n9n, n10n, n11n, n12n, n13n, n14n, n15n, n16n, n17n, n18n, n19n, n20n, n21n, n22n, n23n;
+
+    uint ca = 0u, cs = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint ca_bit = ca_in ? o : z;
+
+    uint cs_bit = cs_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[ca_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[s0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_cndmask_b32   %[ca], %[z], %[o], vcc_lo\n\t"
+        "v_not_b32       %[n0n], %[n0]\n\t"
+        "v_not_b32       %[n1n], %[n1]\n\t"
+        "v_not_b32       %[n2n], %[n2]\n\t"
+        "v_not_b32       %[n3n], %[n3]\n\t"
+        "v_not_b32       %[n4n], %[n4]\n\t"
+        "v_not_b32       %[n5n], %[n5]\n\t"
+        "v_not_b32       %[n6n], %[n6]\n\t"
+        "v_not_b32       %[n7n], %[n7]\n\t"
+        "v_not_b32       %[n8n], %[n8]\n\t"
+        "v_not_b32       %[n9n], %[n9]\n\t"
+        "v_not_b32       %[n10n], %[n10]\n\t"
+        "v_not_b32       %[n11n], %[n11]\n\t"
+        "v_not_b32       %[n12n], %[n12]\n\t"
+        "v_not_b32       %[n13n], %[n13]\n\t"
+        "v_not_b32       %[n14n], %[n14]\n\t"
+        "v_not_b32       %[n15n], %[n15]\n\t"
+        "v_not_b32       %[n16n], %[n16]\n\t"
+        "v_not_b32       %[n17n], %[n17]\n\t"
+        "v_not_b32       %[n18n], %[n18]\n\t"
+        "v_not_b32       %[n19n], %[n19]\n\t"
+        "v_not_b32       %[n20n], %[n20]\n\t"
+        "v_not_b32       %[n21n], %[n21]\n\t"
+        "v_not_b32       %[n22n], %[n22]\n\t"
+        "v_not_b32       %[n23n], %[n23]\n\t"
+        "v_cmp_eq_u32    vcc_lo, %[cs_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[r0], vcc_lo, %[s0], %[n0n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r1], vcc_lo, %[s1], %[n1n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r2], vcc_lo, %[s2], %[n2n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r3], vcc_lo, %[s3], %[n3n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r4], vcc_lo, %[s4], %[n4n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r5], vcc_lo, %[s5], %[n5n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r6], vcc_lo, %[s6], %[n6n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r7], vcc_lo, %[s7], %[n7n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r8], vcc_lo, %[s8], %[n8n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r9], vcc_lo, %[s9], %[n9n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r10], vcc_lo, %[s10], %[n10n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r11], vcc_lo, %[s11], %[n11n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r12], vcc_lo, %[s12], %[n12n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r13], vcc_lo, %[s13], %[n13n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r14], vcc_lo, %[s14], %[n14n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r15], vcc_lo, %[s15], %[n15n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r16], vcc_lo, %[s16], %[n16n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r17], vcc_lo, %[s17], %[n17n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r18], vcc_lo, %[s18], %[n18n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r19], vcc_lo, %[s19], %[n19n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r20], vcc_lo, %[s20], %[n20n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r21], vcc_lo, %[s21], %[n21n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r22], vcc_lo, %[s22], %[n22n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r23], vcc_lo, %[s23], %[n23n], vcc_lo\n\t"
+        "v_cndmask_b32   %[cs], %[z], %[o], vcc_lo"
+
+        : [s0] "=&v"(s0), [s1] "=&v"(s1), [s2] "=&v"(s2), [s3] "=&v"(s3), [s4] "=&v"(s4), [s5] "=&v"(s5), [s6] "=&v"(s6), [s7] "=&v"(s7), [s8] "=&v"(s8), [s9] "=&v"(s9), [s10] "=&v"(s10), [s11] "=&v"(s11), [s12] "=&v"(s12), [s13] "=&v"(s13), [s14] "=&v"(s14), [s15] "=&v"(s15), [s16] "=&v"(s16), [s17] "=&v"(s17), [s18] "=&v"(s18), [s19] "=&v"(s19), [s20] "=&v"(s20), [s21] "=&v"(s21), [s22] "=&v"(s22), [s23] "=&v"(s23),
+
+          [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23),
+
+          [n0n] "=&v"(n0n), [n1n] "=&v"(n1n), [n2n] "=&v"(n2n), [n3n] "=&v"(n3n), [n4n] "=&v"(n4n), [n5n] "=&v"(n5n), [n6n] "=&v"(n6n), [n7n] "=&v"(n7n), [n8n] "=&v"(n8n), [n9n] "=&v"(n9n), [n10n] "=&v"(n10n), [n11n] "=&v"(n11n), [n12n] "=&v"(n12n), [n13n] "=&v"(n13n), [n14n] "=&v"(n14n), [n15n] "=&v"(n15n), [n16n] "=&v"(n16n), [n17n] "=&v"(n17n), [n18n] "=&v"(n18n), [n19n] "=&v"(n19n), [n20n] "=&v"(n20n), [n21n] "=&v"(n21n), [n22n] "=&v"(n22n), [n23n] "=&v"(n23n),
+
+          [ca] "=&v"(ca), [cs] "=&v"(cs)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23),
+
+          [n0] "v"(n0), [n1] "v"(n1), [n2] "v"(n2), [n3] "v"(n3), [n4] "v"(n4), [n5] "v"(n5), [n6] "v"(n6), [n7] "v"(n7), [n8] "v"(n8), [n9] "v"(n9), [n10] "v"(n10), [n11] "v"(n11), [n12] "v"(n12), [n13] "v"(n13), [n14] "v"(n14), [n15] "v"(n15), [n16] "v"(n16), [n17] "v"(n17), [n18] "v"(n18), [n19] "v"(n19), [n20] "v"(n20), [n21] "v"(n21), [n22] "v"(n22), [n23] "v"(n23),
+
+          [ca_bit] "v"(ca_bit), [cs_bit] "v"(cs_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if ((ca | cs) == 0u) {
+
+        c_fix_add_n24(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    *ca_out = ca;
+
+    *cs_out = cs;
+
+}
+#endif
+#ifndef ASM_COMMON_FUSED_BLOCK32_PRIV_DEFINED
+#define ASM_COMMON_FUSED_BLOCK32_PRIV_DEFINED
+// 32-limb fused add-mod block (private stage1).
+
+static inline void asm_fused_block32_priv(const uint *a, const uint *b,
+
+                                   const uint *n, uint *r, uint ca_in,
+
+                                   uint cs_in, uint *ca_out, uint *cs_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21, s22, s23, s24, s25, s26, s27, s28, s29, s30, s31;
+
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31;
+
+    uint n0n, n1n, n2n, n3n, n4n, n5n, n6n, n7n, n8n, n9n, n10n, n11n, n12n, n13n, n14n, n15n, n16n, n17n, n18n, n19n, n20n, n21n, n22n, n23n, n24n, n25n, n26n, n27n, n28n, n29n, n30n, n31n;
+
+    uint ca = 0u, cs = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint ca_bit = ca_in ? o : z;
+
+    uint cs_bit = cs_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[ca_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[s0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_cndmask_b32   %[ca], %[z], %[o], vcc_lo\n\t"
+        "v_not_b32       %[n0n], %[n0]\n\t"
+        "v_not_b32       %[n1n], %[n1]\n\t"
+        "v_not_b32       %[n2n], %[n2]\n\t"
+        "v_not_b32       %[n3n], %[n3]\n\t"
+        "v_not_b32       %[n4n], %[n4]\n\t"
+        "v_not_b32       %[n5n], %[n5]\n\t"
+        "v_not_b32       %[n6n], %[n6]\n\t"
+        "v_not_b32       %[n7n], %[n7]\n\t"
+        "v_not_b32       %[n8n], %[n8]\n\t"
+        "v_not_b32       %[n9n], %[n9]\n\t"
+        "v_not_b32       %[n10n], %[n10]\n\t"
+        "v_not_b32       %[n11n], %[n11]\n\t"
+        "v_not_b32       %[n12n], %[n12]\n\t"
+        "v_not_b32       %[n13n], %[n13]\n\t"
+        "v_not_b32       %[n14n], %[n14]\n\t"
+        "v_not_b32       %[n15n], %[n15]\n\t"
+        "v_not_b32       %[n16n], %[n16]\n\t"
+        "v_not_b32       %[n17n], %[n17]\n\t"
+        "v_not_b32       %[n18n], %[n18]\n\t"
+        "v_not_b32       %[n19n], %[n19]\n\t"
+        "v_not_b32       %[n20n], %[n20]\n\t"
+        "v_not_b32       %[n21n], %[n21]\n\t"
+        "v_not_b32       %[n22n], %[n22]\n\t"
+        "v_not_b32       %[n23n], %[n23]\n\t"
+        "v_not_b32       %[n24n], %[n24]\n\t"
+        "v_not_b32       %[n25n], %[n25]\n\t"
+        "v_not_b32       %[n26n], %[n26]\n\t"
+        "v_not_b32       %[n27n], %[n27]\n\t"
+        "v_not_b32       %[n28n], %[n28]\n\t"
+        "v_not_b32       %[n29n], %[n29]\n\t"
+        "v_not_b32       %[n30n], %[n30]\n\t"
+        "v_not_b32       %[n31n], %[n31]\n\t"
+        "v_cmp_eq_u32    vcc_lo, %[cs_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[r0], vcc_lo, %[s0], %[n0n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r1], vcc_lo, %[s1], %[n1n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r2], vcc_lo, %[s2], %[n2n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r3], vcc_lo, %[s3], %[n3n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r4], vcc_lo, %[s4], %[n4n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r5], vcc_lo, %[s5], %[n5n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r6], vcc_lo, %[s6], %[n6n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r7], vcc_lo, %[s7], %[n7n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r8], vcc_lo, %[s8], %[n8n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r9], vcc_lo, %[s9], %[n9n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r10], vcc_lo, %[s10], %[n10n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r11], vcc_lo, %[s11], %[n11n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r12], vcc_lo, %[s12], %[n12n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r13], vcc_lo, %[s13], %[n13n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r14], vcc_lo, %[s14], %[n14n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r15], vcc_lo, %[s15], %[n15n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r16], vcc_lo, %[s16], %[n16n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r17], vcc_lo, %[s17], %[n17n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r18], vcc_lo, %[s18], %[n18n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r19], vcc_lo, %[s19], %[n19n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r20], vcc_lo, %[s20], %[n20n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r21], vcc_lo, %[s21], %[n21n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r22], vcc_lo, %[s22], %[n22n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r23], vcc_lo, %[s23], %[n23n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r24], vcc_lo, %[s24], %[n24n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r25], vcc_lo, %[s25], %[n25n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r26], vcc_lo, %[s26], %[n26n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r27], vcc_lo, %[s27], %[n27n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r28], vcc_lo, %[s28], %[n28n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r29], vcc_lo, %[s29], %[n29n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r30], vcc_lo, %[s30], %[n30n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r31], vcc_lo, %[s31], %[n31n], vcc_lo\n\t"
+        "v_cndmask_b32   %[cs], %[z], %[o], vcc_lo"
+
+        : [s0] "=&v"(s0), [s1] "=&v"(s1), [s2] "=&v"(s2), [s3] "=&v"(s3), [s4] "=&v"(s4), [s5] "=&v"(s5), [s6] "=&v"(s6), [s7] "=&v"(s7), [s8] "=&v"(s8), [s9] "=&v"(s9), [s10] "=&v"(s10), [s11] "=&v"(s11), [s12] "=&v"(s12), [s13] "=&v"(s13), [s14] "=&v"(s14), [s15] "=&v"(s15), [s16] "=&v"(s16), [s17] "=&v"(s17), [s18] "=&v"(s18), [s19] "=&v"(s19), [s20] "=&v"(s20), [s21] "=&v"(s21), [s22] "=&v"(s22), [s23] "=&v"(s23), [s24] "=&v"(s24), [s25] "=&v"(s25), [s26] "=&v"(s26), [s27] "=&v"(s27), [s28] "=&v"(s28), [s29] "=&v"(s29), [s30] "=&v"(s30), [s31] "=&v"(s31),
+
+          [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31),
+
+          [n0n] "=&v"(n0n), [n1n] "=&v"(n1n), [n2n] "=&v"(n2n), [n3n] "=&v"(n3n), [n4n] "=&v"(n4n), [n5n] "=&v"(n5n), [n6n] "=&v"(n6n), [n7n] "=&v"(n7n), [n8n] "=&v"(n8n), [n9n] "=&v"(n9n), [n10n] "=&v"(n10n), [n11n] "=&v"(n11n), [n12n] "=&v"(n12n), [n13n] "=&v"(n13n), [n14n] "=&v"(n14n), [n15n] "=&v"(n15n), [n16n] "=&v"(n16n), [n17n] "=&v"(n17n), [n18n] "=&v"(n18n), [n19n] "=&v"(n19n), [n20n] "=&v"(n20n), [n21n] "=&v"(n21n), [n22n] "=&v"(n22n), [n23n] "=&v"(n23n), [n24n] "=&v"(n24n), [n25n] "=&v"(n25n), [n26n] "=&v"(n26n), [n27n] "=&v"(n27n), [n28n] "=&v"(n28n), [n29n] "=&v"(n29n), [n30n] "=&v"(n30n), [n31n] "=&v"(n31n),
+
+          [ca] "=&v"(ca), [cs] "=&v"(cs)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31),
+
+          [n0] "v"(n0), [n1] "v"(n1), [n2] "v"(n2), [n3] "v"(n3), [n4] "v"(n4), [n5] "v"(n5), [n6] "v"(n6), [n7] "v"(n7), [n8] "v"(n8), [n9] "v"(n9), [n10] "v"(n10), [n11] "v"(n11), [n12] "v"(n12), [n13] "v"(n13), [n14] "v"(n14), [n15] "v"(n15), [n16] "v"(n16), [n17] "v"(n17), [n18] "v"(n18), [n19] "v"(n19), [n20] "v"(n20), [n21] "v"(n21), [n22] "v"(n22), [n23] "v"(n23), [n24] "v"(n24), [n25] "v"(n25), [n26] "v"(n26), [n27] "v"(n27), [n28] "v"(n28), [n29] "v"(n29), [n30] "v"(n30), [n31] "v"(n31),
+
+          [ca_bit] "v"(ca_bit), [cs_bit] "v"(cs_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if ((ca | cs) == 0u) {
+
+        c_fix_add_n32(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    *ca_out = ca;
+
+    *cs_out = cs;
+
+}
+#endif
+#ifndef ASM_COMMON_FUSED_BLOCK48_PRIV_DEFINED
+#define ASM_COMMON_FUSED_BLOCK48_PRIV_DEFINED
+// 48-limb fused add-mod block (private stage1).
+
+static inline void asm_fused_block48_priv(const uint *a, const uint *b,
+
+                                   const uint *n, uint *r, uint ca_in,
+
+                                   uint cs_in, uint *ca_out, uint *cs_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint a32 = a[32];
+    uint a33 = a[33];
+    uint a34 = a[34];
+    uint a35 = a[35];
+    uint a36 = a[36];
+    uint a37 = a[37];
+    uint a38 = a[38];
+    uint a39 = a[39];
+    uint a40 = a[40];
+    uint a41 = a[41];
+    uint a42 = a[42];
+    uint a43 = a[43];
+    uint a44 = a[44];
+    uint a45 = a[45];
+    uint a46 = a[46];
+    uint a47 = a[47];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint b32 = b[32];
+    uint b33 = b[33];
+    uint b34 = b[34];
+    uint b35 = b[35];
+    uint b36 = b[36];
+    uint b37 = b[37];
+    uint b38 = b[38];
+    uint b39 = b[39];
+    uint b40 = b[40];
+    uint b41 = b[41];
+    uint b42 = b[42];
+    uint b43 = b[43];
+    uint b44 = b[44];
+    uint b45 = b[45];
+    uint b46 = b[46];
+    uint b47 = b[47];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint n32 = n[32];
+    uint n33 = n[33];
+    uint n34 = n[34];
+    uint n35 = n[35];
+    uint n36 = n[36];
+    uint n37 = n[37];
+    uint n38 = n[38];
+    uint n39 = n[39];
+    uint n40 = n[40];
+    uint n41 = n[41];
+    uint n42 = n[42];
+    uint n43 = n[43];
+    uint n44 = n[44];
+    uint n45 = n[45];
+    uint n46 = n[46];
+    uint n47 = n[47];
+    uint s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21, s22, s23, s24, s25, s26, s27, s28, s29, s30, s31, s32, s33, s34, s35, s36, s37, s38, s39, s40, s41, s42, s43, s44, s45, s46, s47;
+
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47;
+
+    uint n0n, n1n, n2n, n3n, n4n, n5n, n6n, n7n, n8n, n9n, n10n, n11n, n12n, n13n, n14n, n15n, n16n, n17n, n18n, n19n, n20n, n21n, n22n, n23n, n24n, n25n, n26n, n27n, n28n, n29n, n30n, n31n, n32n, n33n, n34n, n35n, n36n, n37n, n38n, n39n, n40n, n41n, n42n, n43n, n44n, n45n, n46n, n47n;
+
+    uint ca = 0u, cs = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint ca_bit = ca_in ? o : z;
+
+    uint cs_bit = cs_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[ca_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[s0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s32], vcc_lo, %[a32], %[b32], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s33], vcc_lo, %[a33], %[b33], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s34], vcc_lo, %[a34], %[b34], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s35], vcc_lo, %[a35], %[b35], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s36], vcc_lo, %[a36], %[b36], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s37], vcc_lo, %[a37], %[b37], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s38], vcc_lo, %[a38], %[b38], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s39], vcc_lo, %[a39], %[b39], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s40], vcc_lo, %[a40], %[b40], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s41], vcc_lo, %[a41], %[b41], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s42], vcc_lo, %[a42], %[b42], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s43], vcc_lo, %[a43], %[b43], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s44], vcc_lo, %[a44], %[b44], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s45], vcc_lo, %[a45], %[b45], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s46], vcc_lo, %[a46], %[b46], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s47], vcc_lo, %[a47], %[b47], vcc_lo\n\t"
+        "v_cndmask_b32   %[ca], %[z], %[o], vcc_lo\n\t"
+        "v_not_b32       %[n0n], %[n0]\n\t"
+        "v_not_b32       %[n1n], %[n1]\n\t"
+        "v_not_b32       %[n2n], %[n2]\n\t"
+        "v_not_b32       %[n3n], %[n3]\n\t"
+        "v_not_b32       %[n4n], %[n4]\n\t"
+        "v_not_b32       %[n5n], %[n5]\n\t"
+        "v_not_b32       %[n6n], %[n6]\n\t"
+        "v_not_b32       %[n7n], %[n7]\n\t"
+        "v_not_b32       %[n8n], %[n8]\n\t"
+        "v_not_b32       %[n9n], %[n9]\n\t"
+        "v_not_b32       %[n10n], %[n10]\n\t"
+        "v_not_b32       %[n11n], %[n11]\n\t"
+        "v_not_b32       %[n12n], %[n12]\n\t"
+        "v_not_b32       %[n13n], %[n13]\n\t"
+        "v_not_b32       %[n14n], %[n14]\n\t"
+        "v_not_b32       %[n15n], %[n15]\n\t"
+        "v_not_b32       %[n16n], %[n16]\n\t"
+        "v_not_b32       %[n17n], %[n17]\n\t"
+        "v_not_b32       %[n18n], %[n18]\n\t"
+        "v_not_b32       %[n19n], %[n19]\n\t"
+        "v_not_b32       %[n20n], %[n20]\n\t"
+        "v_not_b32       %[n21n], %[n21]\n\t"
+        "v_not_b32       %[n22n], %[n22]\n\t"
+        "v_not_b32       %[n23n], %[n23]\n\t"
+        "v_not_b32       %[n24n], %[n24]\n\t"
+        "v_not_b32       %[n25n], %[n25]\n\t"
+        "v_not_b32       %[n26n], %[n26]\n\t"
+        "v_not_b32       %[n27n], %[n27]\n\t"
+        "v_not_b32       %[n28n], %[n28]\n\t"
+        "v_not_b32       %[n29n], %[n29]\n\t"
+        "v_not_b32       %[n30n], %[n30]\n\t"
+        "v_not_b32       %[n31n], %[n31]\n\t"
+        "v_not_b32       %[n32n], %[n32]\n\t"
+        "v_not_b32       %[n33n], %[n33]\n\t"
+        "v_not_b32       %[n34n], %[n34]\n\t"
+        "v_not_b32       %[n35n], %[n35]\n\t"
+        "v_not_b32       %[n36n], %[n36]\n\t"
+        "v_not_b32       %[n37n], %[n37]\n\t"
+        "v_not_b32       %[n38n], %[n38]\n\t"
+        "v_not_b32       %[n39n], %[n39]\n\t"
+        "v_not_b32       %[n40n], %[n40]\n\t"
+        "v_not_b32       %[n41n], %[n41]\n\t"
+        "v_not_b32       %[n42n], %[n42]\n\t"
+        "v_not_b32       %[n43n], %[n43]\n\t"
+        "v_not_b32       %[n44n], %[n44]\n\t"
+        "v_not_b32       %[n45n], %[n45]\n\t"
+        "v_not_b32       %[n46n], %[n46]\n\t"
+        "v_not_b32       %[n47n], %[n47]\n\t"
+        "v_cmp_eq_u32    vcc_lo, %[cs_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[r0], vcc_lo, %[s0], %[n0n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r1], vcc_lo, %[s1], %[n1n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r2], vcc_lo, %[s2], %[n2n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r3], vcc_lo, %[s3], %[n3n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r4], vcc_lo, %[s4], %[n4n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r5], vcc_lo, %[s5], %[n5n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r6], vcc_lo, %[s6], %[n6n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r7], vcc_lo, %[s7], %[n7n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r8], vcc_lo, %[s8], %[n8n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r9], vcc_lo, %[s9], %[n9n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r10], vcc_lo, %[s10], %[n10n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r11], vcc_lo, %[s11], %[n11n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r12], vcc_lo, %[s12], %[n12n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r13], vcc_lo, %[s13], %[n13n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r14], vcc_lo, %[s14], %[n14n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r15], vcc_lo, %[s15], %[n15n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r16], vcc_lo, %[s16], %[n16n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r17], vcc_lo, %[s17], %[n17n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r18], vcc_lo, %[s18], %[n18n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r19], vcc_lo, %[s19], %[n19n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r20], vcc_lo, %[s20], %[n20n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r21], vcc_lo, %[s21], %[n21n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r22], vcc_lo, %[s22], %[n22n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r23], vcc_lo, %[s23], %[n23n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r24], vcc_lo, %[s24], %[n24n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r25], vcc_lo, %[s25], %[n25n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r26], vcc_lo, %[s26], %[n26n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r27], vcc_lo, %[s27], %[n27n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r28], vcc_lo, %[s28], %[n28n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r29], vcc_lo, %[s29], %[n29n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r30], vcc_lo, %[s30], %[n30n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r31], vcc_lo, %[s31], %[n31n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r32], vcc_lo, %[s32], %[n32n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r33], vcc_lo, %[s33], %[n33n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r34], vcc_lo, %[s34], %[n34n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r35], vcc_lo, %[s35], %[n35n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r36], vcc_lo, %[s36], %[n36n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r37], vcc_lo, %[s37], %[n37n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r38], vcc_lo, %[s38], %[n38n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r39], vcc_lo, %[s39], %[n39n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r40], vcc_lo, %[s40], %[n40n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r41], vcc_lo, %[s41], %[n41n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r42], vcc_lo, %[s42], %[n42n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r43], vcc_lo, %[s43], %[n43n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r44], vcc_lo, %[s44], %[n44n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r45], vcc_lo, %[s45], %[n45n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r46], vcc_lo, %[s46], %[n46n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r47], vcc_lo, %[s47], %[n47n], vcc_lo\n\t"
+        "v_cndmask_b32   %[cs], %[z], %[o], vcc_lo"
+
+        : [s0] "=&v"(s0), [s1] "=&v"(s1), [s2] "=&v"(s2), [s3] "=&v"(s3), [s4] "=&v"(s4), [s5] "=&v"(s5), [s6] "=&v"(s6), [s7] "=&v"(s7), [s8] "=&v"(s8), [s9] "=&v"(s9), [s10] "=&v"(s10), [s11] "=&v"(s11), [s12] "=&v"(s12), [s13] "=&v"(s13), [s14] "=&v"(s14), [s15] "=&v"(s15), [s16] "=&v"(s16), [s17] "=&v"(s17), [s18] "=&v"(s18), [s19] "=&v"(s19), [s20] "=&v"(s20), [s21] "=&v"(s21), [s22] "=&v"(s22), [s23] "=&v"(s23), [s24] "=&v"(s24), [s25] "=&v"(s25), [s26] "=&v"(s26), [s27] "=&v"(s27), [s28] "=&v"(s28), [s29] "=&v"(s29), [s30] "=&v"(s30), [s31] "=&v"(s31), [s32] "=&v"(s32), [s33] "=&v"(s33), [s34] "=&v"(s34), [s35] "=&v"(s35), [s36] "=&v"(s36), [s37] "=&v"(s37), [s38] "=&v"(s38), [s39] "=&v"(s39), [s40] "=&v"(s40), [s41] "=&v"(s41), [s42] "=&v"(s42), [s43] "=&v"(s43), [s44] "=&v"(s44), [s45] "=&v"(s45), [s46] "=&v"(s46), [s47] "=&v"(s47),
+
+          [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31), [r32] "=&v"(r32), [r33] "=&v"(r33), [r34] "=&v"(r34), [r35] "=&v"(r35), [r36] "=&v"(r36), [r37] "=&v"(r37), [r38] "=&v"(r38), [r39] "=&v"(r39), [r40] "=&v"(r40), [r41] "=&v"(r41), [r42] "=&v"(r42), [r43] "=&v"(r43), [r44] "=&v"(r44), [r45] "=&v"(r45), [r46] "=&v"(r46), [r47] "=&v"(r47),
+
+          [n0n] "=&v"(n0n), [n1n] "=&v"(n1n), [n2n] "=&v"(n2n), [n3n] "=&v"(n3n), [n4n] "=&v"(n4n), [n5n] "=&v"(n5n), [n6n] "=&v"(n6n), [n7n] "=&v"(n7n), [n8n] "=&v"(n8n), [n9n] "=&v"(n9n), [n10n] "=&v"(n10n), [n11n] "=&v"(n11n), [n12n] "=&v"(n12n), [n13n] "=&v"(n13n), [n14n] "=&v"(n14n), [n15n] "=&v"(n15n), [n16n] "=&v"(n16n), [n17n] "=&v"(n17n), [n18n] "=&v"(n18n), [n19n] "=&v"(n19n), [n20n] "=&v"(n20n), [n21n] "=&v"(n21n), [n22n] "=&v"(n22n), [n23n] "=&v"(n23n), [n24n] "=&v"(n24n), [n25n] "=&v"(n25n), [n26n] "=&v"(n26n), [n27n] "=&v"(n27n), [n28n] "=&v"(n28n), [n29n] "=&v"(n29n), [n30n] "=&v"(n30n), [n31n] "=&v"(n31n), [n32n] "=&v"(n32n), [n33n] "=&v"(n33n), [n34n] "=&v"(n34n), [n35n] "=&v"(n35n), [n36n] "=&v"(n36n), [n37n] "=&v"(n37n), [n38n] "=&v"(n38n), [n39n] "=&v"(n39n), [n40n] "=&v"(n40n), [n41n] "=&v"(n41n), [n42n] "=&v"(n42n), [n43n] "=&v"(n43n), [n44n] "=&v"(n44n), [n45n] "=&v"(n45n), [n46n] "=&v"(n46n), [n47n] "=&v"(n47n),
+
+          [ca] "=&v"(ca), [cs] "=&v"(cs)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31), [a32] "v"(a32), [b32] "v"(b32), [a33] "v"(a33), [b33] "v"(b33), [a34] "v"(a34), [b34] "v"(b34), [a35] "v"(a35), [b35] "v"(b35), [a36] "v"(a36), [b36] "v"(b36), [a37] "v"(a37), [b37] "v"(b37), [a38] "v"(a38), [b38] "v"(b38), [a39] "v"(a39), [b39] "v"(b39), [a40] "v"(a40), [b40] "v"(b40), [a41] "v"(a41), [b41] "v"(b41), [a42] "v"(a42), [b42] "v"(b42), [a43] "v"(a43), [b43] "v"(b43), [a44] "v"(a44), [b44] "v"(b44), [a45] "v"(a45), [b45] "v"(b45), [a46] "v"(a46), [b46] "v"(b46), [a47] "v"(a47), [b47] "v"(b47),
+
+          [n0] "v"(n0), [n1] "v"(n1), [n2] "v"(n2), [n3] "v"(n3), [n4] "v"(n4), [n5] "v"(n5), [n6] "v"(n6), [n7] "v"(n7), [n8] "v"(n8), [n9] "v"(n9), [n10] "v"(n10), [n11] "v"(n11), [n12] "v"(n12), [n13] "v"(n13), [n14] "v"(n14), [n15] "v"(n15), [n16] "v"(n16), [n17] "v"(n17), [n18] "v"(n18), [n19] "v"(n19), [n20] "v"(n20), [n21] "v"(n21), [n22] "v"(n22), [n23] "v"(n23), [n24] "v"(n24), [n25] "v"(n25), [n26] "v"(n26), [n27] "v"(n27), [n28] "v"(n28), [n29] "v"(n29), [n30] "v"(n30), [n31] "v"(n31), [n32] "v"(n32), [n33] "v"(n33), [n34] "v"(n34), [n35] "v"(n35), [n36] "v"(n36), [n37] "v"(n37), [n38] "v"(n38), [n39] "v"(n39), [n40] "v"(n40), [n41] "v"(n41), [n42] "v"(n42), [n43] "v"(n43), [n44] "v"(n44), [n45] "v"(n45), [n46] "v"(n46), [n47] "v"(n47),
+
+          [ca_bit] "v"(ca_bit), [cs_bit] "v"(cs_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if ((ca | cs) == 0u) {
+
+        c_fix_add_n48(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, &r32, &r33, &r34, &r35, &r36, &r37, &r38, &r39, &r40, &r41, &r42, &r43, &r44, &r45, &r46, &r47, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    r[32] = r32;
+    r[33] = r33;
+    r[34] = r34;
+    r[35] = r35;
+    r[36] = r36;
+    r[37] = r37;
+    r[38] = r38;
+    r[39] = r39;
+    r[40] = r40;
+    r[41] = r41;
+    r[42] = r42;
+    r[43] = r43;
+    r[44] = r44;
+    r[45] = r45;
+    r[46] = r46;
+    r[47] = r47;
+    *ca_out = ca;
+
+    *cs_out = cs;
+
+}
+#endif
+#ifndef ASM_COMMON_FUSED_BLOCK64_PRIV_DEFINED
+#define ASM_COMMON_FUSED_BLOCK64_PRIV_DEFINED
+// 64-limb fused add-mod block (private stage1).
+
+static inline void asm_fused_block64_priv(const uint *a, const uint *b,
+
+                                   const uint *n, uint *r, uint ca_in,
+
+                                   uint cs_in, uint *ca_out, uint *cs_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint a32 = a[32];
+    uint a33 = a[33];
+    uint a34 = a[34];
+    uint a35 = a[35];
+    uint a36 = a[36];
+    uint a37 = a[37];
+    uint a38 = a[38];
+    uint a39 = a[39];
+    uint a40 = a[40];
+    uint a41 = a[41];
+    uint a42 = a[42];
+    uint a43 = a[43];
+    uint a44 = a[44];
+    uint a45 = a[45];
+    uint a46 = a[46];
+    uint a47 = a[47];
+    uint a48 = a[48];
+    uint a49 = a[49];
+    uint a50 = a[50];
+    uint a51 = a[51];
+    uint a52 = a[52];
+    uint a53 = a[53];
+    uint a54 = a[54];
+    uint a55 = a[55];
+    uint a56 = a[56];
+    uint a57 = a[57];
+    uint a58 = a[58];
+    uint a59 = a[59];
+    uint a60 = a[60];
+    uint a61 = a[61];
+    uint a62 = a[62];
+    uint a63 = a[63];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint b32 = b[32];
+    uint b33 = b[33];
+    uint b34 = b[34];
+    uint b35 = b[35];
+    uint b36 = b[36];
+    uint b37 = b[37];
+    uint b38 = b[38];
+    uint b39 = b[39];
+    uint b40 = b[40];
+    uint b41 = b[41];
+    uint b42 = b[42];
+    uint b43 = b[43];
+    uint b44 = b[44];
+    uint b45 = b[45];
+    uint b46 = b[46];
+    uint b47 = b[47];
+    uint b48 = b[48];
+    uint b49 = b[49];
+    uint b50 = b[50];
+    uint b51 = b[51];
+    uint b52 = b[52];
+    uint b53 = b[53];
+    uint b54 = b[54];
+    uint b55 = b[55];
+    uint b56 = b[56];
+    uint b57 = b[57];
+    uint b58 = b[58];
+    uint b59 = b[59];
+    uint b60 = b[60];
+    uint b61 = b[61];
+    uint b62 = b[62];
+    uint b63 = b[63];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint n32 = n[32];
+    uint n33 = n[33];
+    uint n34 = n[34];
+    uint n35 = n[35];
+    uint n36 = n[36];
+    uint n37 = n[37];
+    uint n38 = n[38];
+    uint n39 = n[39];
+    uint n40 = n[40];
+    uint n41 = n[41];
+    uint n42 = n[42];
+    uint n43 = n[43];
+    uint n44 = n[44];
+    uint n45 = n[45];
+    uint n46 = n[46];
+    uint n47 = n[47];
+    uint n48 = n[48];
+    uint n49 = n[49];
+    uint n50 = n[50];
+    uint n51 = n[51];
+    uint n52 = n[52];
+    uint n53 = n[53];
+    uint n54 = n[54];
+    uint n55 = n[55];
+    uint n56 = n[56];
+    uint n57 = n[57];
+    uint n58 = n[58];
+    uint n59 = n[59];
+    uint n60 = n[60];
+    uint n61 = n[61];
+    uint n62 = n[62];
+    uint n63 = n[63];
+    uint s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21, s22, s23, s24, s25, s26, s27, s28, s29, s30, s31, s32, s33, s34, s35, s36, s37, s38, s39, s40, s41, s42, s43, s44, s45, s46, s47, s48, s49, s50, s51, s52, s53, s54, s55, s56, s57, s58, s59, s60, s61, s62, s63;
+
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47, r48, r49, r50, r51, r52, r53, r54, r55, r56, r57, r58, r59, r60, r61, r62, r63;
+
+    uint n0n, n1n, n2n, n3n, n4n, n5n, n6n, n7n, n8n, n9n, n10n, n11n, n12n, n13n, n14n, n15n, n16n, n17n, n18n, n19n, n20n, n21n, n22n, n23n, n24n, n25n, n26n, n27n, n28n, n29n, n30n, n31n, n32n, n33n, n34n, n35n, n36n, n37n, n38n, n39n, n40n, n41n, n42n, n43n, n44n, n45n, n46n, n47n, n48n, n49n, n50n, n51n, n52n, n53n, n54n, n55n, n56n, n57n, n58n, n59n, n60n, n61n, n62n, n63n;
+
+    uint ca = 0u, cs = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint ca_bit = ca_in ? o : z;
+
+    uint cs_bit = cs_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[ca_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[s0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s32], vcc_lo, %[a32], %[b32], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s33], vcc_lo, %[a33], %[b33], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s34], vcc_lo, %[a34], %[b34], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s35], vcc_lo, %[a35], %[b35], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s36], vcc_lo, %[a36], %[b36], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s37], vcc_lo, %[a37], %[b37], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s38], vcc_lo, %[a38], %[b38], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s39], vcc_lo, %[a39], %[b39], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s40], vcc_lo, %[a40], %[b40], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s41], vcc_lo, %[a41], %[b41], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s42], vcc_lo, %[a42], %[b42], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s43], vcc_lo, %[a43], %[b43], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s44], vcc_lo, %[a44], %[b44], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s45], vcc_lo, %[a45], %[b45], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s46], vcc_lo, %[a46], %[b46], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s47], vcc_lo, %[a47], %[b47], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s48], vcc_lo, %[a48], %[b48], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s49], vcc_lo, %[a49], %[b49], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s50], vcc_lo, %[a50], %[b50], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s51], vcc_lo, %[a51], %[b51], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s52], vcc_lo, %[a52], %[b52], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s53], vcc_lo, %[a53], %[b53], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s54], vcc_lo, %[a54], %[b54], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s55], vcc_lo, %[a55], %[b55], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s56], vcc_lo, %[a56], %[b56], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s57], vcc_lo, %[a57], %[b57], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s58], vcc_lo, %[a58], %[b58], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s59], vcc_lo, %[a59], %[b59], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s60], vcc_lo, %[a60], %[b60], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s61], vcc_lo, %[a61], %[b61], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s62], vcc_lo, %[a62], %[b62], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s63], vcc_lo, %[a63], %[b63], vcc_lo\n\t"
+        "v_cndmask_b32   %[ca], %[z], %[o], vcc_lo\n\t"
+        "v_not_b32       %[n0n], %[n0]\n\t"
+        "v_not_b32       %[n1n], %[n1]\n\t"
+        "v_not_b32       %[n2n], %[n2]\n\t"
+        "v_not_b32       %[n3n], %[n3]\n\t"
+        "v_not_b32       %[n4n], %[n4]\n\t"
+        "v_not_b32       %[n5n], %[n5]\n\t"
+        "v_not_b32       %[n6n], %[n6]\n\t"
+        "v_not_b32       %[n7n], %[n7]\n\t"
+        "v_not_b32       %[n8n], %[n8]\n\t"
+        "v_not_b32       %[n9n], %[n9]\n\t"
+        "v_not_b32       %[n10n], %[n10]\n\t"
+        "v_not_b32       %[n11n], %[n11]\n\t"
+        "v_not_b32       %[n12n], %[n12]\n\t"
+        "v_not_b32       %[n13n], %[n13]\n\t"
+        "v_not_b32       %[n14n], %[n14]\n\t"
+        "v_not_b32       %[n15n], %[n15]\n\t"
+        "v_not_b32       %[n16n], %[n16]\n\t"
+        "v_not_b32       %[n17n], %[n17]\n\t"
+        "v_not_b32       %[n18n], %[n18]\n\t"
+        "v_not_b32       %[n19n], %[n19]\n\t"
+        "v_not_b32       %[n20n], %[n20]\n\t"
+        "v_not_b32       %[n21n], %[n21]\n\t"
+        "v_not_b32       %[n22n], %[n22]\n\t"
+        "v_not_b32       %[n23n], %[n23]\n\t"
+        "v_not_b32       %[n24n], %[n24]\n\t"
+        "v_not_b32       %[n25n], %[n25]\n\t"
+        "v_not_b32       %[n26n], %[n26]\n\t"
+        "v_not_b32       %[n27n], %[n27]\n\t"
+        "v_not_b32       %[n28n], %[n28]\n\t"
+        "v_not_b32       %[n29n], %[n29]\n\t"
+        "v_not_b32       %[n30n], %[n30]\n\t"
+        "v_not_b32       %[n31n], %[n31]\n\t"
+        "v_not_b32       %[n32n], %[n32]\n\t"
+        "v_not_b32       %[n33n], %[n33]\n\t"
+        "v_not_b32       %[n34n], %[n34]\n\t"
+        "v_not_b32       %[n35n], %[n35]\n\t"
+        "v_not_b32       %[n36n], %[n36]\n\t"
+        "v_not_b32       %[n37n], %[n37]\n\t"
+        "v_not_b32       %[n38n], %[n38]\n\t"
+        "v_not_b32       %[n39n], %[n39]\n\t"
+        "v_not_b32       %[n40n], %[n40]\n\t"
+        "v_not_b32       %[n41n], %[n41]\n\t"
+        "v_not_b32       %[n42n], %[n42]\n\t"
+        "v_not_b32       %[n43n], %[n43]\n\t"
+        "v_not_b32       %[n44n], %[n44]\n\t"
+        "v_not_b32       %[n45n], %[n45]\n\t"
+        "v_not_b32       %[n46n], %[n46]\n\t"
+        "v_not_b32       %[n47n], %[n47]\n\t"
+        "v_not_b32       %[n48n], %[n48]\n\t"
+        "v_not_b32       %[n49n], %[n49]\n\t"
+        "v_not_b32       %[n50n], %[n50]\n\t"
+        "v_not_b32       %[n51n], %[n51]\n\t"
+        "v_not_b32       %[n52n], %[n52]\n\t"
+        "v_not_b32       %[n53n], %[n53]\n\t"
+        "v_not_b32       %[n54n], %[n54]\n\t"
+        "v_not_b32       %[n55n], %[n55]\n\t"
+        "v_not_b32       %[n56n], %[n56]\n\t"
+        "v_not_b32       %[n57n], %[n57]\n\t"
+        "v_not_b32       %[n58n], %[n58]\n\t"
+        "v_not_b32       %[n59n], %[n59]\n\t"
+        "v_not_b32       %[n60n], %[n60]\n\t"
+        "v_not_b32       %[n61n], %[n61]\n\t"
+        "v_not_b32       %[n62n], %[n62]\n\t"
+        "v_not_b32       %[n63n], %[n63]\n\t"
+        "v_cmp_eq_u32    vcc_lo, %[cs_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[r0], vcc_lo, %[s0], %[n0n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r1], vcc_lo, %[s1], %[n1n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r2], vcc_lo, %[s2], %[n2n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r3], vcc_lo, %[s3], %[n3n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r4], vcc_lo, %[s4], %[n4n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r5], vcc_lo, %[s5], %[n5n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r6], vcc_lo, %[s6], %[n6n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r7], vcc_lo, %[s7], %[n7n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r8], vcc_lo, %[s8], %[n8n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r9], vcc_lo, %[s9], %[n9n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r10], vcc_lo, %[s10], %[n10n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r11], vcc_lo, %[s11], %[n11n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r12], vcc_lo, %[s12], %[n12n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r13], vcc_lo, %[s13], %[n13n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r14], vcc_lo, %[s14], %[n14n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r15], vcc_lo, %[s15], %[n15n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r16], vcc_lo, %[s16], %[n16n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r17], vcc_lo, %[s17], %[n17n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r18], vcc_lo, %[s18], %[n18n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r19], vcc_lo, %[s19], %[n19n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r20], vcc_lo, %[s20], %[n20n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r21], vcc_lo, %[s21], %[n21n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r22], vcc_lo, %[s22], %[n22n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r23], vcc_lo, %[s23], %[n23n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r24], vcc_lo, %[s24], %[n24n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r25], vcc_lo, %[s25], %[n25n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r26], vcc_lo, %[s26], %[n26n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r27], vcc_lo, %[s27], %[n27n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r28], vcc_lo, %[s28], %[n28n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r29], vcc_lo, %[s29], %[n29n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r30], vcc_lo, %[s30], %[n30n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r31], vcc_lo, %[s31], %[n31n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r32], vcc_lo, %[s32], %[n32n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r33], vcc_lo, %[s33], %[n33n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r34], vcc_lo, %[s34], %[n34n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r35], vcc_lo, %[s35], %[n35n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r36], vcc_lo, %[s36], %[n36n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r37], vcc_lo, %[s37], %[n37n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r38], vcc_lo, %[s38], %[n38n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r39], vcc_lo, %[s39], %[n39n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r40], vcc_lo, %[s40], %[n40n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r41], vcc_lo, %[s41], %[n41n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r42], vcc_lo, %[s42], %[n42n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r43], vcc_lo, %[s43], %[n43n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r44], vcc_lo, %[s44], %[n44n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r45], vcc_lo, %[s45], %[n45n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r46], vcc_lo, %[s46], %[n46n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r47], vcc_lo, %[s47], %[n47n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r48], vcc_lo, %[s48], %[n48n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r49], vcc_lo, %[s49], %[n49n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r50], vcc_lo, %[s50], %[n50n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r51], vcc_lo, %[s51], %[n51n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r52], vcc_lo, %[s52], %[n52n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r53], vcc_lo, %[s53], %[n53n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r54], vcc_lo, %[s54], %[n54n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r55], vcc_lo, %[s55], %[n55n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r56], vcc_lo, %[s56], %[n56n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r57], vcc_lo, %[s57], %[n57n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r58], vcc_lo, %[s58], %[n58n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r59], vcc_lo, %[s59], %[n59n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r60], vcc_lo, %[s60], %[n60n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r61], vcc_lo, %[s61], %[n61n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r62], vcc_lo, %[s62], %[n62n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r63], vcc_lo, %[s63], %[n63n], vcc_lo\n\t"
+        "v_cndmask_b32   %[cs], %[z], %[o], vcc_lo"
+
+        : [s0] "=&v"(s0), [s1] "=&v"(s1), [s2] "=&v"(s2), [s3] "=&v"(s3), [s4] "=&v"(s4), [s5] "=&v"(s5), [s6] "=&v"(s6), [s7] "=&v"(s7), [s8] "=&v"(s8), [s9] "=&v"(s9), [s10] "=&v"(s10), [s11] "=&v"(s11), [s12] "=&v"(s12), [s13] "=&v"(s13), [s14] "=&v"(s14), [s15] "=&v"(s15), [s16] "=&v"(s16), [s17] "=&v"(s17), [s18] "=&v"(s18), [s19] "=&v"(s19), [s20] "=&v"(s20), [s21] "=&v"(s21), [s22] "=&v"(s22), [s23] "=&v"(s23), [s24] "=&v"(s24), [s25] "=&v"(s25), [s26] "=&v"(s26), [s27] "=&v"(s27), [s28] "=&v"(s28), [s29] "=&v"(s29), [s30] "=&v"(s30), [s31] "=&v"(s31), [s32] "=&v"(s32), [s33] "=&v"(s33), [s34] "=&v"(s34), [s35] "=&v"(s35), [s36] "=&v"(s36), [s37] "=&v"(s37), [s38] "=&v"(s38), [s39] "=&v"(s39), [s40] "=&v"(s40), [s41] "=&v"(s41), [s42] "=&v"(s42), [s43] "=&v"(s43), [s44] "=&v"(s44), [s45] "=&v"(s45), [s46] "=&v"(s46), [s47] "=&v"(s47), [s48] "=&v"(s48), [s49] "=&v"(s49), [s50] "=&v"(s50), [s51] "=&v"(s51), [s52] "=&v"(s52), [s53] "=&v"(s53), [s54] "=&v"(s54), [s55] "=&v"(s55), [s56] "=&v"(s56), [s57] "=&v"(s57), [s58] "=&v"(s58), [s59] "=&v"(s59), [s60] "=&v"(s60), [s61] "=&v"(s61), [s62] "=&v"(s62), [s63] "=&v"(s63),
+
+          [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31), [r32] "=&v"(r32), [r33] "=&v"(r33), [r34] "=&v"(r34), [r35] "=&v"(r35), [r36] "=&v"(r36), [r37] "=&v"(r37), [r38] "=&v"(r38), [r39] "=&v"(r39), [r40] "=&v"(r40), [r41] "=&v"(r41), [r42] "=&v"(r42), [r43] "=&v"(r43), [r44] "=&v"(r44), [r45] "=&v"(r45), [r46] "=&v"(r46), [r47] "=&v"(r47), [r48] "=&v"(r48), [r49] "=&v"(r49), [r50] "=&v"(r50), [r51] "=&v"(r51), [r52] "=&v"(r52), [r53] "=&v"(r53), [r54] "=&v"(r54), [r55] "=&v"(r55), [r56] "=&v"(r56), [r57] "=&v"(r57), [r58] "=&v"(r58), [r59] "=&v"(r59), [r60] "=&v"(r60), [r61] "=&v"(r61), [r62] "=&v"(r62), [r63] "=&v"(r63),
+
+          [n0n] "=&v"(n0n), [n1n] "=&v"(n1n), [n2n] "=&v"(n2n), [n3n] "=&v"(n3n), [n4n] "=&v"(n4n), [n5n] "=&v"(n5n), [n6n] "=&v"(n6n), [n7n] "=&v"(n7n), [n8n] "=&v"(n8n), [n9n] "=&v"(n9n), [n10n] "=&v"(n10n), [n11n] "=&v"(n11n), [n12n] "=&v"(n12n), [n13n] "=&v"(n13n), [n14n] "=&v"(n14n), [n15n] "=&v"(n15n), [n16n] "=&v"(n16n), [n17n] "=&v"(n17n), [n18n] "=&v"(n18n), [n19n] "=&v"(n19n), [n20n] "=&v"(n20n), [n21n] "=&v"(n21n), [n22n] "=&v"(n22n), [n23n] "=&v"(n23n), [n24n] "=&v"(n24n), [n25n] "=&v"(n25n), [n26n] "=&v"(n26n), [n27n] "=&v"(n27n), [n28n] "=&v"(n28n), [n29n] "=&v"(n29n), [n30n] "=&v"(n30n), [n31n] "=&v"(n31n), [n32n] "=&v"(n32n), [n33n] "=&v"(n33n), [n34n] "=&v"(n34n), [n35n] "=&v"(n35n), [n36n] "=&v"(n36n), [n37n] "=&v"(n37n), [n38n] "=&v"(n38n), [n39n] "=&v"(n39n), [n40n] "=&v"(n40n), [n41n] "=&v"(n41n), [n42n] "=&v"(n42n), [n43n] "=&v"(n43n), [n44n] "=&v"(n44n), [n45n] "=&v"(n45n), [n46n] "=&v"(n46n), [n47n] "=&v"(n47n), [n48n] "=&v"(n48n), [n49n] "=&v"(n49n), [n50n] "=&v"(n50n), [n51n] "=&v"(n51n), [n52n] "=&v"(n52n), [n53n] "=&v"(n53n), [n54n] "=&v"(n54n), [n55n] "=&v"(n55n), [n56n] "=&v"(n56n), [n57n] "=&v"(n57n), [n58n] "=&v"(n58n), [n59n] "=&v"(n59n), [n60n] "=&v"(n60n), [n61n] "=&v"(n61n), [n62n] "=&v"(n62n), [n63n] "=&v"(n63n),
+
+          [ca] "=&v"(ca), [cs] "=&v"(cs)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31), [a32] "v"(a32), [b32] "v"(b32), [a33] "v"(a33), [b33] "v"(b33), [a34] "v"(a34), [b34] "v"(b34), [a35] "v"(a35), [b35] "v"(b35), [a36] "v"(a36), [b36] "v"(b36), [a37] "v"(a37), [b37] "v"(b37), [a38] "v"(a38), [b38] "v"(b38), [a39] "v"(a39), [b39] "v"(b39), [a40] "v"(a40), [b40] "v"(b40), [a41] "v"(a41), [b41] "v"(b41), [a42] "v"(a42), [b42] "v"(b42), [a43] "v"(a43), [b43] "v"(b43), [a44] "v"(a44), [b44] "v"(b44), [a45] "v"(a45), [b45] "v"(b45), [a46] "v"(a46), [b46] "v"(b46), [a47] "v"(a47), [b47] "v"(b47), [a48] "v"(a48), [b48] "v"(b48), [a49] "v"(a49), [b49] "v"(b49), [a50] "v"(a50), [b50] "v"(b50), [a51] "v"(a51), [b51] "v"(b51), [a52] "v"(a52), [b52] "v"(b52), [a53] "v"(a53), [b53] "v"(b53), [a54] "v"(a54), [b54] "v"(b54), [a55] "v"(a55), [b55] "v"(b55), [a56] "v"(a56), [b56] "v"(b56), [a57] "v"(a57), [b57] "v"(b57), [a58] "v"(a58), [b58] "v"(b58), [a59] "v"(a59), [b59] "v"(b59), [a60] "v"(a60), [b60] "v"(b60), [a61] "v"(a61), [b61] "v"(b61), [a62] "v"(a62), [b62] "v"(b62), [a63] "v"(a63), [b63] "v"(b63),
+
+          [n0] "v"(n0), [n1] "v"(n1), [n2] "v"(n2), [n3] "v"(n3), [n4] "v"(n4), [n5] "v"(n5), [n6] "v"(n6), [n7] "v"(n7), [n8] "v"(n8), [n9] "v"(n9), [n10] "v"(n10), [n11] "v"(n11), [n12] "v"(n12), [n13] "v"(n13), [n14] "v"(n14), [n15] "v"(n15), [n16] "v"(n16), [n17] "v"(n17), [n18] "v"(n18), [n19] "v"(n19), [n20] "v"(n20), [n21] "v"(n21), [n22] "v"(n22), [n23] "v"(n23), [n24] "v"(n24), [n25] "v"(n25), [n26] "v"(n26), [n27] "v"(n27), [n28] "v"(n28), [n29] "v"(n29), [n30] "v"(n30), [n31] "v"(n31), [n32] "v"(n32), [n33] "v"(n33), [n34] "v"(n34), [n35] "v"(n35), [n36] "v"(n36), [n37] "v"(n37), [n38] "v"(n38), [n39] "v"(n39), [n40] "v"(n40), [n41] "v"(n41), [n42] "v"(n42), [n43] "v"(n43), [n44] "v"(n44), [n45] "v"(n45), [n46] "v"(n46), [n47] "v"(n47), [n48] "v"(n48), [n49] "v"(n49), [n50] "v"(n50), [n51] "v"(n51), [n52] "v"(n52), [n53] "v"(n53), [n54] "v"(n54), [n55] "v"(n55), [n56] "v"(n56), [n57] "v"(n57), [n58] "v"(n58), [n59] "v"(n59), [n60] "v"(n60), [n61] "v"(n61), [n62] "v"(n62), [n63] "v"(n63),
+
+          [ca_bit] "v"(ca_bit), [cs_bit] "v"(cs_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if ((ca | cs) == 0u) {
+
+        c_fix_add_n64(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, &r32, &r33, &r34, &r35, &r36, &r37, &r38, &r39, &r40, &r41, &r42, &r43, &r44, &r45, &r46, &r47, &r48, &r49, &r50, &r51, &r52, &r53, &r54, &r55, &r56, &r57, &r58, &r59, &r60, &r61, &r62, &r63, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47, n48, n49, n50, n51, n52, n53, n54, n55, n56, n57, n58, n59, n60, n61, n62, n63);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    r[32] = r32;
+    r[33] = r33;
+    r[34] = r34;
+    r[35] = r35;
+    r[36] = r36;
+    r[37] = r37;
+    r[38] = r38;
+    r[39] = r39;
+    r[40] = r40;
+    r[41] = r41;
+    r[42] = r42;
+    r[43] = r43;
+    r[44] = r44;
+    r[45] = r45;
+    r[46] = r46;
+    r[47] = r47;
+    r[48] = r48;
+    r[49] = r49;
+    r[50] = r50;
+    r[51] = r51;
+    r[52] = r52;
+    r[53] = r53;
+    r[54] = r54;
+    r[55] = r55;
+    r[56] = r56;
+    r[57] = r57;
+    r[58] = r58;
+    r[59] = r59;
+    r[60] = r60;
+    r[61] = r61;
+    r[62] = r62;
+    r[63] = r63;
+    *ca_out = ca;
+
+    *cs_out = cs;
+
+}
+#endif
+#ifndef ASM_COMMON_FUSED_BLOCK80_PRIV_DEFINED
+#define ASM_COMMON_FUSED_BLOCK80_PRIV_DEFINED
+// 80-limb fused add-mod block (private stage1).
+
+static inline void asm_fused_block80_priv(const uint *a, const uint *b,
+
+                                   const uint *n, uint *r, uint ca_in,
+
+                                   uint cs_in, uint *ca_out, uint *cs_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint a32 = a[32];
+    uint a33 = a[33];
+    uint a34 = a[34];
+    uint a35 = a[35];
+    uint a36 = a[36];
+    uint a37 = a[37];
+    uint a38 = a[38];
+    uint a39 = a[39];
+    uint a40 = a[40];
+    uint a41 = a[41];
+    uint a42 = a[42];
+    uint a43 = a[43];
+    uint a44 = a[44];
+    uint a45 = a[45];
+    uint a46 = a[46];
+    uint a47 = a[47];
+    uint a48 = a[48];
+    uint a49 = a[49];
+    uint a50 = a[50];
+    uint a51 = a[51];
+    uint a52 = a[52];
+    uint a53 = a[53];
+    uint a54 = a[54];
+    uint a55 = a[55];
+    uint a56 = a[56];
+    uint a57 = a[57];
+    uint a58 = a[58];
+    uint a59 = a[59];
+    uint a60 = a[60];
+    uint a61 = a[61];
+    uint a62 = a[62];
+    uint a63 = a[63];
+    uint a64 = a[64];
+    uint a65 = a[65];
+    uint a66 = a[66];
+    uint a67 = a[67];
+    uint a68 = a[68];
+    uint a69 = a[69];
+    uint a70 = a[70];
+    uint a71 = a[71];
+    uint a72 = a[72];
+    uint a73 = a[73];
+    uint a74 = a[74];
+    uint a75 = a[75];
+    uint a76 = a[76];
+    uint a77 = a[77];
+    uint a78 = a[78];
+    uint a79 = a[79];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint b32 = b[32];
+    uint b33 = b[33];
+    uint b34 = b[34];
+    uint b35 = b[35];
+    uint b36 = b[36];
+    uint b37 = b[37];
+    uint b38 = b[38];
+    uint b39 = b[39];
+    uint b40 = b[40];
+    uint b41 = b[41];
+    uint b42 = b[42];
+    uint b43 = b[43];
+    uint b44 = b[44];
+    uint b45 = b[45];
+    uint b46 = b[46];
+    uint b47 = b[47];
+    uint b48 = b[48];
+    uint b49 = b[49];
+    uint b50 = b[50];
+    uint b51 = b[51];
+    uint b52 = b[52];
+    uint b53 = b[53];
+    uint b54 = b[54];
+    uint b55 = b[55];
+    uint b56 = b[56];
+    uint b57 = b[57];
+    uint b58 = b[58];
+    uint b59 = b[59];
+    uint b60 = b[60];
+    uint b61 = b[61];
+    uint b62 = b[62];
+    uint b63 = b[63];
+    uint b64 = b[64];
+    uint b65 = b[65];
+    uint b66 = b[66];
+    uint b67 = b[67];
+    uint b68 = b[68];
+    uint b69 = b[69];
+    uint b70 = b[70];
+    uint b71 = b[71];
+    uint b72 = b[72];
+    uint b73 = b[73];
+    uint b74 = b[74];
+    uint b75 = b[75];
+    uint b76 = b[76];
+    uint b77 = b[77];
+    uint b78 = b[78];
+    uint b79 = b[79];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint n32 = n[32];
+    uint n33 = n[33];
+    uint n34 = n[34];
+    uint n35 = n[35];
+    uint n36 = n[36];
+    uint n37 = n[37];
+    uint n38 = n[38];
+    uint n39 = n[39];
+    uint n40 = n[40];
+    uint n41 = n[41];
+    uint n42 = n[42];
+    uint n43 = n[43];
+    uint n44 = n[44];
+    uint n45 = n[45];
+    uint n46 = n[46];
+    uint n47 = n[47];
+    uint n48 = n[48];
+    uint n49 = n[49];
+    uint n50 = n[50];
+    uint n51 = n[51];
+    uint n52 = n[52];
+    uint n53 = n[53];
+    uint n54 = n[54];
+    uint n55 = n[55];
+    uint n56 = n[56];
+    uint n57 = n[57];
+    uint n58 = n[58];
+    uint n59 = n[59];
+    uint n60 = n[60];
+    uint n61 = n[61];
+    uint n62 = n[62];
+    uint n63 = n[63];
+    uint n64 = n[64];
+    uint n65 = n[65];
+    uint n66 = n[66];
+    uint n67 = n[67];
+    uint n68 = n[68];
+    uint n69 = n[69];
+    uint n70 = n[70];
+    uint n71 = n[71];
+    uint n72 = n[72];
+    uint n73 = n[73];
+    uint n74 = n[74];
+    uint n75 = n[75];
+    uint n76 = n[76];
+    uint n77 = n[77];
+    uint n78 = n[78];
+    uint n79 = n[79];
+    uint s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21, s22, s23, s24, s25, s26, s27, s28, s29, s30, s31, s32, s33, s34, s35, s36, s37, s38, s39, s40, s41, s42, s43, s44, s45, s46, s47, s48, s49, s50, s51, s52, s53, s54, s55, s56, s57, s58, s59, s60, s61, s62, s63, s64, s65, s66, s67, s68, s69, s70, s71, s72, s73, s74, s75, s76, s77, s78, s79;
+
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47, r48, r49, r50, r51, r52, r53, r54, r55, r56, r57, r58, r59, r60, r61, r62, r63, r64, r65, r66, r67, r68, r69, r70, r71, r72, r73, r74, r75, r76, r77, r78, r79;
+
+    uint n0n, n1n, n2n, n3n, n4n, n5n, n6n, n7n, n8n, n9n, n10n, n11n, n12n, n13n, n14n, n15n, n16n, n17n, n18n, n19n, n20n, n21n, n22n, n23n, n24n, n25n, n26n, n27n, n28n, n29n, n30n, n31n, n32n, n33n, n34n, n35n, n36n, n37n, n38n, n39n, n40n, n41n, n42n, n43n, n44n, n45n, n46n, n47n, n48n, n49n, n50n, n51n, n52n, n53n, n54n, n55n, n56n, n57n, n58n, n59n, n60n, n61n, n62n, n63n, n64n, n65n, n66n, n67n, n68n, n69n, n70n, n71n, n72n, n73n, n74n, n75n, n76n, n77n, n78n, n79n;
+
+    uint ca = 0u, cs = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint ca_bit = ca_in ? o : z;
+
+    uint cs_bit = cs_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[ca_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[s0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s32], vcc_lo, %[a32], %[b32], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s33], vcc_lo, %[a33], %[b33], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s34], vcc_lo, %[a34], %[b34], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s35], vcc_lo, %[a35], %[b35], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s36], vcc_lo, %[a36], %[b36], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s37], vcc_lo, %[a37], %[b37], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s38], vcc_lo, %[a38], %[b38], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s39], vcc_lo, %[a39], %[b39], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s40], vcc_lo, %[a40], %[b40], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s41], vcc_lo, %[a41], %[b41], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s42], vcc_lo, %[a42], %[b42], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s43], vcc_lo, %[a43], %[b43], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s44], vcc_lo, %[a44], %[b44], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s45], vcc_lo, %[a45], %[b45], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s46], vcc_lo, %[a46], %[b46], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s47], vcc_lo, %[a47], %[b47], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s48], vcc_lo, %[a48], %[b48], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s49], vcc_lo, %[a49], %[b49], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s50], vcc_lo, %[a50], %[b50], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s51], vcc_lo, %[a51], %[b51], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s52], vcc_lo, %[a52], %[b52], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s53], vcc_lo, %[a53], %[b53], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s54], vcc_lo, %[a54], %[b54], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s55], vcc_lo, %[a55], %[b55], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s56], vcc_lo, %[a56], %[b56], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s57], vcc_lo, %[a57], %[b57], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s58], vcc_lo, %[a58], %[b58], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s59], vcc_lo, %[a59], %[b59], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s60], vcc_lo, %[a60], %[b60], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s61], vcc_lo, %[a61], %[b61], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s62], vcc_lo, %[a62], %[b62], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s63], vcc_lo, %[a63], %[b63], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s64], vcc_lo, %[a64], %[b64], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s65], vcc_lo, %[a65], %[b65], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s66], vcc_lo, %[a66], %[b66], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s67], vcc_lo, %[a67], %[b67], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s68], vcc_lo, %[a68], %[b68], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s69], vcc_lo, %[a69], %[b69], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s70], vcc_lo, %[a70], %[b70], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s71], vcc_lo, %[a71], %[b71], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s72], vcc_lo, %[a72], %[b72], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s73], vcc_lo, %[a73], %[b73], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s74], vcc_lo, %[a74], %[b74], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s75], vcc_lo, %[a75], %[b75], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s76], vcc_lo, %[a76], %[b76], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s77], vcc_lo, %[a77], %[b77], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s78], vcc_lo, %[a78], %[b78], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s79], vcc_lo, %[a79], %[b79], vcc_lo\n\t"
+        "v_cndmask_b32   %[ca], %[z], %[o], vcc_lo\n\t"
+        "v_not_b32       %[n0n], %[n0]\n\t"
+        "v_not_b32       %[n1n], %[n1]\n\t"
+        "v_not_b32       %[n2n], %[n2]\n\t"
+        "v_not_b32       %[n3n], %[n3]\n\t"
+        "v_not_b32       %[n4n], %[n4]\n\t"
+        "v_not_b32       %[n5n], %[n5]\n\t"
+        "v_not_b32       %[n6n], %[n6]\n\t"
+        "v_not_b32       %[n7n], %[n7]\n\t"
+        "v_not_b32       %[n8n], %[n8]\n\t"
+        "v_not_b32       %[n9n], %[n9]\n\t"
+        "v_not_b32       %[n10n], %[n10]\n\t"
+        "v_not_b32       %[n11n], %[n11]\n\t"
+        "v_not_b32       %[n12n], %[n12]\n\t"
+        "v_not_b32       %[n13n], %[n13]\n\t"
+        "v_not_b32       %[n14n], %[n14]\n\t"
+        "v_not_b32       %[n15n], %[n15]\n\t"
+        "v_not_b32       %[n16n], %[n16]\n\t"
+        "v_not_b32       %[n17n], %[n17]\n\t"
+        "v_not_b32       %[n18n], %[n18]\n\t"
+        "v_not_b32       %[n19n], %[n19]\n\t"
+        "v_not_b32       %[n20n], %[n20]\n\t"
+        "v_not_b32       %[n21n], %[n21]\n\t"
+        "v_not_b32       %[n22n], %[n22]\n\t"
+        "v_not_b32       %[n23n], %[n23]\n\t"
+        "v_not_b32       %[n24n], %[n24]\n\t"
+        "v_not_b32       %[n25n], %[n25]\n\t"
+        "v_not_b32       %[n26n], %[n26]\n\t"
+        "v_not_b32       %[n27n], %[n27]\n\t"
+        "v_not_b32       %[n28n], %[n28]\n\t"
+        "v_not_b32       %[n29n], %[n29]\n\t"
+        "v_not_b32       %[n30n], %[n30]\n\t"
+        "v_not_b32       %[n31n], %[n31]\n\t"
+        "v_not_b32       %[n32n], %[n32]\n\t"
+        "v_not_b32       %[n33n], %[n33]\n\t"
+        "v_not_b32       %[n34n], %[n34]\n\t"
+        "v_not_b32       %[n35n], %[n35]\n\t"
+        "v_not_b32       %[n36n], %[n36]\n\t"
+        "v_not_b32       %[n37n], %[n37]\n\t"
+        "v_not_b32       %[n38n], %[n38]\n\t"
+        "v_not_b32       %[n39n], %[n39]\n\t"
+        "v_not_b32       %[n40n], %[n40]\n\t"
+        "v_not_b32       %[n41n], %[n41]\n\t"
+        "v_not_b32       %[n42n], %[n42]\n\t"
+        "v_not_b32       %[n43n], %[n43]\n\t"
+        "v_not_b32       %[n44n], %[n44]\n\t"
+        "v_not_b32       %[n45n], %[n45]\n\t"
+        "v_not_b32       %[n46n], %[n46]\n\t"
+        "v_not_b32       %[n47n], %[n47]\n\t"
+        "v_not_b32       %[n48n], %[n48]\n\t"
+        "v_not_b32       %[n49n], %[n49]\n\t"
+        "v_not_b32       %[n50n], %[n50]\n\t"
+        "v_not_b32       %[n51n], %[n51]\n\t"
+        "v_not_b32       %[n52n], %[n52]\n\t"
+        "v_not_b32       %[n53n], %[n53]\n\t"
+        "v_not_b32       %[n54n], %[n54]\n\t"
+        "v_not_b32       %[n55n], %[n55]\n\t"
+        "v_not_b32       %[n56n], %[n56]\n\t"
+        "v_not_b32       %[n57n], %[n57]\n\t"
+        "v_not_b32       %[n58n], %[n58]\n\t"
+        "v_not_b32       %[n59n], %[n59]\n\t"
+        "v_not_b32       %[n60n], %[n60]\n\t"
+        "v_not_b32       %[n61n], %[n61]\n\t"
+        "v_not_b32       %[n62n], %[n62]\n\t"
+        "v_not_b32       %[n63n], %[n63]\n\t"
+        "v_not_b32       %[n64n], %[n64]\n\t"
+        "v_not_b32       %[n65n], %[n65]\n\t"
+        "v_not_b32       %[n66n], %[n66]\n\t"
+        "v_not_b32       %[n67n], %[n67]\n\t"
+        "v_not_b32       %[n68n], %[n68]\n\t"
+        "v_not_b32       %[n69n], %[n69]\n\t"
+        "v_not_b32       %[n70n], %[n70]\n\t"
+        "v_not_b32       %[n71n], %[n71]\n\t"
+        "v_not_b32       %[n72n], %[n72]\n\t"
+        "v_not_b32       %[n73n], %[n73]\n\t"
+        "v_not_b32       %[n74n], %[n74]\n\t"
+        "v_not_b32       %[n75n], %[n75]\n\t"
+        "v_not_b32       %[n76n], %[n76]\n\t"
+        "v_not_b32       %[n77n], %[n77]\n\t"
+        "v_not_b32       %[n78n], %[n78]\n\t"
+        "v_not_b32       %[n79n], %[n79]\n\t"
+        "v_cmp_eq_u32    vcc_lo, %[cs_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[r0], vcc_lo, %[s0], %[n0n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r1], vcc_lo, %[s1], %[n1n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r2], vcc_lo, %[s2], %[n2n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r3], vcc_lo, %[s3], %[n3n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r4], vcc_lo, %[s4], %[n4n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r5], vcc_lo, %[s5], %[n5n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r6], vcc_lo, %[s6], %[n6n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r7], vcc_lo, %[s7], %[n7n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r8], vcc_lo, %[s8], %[n8n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r9], vcc_lo, %[s9], %[n9n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r10], vcc_lo, %[s10], %[n10n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r11], vcc_lo, %[s11], %[n11n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r12], vcc_lo, %[s12], %[n12n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r13], vcc_lo, %[s13], %[n13n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r14], vcc_lo, %[s14], %[n14n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r15], vcc_lo, %[s15], %[n15n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r16], vcc_lo, %[s16], %[n16n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r17], vcc_lo, %[s17], %[n17n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r18], vcc_lo, %[s18], %[n18n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r19], vcc_lo, %[s19], %[n19n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r20], vcc_lo, %[s20], %[n20n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r21], vcc_lo, %[s21], %[n21n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r22], vcc_lo, %[s22], %[n22n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r23], vcc_lo, %[s23], %[n23n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r24], vcc_lo, %[s24], %[n24n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r25], vcc_lo, %[s25], %[n25n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r26], vcc_lo, %[s26], %[n26n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r27], vcc_lo, %[s27], %[n27n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r28], vcc_lo, %[s28], %[n28n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r29], vcc_lo, %[s29], %[n29n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r30], vcc_lo, %[s30], %[n30n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r31], vcc_lo, %[s31], %[n31n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r32], vcc_lo, %[s32], %[n32n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r33], vcc_lo, %[s33], %[n33n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r34], vcc_lo, %[s34], %[n34n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r35], vcc_lo, %[s35], %[n35n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r36], vcc_lo, %[s36], %[n36n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r37], vcc_lo, %[s37], %[n37n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r38], vcc_lo, %[s38], %[n38n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r39], vcc_lo, %[s39], %[n39n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r40], vcc_lo, %[s40], %[n40n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r41], vcc_lo, %[s41], %[n41n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r42], vcc_lo, %[s42], %[n42n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r43], vcc_lo, %[s43], %[n43n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r44], vcc_lo, %[s44], %[n44n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r45], vcc_lo, %[s45], %[n45n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r46], vcc_lo, %[s46], %[n46n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r47], vcc_lo, %[s47], %[n47n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r48], vcc_lo, %[s48], %[n48n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r49], vcc_lo, %[s49], %[n49n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r50], vcc_lo, %[s50], %[n50n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r51], vcc_lo, %[s51], %[n51n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r52], vcc_lo, %[s52], %[n52n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r53], vcc_lo, %[s53], %[n53n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r54], vcc_lo, %[s54], %[n54n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r55], vcc_lo, %[s55], %[n55n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r56], vcc_lo, %[s56], %[n56n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r57], vcc_lo, %[s57], %[n57n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r58], vcc_lo, %[s58], %[n58n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r59], vcc_lo, %[s59], %[n59n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r60], vcc_lo, %[s60], %[n60n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r61], vcc_lo, %[s61], %[n61n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r62], vcc_lo, %[s62], %[n62n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r63], vcc_lo, %[s63], %[n63n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r64], vcc_lo, %[s64], %[n64n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r65], vcc_lo, %[s65], %[n65n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r66], vcc_lo, %[s66], %[n66n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r67], vcc_lo, %[s67], %[n67n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r68], vcc_lo, %[s68], %[n68n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r69], vcc_lo, %[s69], %[n69n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r70], vcc_lo, %[s70], %[n70n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r71], vcc_lo, %[s71], %[n71n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r72], vcc_lo, %[s72], %[n72n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r73], vcc_lo, %[s73], %[n73n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r74], vcc_lo, %[s74], %[n74n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r75], vcc_lo, %[s75], %[n75n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r76], vcc_lo, %[s76], %[n76n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r77], vcc_lo, %[s77], %[n77n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r78], vcc_lo, %[s78], %[n78n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r79], vcc_lo, %[s79], %[n79n], vcc_lo\n\t"
+        "v_cndmask_b32   %[cs], %[z], %[o], vcc_lo"
+
+        : [s0] "=&v"(s0), [s1] "=&v"(s1), [s2] "=&v"(s2), [s3] "=&v"(s3), [s4] "=&v"(s4), [s5] "=&v"(s5), [s6] "=&v"(s6), [s7] "=&v"(s7), [s8] "=&v"(s8), [s9] "=&v"(s9), [s10] "=&v"(s10), [s11] "=&v"(s11), [s12] "=&v"(s12), [s13] "=&v"(s13), [s14] "=&v"(s14), [s15] "=&v"(s15), [s16] "=&v"(s16), [s17] "=&v"(s17), [s18] "=&v"(s18), [s19] "=&v"(s19), [s20] "=&v"(s20), [s21] "=&v"(s21), [s22] "=&v"(s22), [s23] "=&v"(s23), [s24] "=&v"(s24), [s25] "=&v"(s25), [s26] "=&v"(s26), [s27] "=&v"(s27), [s28] "=&v"(s28), [s29] "=&v"(s29), [s30] "=&v"(s30), [s31] "=&v"(s31), [s32] "=&v"(s32), [s33] "=&v"(s33), [s34] "=&v"(s34), [s35] "=&v"(s35), [s36] "=&v"(s36), [s37] "=&v"(s37), [s38] "=&v"(s38), [s39] "=&v"(s39), [s40] "=&v"(s40), [s41] "=&v"(s41), [s42] "=&v"(s42), [s43] "=&v"(s43), [s44] "=&v"(s44), [s45] "=&v"(s45), [s46] "=&v"(s46), [s47] "=&v"(s47), [s48] "=&v"(s48), [s49] "=&v"(s49), [s50] "=&v"(s50), [s51] "=&v"(s51), [s52] "=&v"(s52), [s53] "=&v"(s53), [s54] "=&v"(s54), [s55] "=&v"(s55), [s56] "=&v"(s56), [s57] "=&v"(s57), [s58] "=&v"(s58), [s59] "=&v"(s59), [s60] "=&v"(s60), [s61] "=&v"(s61), [s62] "=&v"(s62), [s63] "=&v"(s63), [s64] "=&v"(s64), [s65] "=&v"(s65), [s66] "=&v"(s66), [s67] "=&v"(s67), [s68] "=&v"(s68), [s69] "=&v"(s69), [s70] "=&v"(s70), [s71] "=&v"(s71), [s72] "=&v"(s72), [s73] "=&v"(s73), [s74] "=&v"(s74), [s75] "=&v"(s75), [s76] "=&v"(s76), [s77] "=&v"(s77), [s78] "=&v"(s78), [s79] "=&v"(s79),
+
+          [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31), [r32] "=&v"(r32), [r33] "=&v"(r33), [r34] "=&v"(r34), [r35] "=&v"(r35), [r36] "=&v"(r36), [r37] "=&v"(r37), [r38] "=&v"(r38), [r39] "=&v"(r39), [r40] "=&v"(r40), [r41] "=&v"(r41), [r42] "=&v"(r42), [r43] "=&v"(r43), [r44] "=&v"(r44), [r45] "=&v"(r45), [r46] "=&v"(r46), [r47] "=&v"(r47), [r48] "=&v"(r48), [r49] "=&v"(r49), [r50] "=&v"(r50), [r51] "=&v"(r51), [r52] "=&v"(r52), [r53] "=&v"(r53), [r54] "=&v"(r54), [r55] "=&v"(r55), [r56] "=&v"(r56), [r57] "=&v"(r57), [r58] "=&v"(r58), [r59] "=&v"(r59), [r60] "=&v"(r60), [r61] "=&v"(r61), [r62] "=&v"(r62), [r63] "=&v"(r63), [r64] "=&v"(r64), [r65] "=&v"(r65), [r66] "=&v"(r66), [r67] "=&v"(r67), [r68] "=&v"(r68), [r69] "=&v"(r69), [r70] "=&v"(r70), [r71] "=&v"(r71), [r72] "=&v"(r72), [r73] "=&v"(r73), [r74] "=&v"(r74), [r75] "=&v"(r75), [r76] "=&v"(r76), [r77] "=&v"(r77), [r78] "=&v"(r78), [r79] "=&v"(r79),
+
+          [n0n] "=&v"(n0n), [n1n] "=&v"(n1n), [n2n] "=&v"(n2n), [n3n] "=&v"(n3n), [n4n] "=&v"(n4n), [n5n] "=&v"(n5n), [n6n] "=&v"(n6n), [n7n] "=&v"(n7n), [n8n] "=&v"(n8n), [n9n] "=&v"(n9n), [n10n] "=&v"(n10n), [n11n] "=&v"(n11n), [n12n] "=&v"(n12n), [n13n] "=&v"(n13n), [n14n] "=&v"(n14n), [n15n] "=&v"(n15n), [n16n] "=&v"(n16n), [n17n] "=&v"(n17n), [n18n] "=&v"(n18n), [n19n] "=&v"(n19n), [n20n] "=&v"(n20n), [n21n] "=&v"(n21n), [n22n] "=&v"(n22n), [n23n] "=&v"(n23n), [n24n] "=&v"(n24n), [n25n] "=&v"(n25n), [n26n] "=&v"(n26n), [n27n] "=&v"(n27n), [n28n] "=&v"(n28n), [n29n] "=&v"(n29n), [n30n] "=&v"(n30n), [n31n] "=&v"(n31n), [n32n] "=&v"(n32n), [n33n] "=&v"(n33n), [n34n] "=&v"(n34n), [n35n] "=&v"(n35n), [n36n] "=&v"(n36n), [n37n] "=&v"(n37n), [n38n] "=&v"(n38n), [n39n] "=&v"(n39n), [n40n] "=&v"(n40n), [n41n] "=&v"(n41n), [n42n] "=&v"(n42n), [n43n] "=&v"(n43n), [n44n] "=&v"(n44n), [n45n] "=&v"(n45n), [n46n] "=&v"(n46n), [n47n] "=&v"(n47n), [n48n] "=&v"(n48n), [n49n] "=&v"(n49n), [n50n] "=&v"(n50n), [n51n] "=&v"(n51n), [n52n] "=&v"(n52n), [n53n] "=&v"(n53n), [n54n] "=&v"(n54n), [n55n] "=&v"(n55n), [n56n] "=&v"(n56n), [n57n] "=&v"(n57n), [n58n] "=&v"(n58n), [n59n] "=&v"(n59n), [n60n] "=&v"(n60n), [n61n] "=&v"(n61n), [n62n] "=&v"(n62n), [n63n] "=&v"(n63n), [n64n] "=&v"(n64n), [n65n] "=&v"(n65n), [n66n] "=&v"(n66n), [n67n] "=&v"(n67n), [n68n] "=&v"(n68n), [n69n] "=&v"(n69n), [n70n] "=&v"(n70n), [n71n] "=&v"(n71n), [n72n] "=&v"(n72n), [n73n] "=&v"(n73n), [n74n] "=&v"(n74n), [n75n] "=&v"(n75n), [n76n] "=&v"(n76n), [n77n] "=&v"(n77n), [n78n] "=&v"(n78n), [n79n] "=&v"(n79n),
+
+          [ca] "=&v"(ca), [cs] "=&v"(cs)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31), [a32] "v"(a32), [b32] "v"(b32), [a33] "v"(a33), [b33] "v"(b33), [a34] "v"(a34), [b34] "v"(b34), [a35] "v"(a35), [b35] "v"(b35), [a36] "v"(a36), [b36] "v"(b36), [a37] "v"(a37), [b37] "v"(b37), [a38] "v"(a38), [b38] "v"(b38), [a39] "v"(a39), [b39] "v"(b39), [a40] "v"(a40), [b40] "v"(b40), [a41] "v"(a41), [b41] "v"(b41), [a42] "v"(a42), [b42] "v"(b42), [a43] "v"(a43), [b43] "v"(b43), [a44] "v"(a44), [b44] "v"(b44), [a45] "v"(a45), [b45] "v"(b45), [a46] "v"(a46), [b46] "v"(b46), [a47] "v"(a47), [b47] "v"(b47), [a48] "v"(a48), [b48] "v"(b48), [a49] "v"(a49), [b49] "v"(b49), [a50] "v"(a50), [b50] "v"(b50), [a51] "v"(a51), [b51] "v"(b51), [a52] "v"(a52), [b52] "v"(b52), [a53] "v"(a53), [b53] "v"(b53), [a54] "v"(a54), [b54] "v"(b54), [a55] "v"(a55), [b55] "v"(b55), [a56] "v"(a56), [b56] "v"(b56), [a57] "v"(a57), [b57] "v"(b57), [a58] "v"(a58), [b58] "v"(b58), [a59] "v"(a59), [b59] "v"(b59), [a60] "v"(a60), [b60] "v"(b60), [a61] "v"(a61), [b61] "v"(b61), [a62] "v"(a62), [b62] "v"(b62), [a63] "v"(a63), [b63] "v"(b63), [a64] "v"(a64), [b64] "v"(b64), [a65] "v"(a65), [b65] "v"(b65), [a66] "v"(a66), [b66] "v"(b66), [a67] "v"(a67), [b67] "v"(b67), [a68] "v"(a68), [b68] "v"(b68), [a69] "v"(a69), [b69] "v"(b69), [a70] "v"(a70), [b70] "v"(b70), [a71] "v"(a71), [b71] "v"(b71), [a72] "v"(a72), [b72] "v"(b72), [a73] "v"(a73), [b73] "v"(b73), [a74] "v"(a74), [b74] "v"(b74), [a75] "v"(a75), [b75] "v"(b75), [a76] "v"(a76), [b76] "v"(b76), [a77] "v"(a77), [b77] "v"(b77), [a78] "v"(a78), [b78] "v"(b78), [a79] "v"(a79), [b79] "v"(b79),
+
+          [n0] "v"(n0), [n1] "v"(n1), [n2] "v"(n2), [n3] "v"(n3), [n4] "v"(n4), [n5] "v"(n5), [n6] "v"(n6), [n7] "v"(n7), [n8] "v"(n8), [n9] "v"(n9), [n10] "v"(n10), [n11] "v"(n11), [n12] "v"(n12), [n13] "v"(n13), [n14] "v"(n14), [n15] "v"(n15), [n16] "v"(n16), [n17] "v"(n17), [n18] "v"(n18), [n19] "v"(n19), [n20] "v"(n20), [n21] "v"(n21), [n22] "v"(n22), [n23] "v"(n23), [n24] "v"(n24), [n25] "v"(n25), [n26] "v"(n26), [n27] "v"(n27), [n28] "v"(n28), [n29] "v"(n29), [n30] "v"(n30), [n31] "v"(n31), [n32] "v"(n32), [n33] "v"(n33), [n34] "v"(n34), [n35] "v"(n35), [n36] "v"(n36), [n37] "v"(n37), [n38] "v"(n38), [n39] "v"(n39), [n40] "v"(n40), [n41] "v"(n41), [n42] "v"(n42), [n43] "v"(n43), [n44] "v"(n44), [n45] "v"(n45), [n46] "v"(n46), [n47] "v"(n47), [n48] "v"(n48), [n49] "v"(n49), [n50] "v"(n50), [n51] "v"(n51), [n52] "v"(n52), [n53] "v"(n53), [n54] "v"(n54), [n55] "v"(n55), [n56] "v"(n56), [n57] "v"(n57), [n58] "v"(n58), [n59] "v"(n59), [n60] "v"(n60), [n61] "v"(n61), [n62] "v"(n62), [n63] "v"(n63), [n64] "v"(n64), [n65] "v"(n65), [n66] "v"(n66), [n67] "v"(n67), [n68] "v"(n68), [n69] "v"(n69), [n70] "v"(n70), [n71] "v"(n71), [n72] "v"(n72), [n73] "v"(n73), [n74] "v"(n74), [n75] "v"(n75), [n76] "v"(n76), [n77] "v"(n77), [n78] "v"(n78), [n79] "v"(n79),
+
+          [ca_bit] "v"(ca_bit), [cs_bit] "v"(cs_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if ((ca | cs) == 0u) {
+
+        c_fix_add_n80(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, &r32, &r33, &r34, &r35, &r36, &r37, &r38, &r39, &r40, &r41, &r42, &r43, &r44, &r45, &r46, &r47, &r48, &r49, &r50, &r51, &r52, &r53, &r54, &r55, &r56, &r57, &r58, &r59, &r60, &r61, &r62, &r63, &r64, &r65, &r66, &r67, &r68, &r69, &r70, &r71, &r72, &r73, &r74, &r75, &r76, &r77, &r78, &r79, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47, n48, n49, n50, n51, n52, n53, n54, n55, n56, n57, n58, n59, n60, n61, n62, n63, n64, n65, n66, n67, n68, n69, n70, n71, n72, n73, n74, n75, n76, n77, n78, n79);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    r[32] = r32;
+    r[33] = r33;
+    r[34] = r34;
+    r[35] = r35;
+    r[36] = r36;
+    r[37] = r37;
+    r[38] = r38;
+    r[39] = r39;
+    r[40] = r40;
+    r[41] = r41;
+    r[42] = r42;
+    r[43] = r43;
+    r[44] = r44;
+    r[45] = r45;
+    r[46] = r46;
+    r[47] = r47;
+    r[48] = r48;
+    r[49] = r49;
+    r[50] = r50;
+    r[51] = r51;
+    r[52] = r52;
+    r[53] = r53;
+    r[54] = r54;
+    r[55] = r55;
+    r[56] = r56;
+    r[57] = r57;
+    r[58] = r58;
+    r[59] = r59;
+    r[60] = r60;
+    r[61] = r61;
+    r[62] = r62;
+    r[63] = r63;
+    r[64] = r64;
+    r[65] = r65;
+    r[66] = r66;
+    r[67] = r67;
+    r[68] = r68;
+    r[69] = r69;
+    r[70] = r70;
+    r[71] = r71;
+    r[72] = r72;
+    r[73] = r73;
+    r[74] = r74;
+    r[75] = r75;
+    r[76] = r76;
+    r[77] = r77;
+    r[78] = r78;
+    r[79] = r79;
+    *ca_out = ca;
+
+    *cs_out = cs;
+
+}
+#endif
+#ifndef ASM_COMMON_FUSED_BLOCK96_PRIV_DEFINED
+#define ASM_COMMON_FUSED_BLOCK96_PRIV_DEFINED
+// 96-limb fused add-mod block (private stage1).
+
+static inline void asm_fused_block96_priv(const uint *a, const uint *b,
+
+                                   const uint *n, uint *r, uint ca_in,
+
+                                   uint cs_in, uint *ca_out, uint *cs_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint a32 = a[32];
+    uint a33 = a[33];
+    uint a34 = a[34];
+    uint a35 = a[35];
+    uint a36 = a[36];
+    uint a37 = a[37];
+    uint a38 = a[38];
+    uint a39 = a[39];
+    uint a40 = a[40];
+    uint a41 = a[41];
+    uint a42 = a[42];
+    uint a43 = a[43];
+    uint a44 = a[44];
+    uint a45 = a[45];
+    uint a46 = a[46];
+    uint a47 = a[47];
+    uint a48 = a[48];
+    uint a49 = a[49];
+    uint a50 = a[50];
+    uint a51 = a[51];
+    uint a52 = a[52];
+    uint a53 = a[53];
+    uint a54 = a[54];
+    uint a55 = a[55];
+    uint a56 = a[56];
+    uint a57 = a[57];
+    uint a58 = a[58];
+    uint a59 = a[59];
+    uint a60 = a[60];
+    uint a61 = a[61];
+    uint a62 = a[62];
+    uint a63 = a[63];
+    uint a64 = a[64];
+    uint a65 = a[65];
+    uint a66 = a[66];
+    uint a67 = a[67];
+    uint a68 = a[68];
+    uint a69 = a[69];
+    uint a70 = a[70];
+    uint a71 = a[71];
+    uint a72 = a[72];
+    uint a73 = a[73];
+    uint a74 = a[74];
+    uint a75 = a[75];
+    uint a76 = a[76];
+    uint a77 = a[77];
+    uint a78 = a[78];
+    uint a79 = a[79];
+    uint a80 = a[80];
+    uint a81 = a[81];
+    uint a82 = a[82];
+    uint a83 = a[83];
+    uint a84 = a[84];
+    uint a85 = a[85];
+    uint a86 = a[86];
+    uint a87 = a[87];
+    uint a88 = a[88];
+    uint a89 = a[89];
+    uint a90 = a[90];
+    uint a91 = a[91];
+    uint a92 = a[92];
+    uint a93 = a[93];
+    uint a94 = a[94];
+    uint a95 = a[95];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint b32 = b[32];
+    uint b33 = b[33];
+    uint b34 = b[34];
+    uint b35 = b[35];
+    uint b36 = b[36];
+    uint b37 = b[37];
+    uint b38 = b[38];
+    uint b39 = b[39];
+    uint b40 = b[40];
+    uint b41 = b[41];
+    uint b42 = b[42];
+    uint b43 = b[43];
+    uint b44 = b[44];
+    uint b45 = b[45];
+    uint b46 = b[46];
+    uint b47 = b[47];
+    uint b48 = b[48];
+    uint b49 = b[49];
+    uint b50 = b[50];
+    uint b51 = b[51];
+    uint b52 = b[52];
+    uint b53 = b[53];
+    uint b54 = b[54];
+    uint b55 = b[55];
+    uint b56 = b[56];
+    uint b57 = b[57];
+    uint b58 = b[58];
+    uint b59 = b[59];
+    uint b60 = b[60];
+    uint b61 = b[61];
+    uint b62 = b[62];
+    uint b63 = b[63];
+    uint b64 = b[64];
+    uint b65 = b[65];
+    uint b66 = b[66];
+    uint b67 = b[67];
+    uint b68 = b[68];
+    uint b69 = b[69];
+    uint b70 = b[70];
+    uint b71 = b[71];
+    uint b72 = b[72];
+    uint b73 = b[73];
+    uint b74 = b[74];
+    uint b75 = b[75];
+    uint b76 = b[76];
+    uint b77 = b[77];
+    uint b78 = b[78];
+    uint b79 = b[79];
+    uint b80 = b[80];
+    uint b81 = b[81];
+    uint b82 = b[82];
+    uint b83 = b[83];
+    uint b84 = b[84];
+    uint b85 = b[85];
+    uint b86 = b[86];
+    uint b87 = b[87];
+    uint b88 = b[88];
+    uint b89 = b[89];
+    uint b90 = b[90];
+    uint b91 = b[91];
+    uint b92 = b[92];
+    uint b93 = b[93];
+    uint b94 = b[94];
+    uint b95 = b[95];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint n32 = n[32];
+    uint n33 = n[33];
+    uint n34 = n[34];
+    uint n35 = n[35];
+    uint n36 = n[36];
+    uint n37 = n[37];
+    uint n38 = n[38];
+    uint n39 = n[39];
+    uint n40 = n[40];
+    uint n41 = n[41];
+    uint n42 = n[42];
+    uint n43 = n[43];
+    uint n44 = n[44];
+    uint n45 = n[45];
+    uint n46 = n[46];
+    uint n47 = n[47];
+    uint n48 = n[48];
+    uint n49 = n[49];
+    uint n50 = n[50];
+    uint n51 = n[51];
+    uint n52 = n[52];
+    uint n53 = n[53];
+    uint n54 = n[54];
+    uint n55 = n[55];
+    uint n56 = n[56];
+    uint n57 = n[57];
+    uint n58 = n[58];
+    uint n59 = n[59];
+    uint n60 = n[60];
+    uint n61 = n[61];
+    uint n62 = n[62];
+    uint n63 = n[63];
+    uint n64 = n[64];
+    uint n65 = n[65];
+    uint n66 = n[66];
+    uint n67 = n[67];
+    uint n68 = n[68];
+    uint n69 = n[69];
+    uint n70 = n[70];
+    uint n71 = n[71];
+    uint n72 = n[72];
+    uint n73 = n[73];
+    uint n74 = n[74];
+    uint n75 = n[75];
+    uint n76 = n[76];
+    uint n77 = n[77];
+    uint n78 = n[78];
+    uint n79 = n[79];
+    uint n80 = n[80];
+    uint n81 = n[81];
+    uint n82 = n[82];
+    uint n83 = n[83];
+    uint n84 = n[84];
+    uint n85 = n[85];
+    uint n86 = n[86];
+    uint n87 = n[87];
+    uint n88 = n[88];
+    uint n89 = n[89];
+    uint n90 = n[90];
+    uint n91 = n[91];
+    uint n92 = n[92];
+    uint n93 = n[93];
+    uint n94 = n[94];
+    uint n95 = n[95];
+    uint s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21, s22, s23, s24, s25, s26, s27, s28, s29, s30, s31, s32, s33, s34, s35, s36, s37, s38, s39, s40, s41, s42, s43, s44, s45, s46, s47, s48, s49, s50, s51, s52, s53, s54, s55, s56, s57, s58, s59, s60, s61, s62, s63, s64, s65, s66, s67, s68, s69, s70, s71, s72, s73, s74, s75, s76, s77, s78, s79, s80, s81, s82, s83, s84, s85, s86, s87, s88, s89, s90, s91, s92, s93, s94, s95;
+
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47, r48, r49, r50, r51, r52, r53, r54, r55, r56, r57, r58, r59, r60, r61, r62, r63, r64, r65, r66, r67, r68, r69, r70, r71, r72, r73, r74, r75, r76, r77, r78, r79, r80, r81, r82, r83, r84, r85, r86, r87, r88, r89, r90, r91, r92, r93, r94, r95;
+
+    uint n0n, n1n, n2n, n3n, n4n, n5n, n6n, n7n, n8n, n9n, n10n, n11n, n12n, n13n, n14n, n15n, n16n, n17n, n18n, n19n, n20n, n21n, n22n, n23n, n24n, n25n, n26n, n27n, n28n, n29n, n30n, n31n, n32n, n33n, n34n, n35n, n36n, n37n, n38n, n39n, n40n, n41n, n42n, n43n, n44n, n45n, n46n, n47n, n48n, n49n, n50n, n51n, n52n, n53n, n54n, n55n, n56n, n57n, n58n, n59n, n60n, n61n, n62n, n63n, n64n, n65n, n66n, n67n, n68n, n69n, n70n, n71n, n72n, n73n, n74n, n75n, n76n, n77n, n78n, n79n, n80n, n81n, n82n, n83n, n84n, n85n, n86n, n87n, n88n, n89n, n90n, n91n, n92n, n93n, n94n, n95n;
+
+    uint ca = 0u, cs = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint ca_bit = ca_in ? o : z;
+
+    uint cs_bit = cs_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[ca_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[s0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s32], vcc_lo, %[a32], %[b32], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s33], vcc_lo, %[a33], %[b33], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s34], vcc_lo, %[a34], %[b34], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s35], vcc_lo, %[a35], %[b35], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s36], vcc_lo, %[a36], %[b36], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s37], vcc_lo, %[a37], %[b37], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s38], vcc_lo, %[a38], %[b38], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s39], vcc_lo, %[a39], %[b39], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s40], vcc_lo, %[a40], %[b40], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s41], vcc_lo, %[a41], %[b41], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s42], vcc_lo, %[a42], %[b42], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s43], vcc_lo, %[a43], %[b43], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s44], vcc_lo, %[a44], %[b44], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s45], vcc_lo, %[a45], %[b45], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s46], vcc_lo, %[a46], %[b46], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s47], vcc_lo, %[a47], %[b47], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s48], vcc_lo, %[a48], %[b48], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s49], vcc_lo, %[a49], %[b49], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s50], vcc_lo, %[a50], %[b50], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s51], vcc_lo, %[a51], %[b51], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s52], vcc_lo, %[a52], %[b52], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s53], vcc_lo, %[a53], %[b53], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s54], vcc_lo, %[a54], %[b54], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s55], vcc_lo, %[a55], %[b55], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s56], vcc_lo, %[a56], %[b56], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s57], vcc_lo, %[a57], %[b57], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s58], vcc_lo, %[a58], %[b58], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s59], vcc_lo, %[a59], %[b59], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s60], vcc_lo, %[a60], %[b60], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s61], vcc_lo, %[a61], %[b61], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s62], vcc_lo, %[a62], %[b62], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s63], vcc_lo, %[a63], %[b63], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s64], vcc_lo, %[a64], %[b64], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s65], vcc_lo, %[a65], %[b65], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s66], vcc_lo, %[a66], %[b66], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s67], vcc_lo, %[a67], %[b67], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s68], vcc_lo, %[a68], %[b68], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s69], vcc_lo, %[a69], %[b69], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s70], vcc_lo, %[a70], %[b70], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s71], vcc_lo, %[a71], %[b71], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s72], vcc_lo, %[a72], %[b72], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s73], vcc_lo, %[a73], %[b73], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s74], vcc_lo, %[a74], %[b74], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s75], vcc_lo, %[a75], %[b75], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s76], vcc_lo, %[a76], %[b76], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s77], vcc_lo, %[a77], %[b77], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s78], vcc_lo, %[a78], %[b78], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s79], vcc_lo, %[a79], %[b79], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s80], vcc_lo, %[a80], %[b80], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s81], vcc_lo, %[a81], %[b81], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s82], vcc_lo, %[a82], %[b82], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s83], vcc_lo, %[a83], %[b83], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s84], vcc_lo, %[a84], %[b84], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s85], vcc_lo, %[a85], %[b85], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s86], vcc_lo, %[a86], %[b86], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s87], vcc_lo, %[a87], %[b87], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s88], vcc_lo, %[a88], %[b88], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s89], vcc_lo, %[a89], %[b89], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s90], vcc_lo, %[a90], %[b90], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s91], vcc_lo, %[a91], %[b91], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s92], vcc_lo, %[a92], %[b92], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s93], vcc_lo, %[a93], %[b93], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s94], vcc_lo, %[a94], %[b94], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s95], vcc_lo, %[a95], %[b95], vcc_lo\n\t"
+        "v_cndmask_b32   %[ca], %[z], %[o], vcc_lo\n\t"
+        "v_not_b32       %[n0n], %[n0]\n\t"
+        "v_not_b32       %[n1n], %[n1]\n\t"
+        "v_not_b32       %[n2n], %[n2]\n\t"
+        "v_not_b32       %[n3n], %[n3]\n\t"
+        "v_not_b32       %[n4n], %[n4]\n\t"
+        "v_not_b32       %[n5n], %[n5]\n\t"
+        "v_not_b32       %[n6n], %[n6]\n\t"
+        "v_not_b32       %[n7n], %[n7]\n\t"
+        "v_not_b32       %[n8n], %[n8]\n\t"
+        "v_not_b32       %[n9n], %[n9]\n\t"
+        "v_not_b32       %[n10n], %[n10]\n\t"
+        "v_not_b32       %[n11n], %[n11]\n\t"
+        "v_not_b32       %[n12n], %[n12]\n\t"
+        "v_not_b32       %[n13n], %[n13]\n\t"
+        "v_not_b32       %[n14n], %[n14]\n\t"
+        "v_not_b32       %[n15n], %[n15]\n\t"
+        "v_not_b32       %[n16n], %[n16]\n\t"
+        "v_not_b32       %[n17n], %[n17]\n\t"
+        "v_not_b32       %[n18n], %[n18]\n\t"
+        "v_not_b32       %[n19n], %[n19]\n\t"
+        "v_not_b32       %[n20n], %[n20]\n\t"
+        "v_not_b32       %[n21n], %[n21]\n\t"
+        "v_not_b32       %[n22n], %[n22]\n\t"
+        "v_not_b32       %[n23n], %[n23]\n\t"
+        "v_not_b32       %[n24n], %[n24]\n\t"
+        "v_not_b32       %[n25n], %[n25]\n\t"
+        "v_not_b32       %[n26n], %[n26]\n\t"
+        "v_not_b32       %[n27n], %[n27]\n\t"
+        "v_not_b32       %[n28n], %[n28]\n\t"
+        "v_not_b32       %[n29n], %[n29]\n\t"
+        "v_not_b32       %[n30n], %[n30]\n\t"
+        "v_not_b32       %[n31n], %[n31]\n\t"
+        "v_not_b32       %[n32n], %[n32]\n\t"
+        "v_not_b32       %[n33n], %[n33]\n\t"
+        "v_not_b32       %[n34n], %[n34]\n\t"
+        "v_not_b32       %[n35n], %[n35]\n\t"
+        "v_not_b32       %[n36n], %[n36]\n\t"
+        "v_not_b32       %[n37n], %[n37]\n\t"
+        "v_not_b32       %[n38n], %[n38]\n\t"
+        "v_not_b32       %[n39n], %[n39]\n\t"
+        "v_not_b32       %[n40n], %[n40]\n\t"
+        "v_not_b32       %[n41n], %[n41]\n\t"
+        "v_not_b32       %[n42n], %[n42]\n\t"
+        "v_not_b32       %[n43n], %[n43]\n\t"
+        "v_not_b32       %[n44n], %[n44]\n\t"
+        "v_not_b32       %[n45n], %[n45]\n\t"
+        "v_not_b32       %[n46n], %[n46]\n\t"
+        "v_not_b32       %[n47n], %[n47]\n\t"
+        "v_not_b32       %[n48n], %[n48]\n\t"
+        "v_not_b32       %[n49n], %[n49]\n\t"
+        "v_not_b32       %[n50n], %[n50]\n\t"
+        "v_not_b32       %[n51n], %[n51]\n\t"
+        "v_not_b32       %[n52n], %[n52]\n\t"
+        "v_not_b32       %[n53n], %[n53]\n\t"
+        "v_not_b32       %[n54n], %[n54]\n\t"
+        "v_not_b32       %[n55n], %[n55]\n\t"
+        "v_not_b32       %[n56n], %[n56]\n\t"
+        "v_not_b32       %[n57n], %[n57]\n\t"
+        "v_not_b32       %[n58n], %[n58]\n\t"
+        "v_not_b32       %[n59n], %[n59]\n\t"
+        "v_not_b32       %[n60n], %[n60]\n\t"
+        "v_not_b32       %[n61n], %[n61]\n\t"
+        "v_not_b32       %[n62n], %[n62]\n\t"
+        "v_not_b32       %[n63n], %[n63]\n\t"
+        "v_not_b32       %[n64n], %[n64]\n\t"
+        "v_not_b32       %[n65n], %[n65]\n\t"
+        "v_not_b32       %[n66n], %[n66]\n\t"
+        "v_not_b32       %[n67n], %[n67]\n\t"
+        "v_not_b32       %[n68n], %[n68]\n\t"
+        "v_not_b32       %[n69n], %[n69]\n\t"
+        "v_not_b32       %[n70n], %[n70]\n\t"
+        "v_not_b32       %[n71n], %[n71]\n\t"
+        "v_not_b32       %[n72n], %[n72]\n\t"
+        "v_not_b32       %[n73n], %[n73]\n\t"
+        "v_not_b32       %[n74n], %[n74]\n\t"
+        "v_not_b32       %[n75n], %[n75]\n\t"
+        "v_not_b32       %[n76n], %[n76]\n\t"
+        "v_not_b32       %[n77n], %[n77]\n\t"
+        "v_not_b32       %[n78n], %[n78]\n\t"
+        "v_not_b32       %[n79n], %[n79]\n\t"
+        "v_not_b32       %[n80n], %[n80]\n\t"
+        "v_not_b32       %[n81n], %[n81]\n\t"
+        "v_not_b32       %[n82n], %[n82]\n\t"
+        "v_not_b32       %[n83n], %[n83]\n\t"
+        "v_not_b32       %[n84n], %[n84]\n\t"
+        "v_not_b32       %[n85n], %[n85]\n\t"
+        "v_not_b32       %[n86n], %[n86]\n\t"
+        "v_not_b32       %[n87n], %[n87]\n\t"
+        "v_not_b32       %[n88n], %[n88]\n\t"
+        "v_not_b32       %[n89n], %[n89]\n\t"
+        "v_not_b32       %[n90n], %[n90]\n\t"
+        "v_not_b32       %[n91n], %[n91]\n\t"
+        "v_not_b32       %[n92n], %[n92]\n\t"
+        "v_not_b32       %[n93n], %[n93]\n\t"
+        "v_not_b32       %[n94n], %[n94]\n\t"
+        "v_not_b32       %[n95n], %[n95]\n\t"
+        "v_cmp_eq_u32    vcc_lo, %[cs_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[r0], vcc_lo, %[s0], %[n0n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r1], vcc_lo, %[s1], %[n1n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r2], vcc_lo, %[s2], %[n2n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r3], vcc_lo, %[s3], %[n3n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r4], vcc_lo, %[s4], %[n4n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r5], vcc_lo, %[s5], %[n5n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r6], vcc_lo, %[s6], %[n6n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r7], vcc_lo, %[s7], %[n7n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r8], vcc_lo, %[s8], %[n8n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r9], vcc_lo, %[s9], %[n9n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r10], vcc_lo, %[s10], %[n10n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r11], vcc_lo, %[s11], %[n11n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r12], vcc_lo, %[s12], %[n12n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r13], vcc_lo, %[s13], %[n13n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r14], vcc_lo, %[s14], %[n14n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r15], vcc_lo, %[s15], %[n15n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r16], vcc_lo, %[s16], %[n16n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r17], vcc_lo, %[s17], %[n17n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r18], vcc_lo, %[s18], %[n18n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r19], vcc_lo, %[s19], %[n19n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r20], vcc_lo, %[s20], %[n20n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r21], vcc_lo, %[s21], %[n21n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r22], vcc_lo, %[s22], %[n22n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r23], vcc_lo, %[s23], %[n23n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r24], vcc_lo, %[s24], %[n24n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r25], vcc_lo, %[s25], %[n25n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r26], vcc_lo, %[s26], %[n26n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r27], vcc_lo, %[s27], %[n27n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r28], vcc_lo, %[s28], %[n28n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r29], vcc_lo, %[s29], %[n29n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r30], vcc_lo, %[s30], %[n30n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r31], vcc_lo, %[s31], %[n31n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r32], vcc_lo, %[s32], %[n32n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r33], vcc_lo, %[s33], %[n33n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r34], vcc_lo, %[s34], %[n34n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r35], vcc_lo, %[s35], %[n35n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r36], vcc_lo, %[s36], %[n36n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r37], vcc_lo, %[s37], %[n37n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r38], vcc_lo, %[s38], %[n38n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r39], vcc_lo, %[s39], %[n39n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r40], vcc_lo, %[s40], %[n40n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r41], vcc_lo, %[s41], %[n41n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r42], vcc_lo, %[s42], %[n42n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r43], vcc_lo, %[s43], %[n43n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r44], vcc_lo, %[s44], %[n44n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r45], vcc_lo, %[s45], %[n45n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r46], vcc_lo, %[s46], %[n46n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r47], vcc_lo, %[s47], %[n47n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r48], vcc_lo, %[s48], %[n48n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r49], vcc_lo, %[s49], %[n49n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r50], vcc_lo, %[s50], %[n50n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r51], vcc_lo, %[s51], %[n51n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r52], vcc_lo, %[s52], %[n52n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r53], vcc_lo, %[s53], %[n53n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r54], vcc_lo, %[s54], %[n54n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r55], vcc_lo, %[s55], %[n55n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r56], vcc_lo, %[s56], %[n56n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r57], vcc_lo, %[s57], %[n57n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r58], vcc_lo, %[s58], %[n58n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r59], vcc_lo, %[s59], %[n59n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r60], vcc_lo, %[s60], %[n60n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r61], vcc_lo, %[s61], %[n61n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r62], vcc_lo, %[s62], %[n62n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r63], vcc_lo, %[s63], %[n63n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r64], vcc_lo, %[s64], %[n64n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r65], vcc_lo, %[s65], %[n65n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r66], vcc_lo, %[s66], %[n66n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r67], vcc_lo, %[s67], %[n67n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r68], vcc_lo, %[s68], %[n68n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r69], vcc_lo, %[s69], %[n69n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r70], vcc_lo, %[s70], %[n70n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r71], vcc_lo, %[s71], %[n71n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r72], vcc_lo, %[s72], %[n72n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r73], vcc_lo, %[s73], %[n73n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r74], vcc_lo, %[s74], %[n74n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r75], vcc_lo, %[s75], %[n75n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r76], vcc_lo, %[s76], %[n76n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r77], vcc_lo, %[s77], %[n77n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r78], vcc_lo, %[s78], %[n78n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r79], vcc_lo, %[s79], %[n79n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r80], vcc_lo, %[s80], %[n80n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r81], vcc_lo, %[s81], %[n81n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r82], vcc_lo, %[s82], %[n82n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r83], vcc_lo, %[s83], %[n83n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r84], vcc_lo, %[s84], %[n84n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r85], vcc_lo, %[s85], %[n85n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r86], vcc_lo, %[s86], %[n86n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r87], vcc_lo, %[s87], %[n87n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r88], vcc_lo, %[s88], %[n88n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r89], vcc_lo, %[s89], %[n89n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r90], vcc_lo, %[s90], %[n90n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r91], vcc_lo, %[s91], %[n91n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r92], vcc_lo, %[s92], %[n92n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r93], vcc_lo, %[s93], %[n93n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r94], vcc_lo, %[s94], %[n94n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r95], vcc_lo, %[s95], %[n95n], vcc_lo\n\t"
+        "v_cndmask_b32   %[cs], %[z], %[o], vcc_lo"
+
+        : [s0] "=&v"(s0), [s1] "=&v"(s1), [s2] "=&v"(s2), [s3] "=&v"(s3), [s4] "=&v"(s4), [s5] "=&v"(s5), [s6] "=&v"(s6), [s7] "=&v"(s7), [s8] "=&v"(s8), [s9] "=&v"(s9), [s10] "=&v"(s10), [s11] "=&v"(s11), [s12] "=&v"(s12), [s13] "=&v"(s13), [s14] "=&v"(s14), [s15] "=&v"(s15), [s16] "=&v"(s16), [s17] "=&v"(s17), [s18] "=&v"(s18), [s19] "=&v"(s19), [s20] "=&v"(s20), [s21] "=&v"(s21), [s22] "=&v"(s22), [s23] "=&v"(s23), [s24] "=&v"(s24), [s25] "=&v"(s25), [s26] "=&v"(s26), [s27] "=&v"(s27), [s28] "=&v"(s28), [s29] "=&v"(s29), [s30] "=&v"(s30), [s31] "=&v"(s31), [s32] "=&v"(s32), [s33] "=&v"(s33), [s34] "=&v"(s34), [s35] "=&v"(s35), [s36] "=&v"(s36), [s37] "=&v"(s37), [s38] "=&v"(s38), [s39] "=&v"(s39), [s40] "=&v"(s40), [s41] "=&v"(s41), [s42] "=&v"(s42), [s43] "=&v"(s43), [s44] "=&v"(s44), [s45] "=&v"(s45), [s46] "=&v"(s46), [s47] "=&v"(s47), [s48] "=&v"(s48), [s49] "=&v"(s49), [s50] "=&v"(s50), [s51] "=&v"(s51), [s52] "=&v"(s52), [s53] "=&v"(s53), [s54] "=&v"(s54), [s55] "=&v"(s55), [s56] "=&v"(s56), [s57] "=&v"(s57), [s58] "=&v"(s58), [s59] "=&v"(s59), [s60] "=&v"(s60), [s61] "=&v"(s61), [s62] "=&v"(s62), [s63] "=&v"(s63), [s64] "=&v"(s64), [s65] "=&v"(s65), [s66] "=&v"(s66), [s67] "=&v"(s67), [s68] "=&v"(s68), [s69] "=&v"(s69), [s70] "=&v"(s70), [s71] "=&v"(s71), [s72] "=&v"(s72), [s73] "=&v"(s73), [s74] "=&v"(s74), [s75] "=&v"(s75), [s76] "=&v"(s76), [s77] "=&v"(s77), [s78] "=&v"(s78), [s79] "=&v"(s79), [s80] "=&v"(s80), [s81] "=&v"(s81), [s82] "=&v"(s82), [s83] "=&v"(s83), [s84] "=&v"(s84), [s85] "=&v"(s85), [s86] "=&v"(s86), [s87] "=&v"(s87), [s88] "=&v"(s88), [s89] "=&v"(s89), [s90] "=&v"(s90), [s91] "=&v"(s91), [s92] "=&v"(s92), [s93] "=&v"(s93), [s94] "=&v"(s94), [s95] "=&v"(s95),
+
+          [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31), [r32] "=&v"(r32), [r33] "=&v"(r33), [r34] "=&v"(r34), [r35] "=&v"(r35), [r36] "=&v"(r36), [r37] "=&v"(r37), [r38] "=&v"(r38), [r39] "=&v"(r39), [r40] "=&v"(r40), [r41] "=&v"(r41), [r42] "=&v"(r42), [r43] "=&v"(r43), [r44] "=&v"(r44), [r45] "=&v"(r45), [r46] "=&v"(r46), [r47] "=&v"(r47), [r48] "=&v"(r48), [r49] "=&v"(r49), [r50] "=&v"(r50), [r51] "=&v"(r51), [r52] "=&v"(r52), [r53] "=&v"(r53), [r54] "=&v"(r54), [r55] "=&v"(r55), [r56] "=&v"(r56), [r57] "=&v"(r57), [r58] "=&v"(r58), [r59] "=&v"(r59), [r60] "=&v"(r60), [r61] "=&v"(r61), [r62] "=&v"(r62), [r63] "=&v"(r63), [r64] "=&v"(r64), [r65] "=&v"(r65), [r66] "=&v"(r66), [r67] "=&v"(r67), [r68] "=&v"(r68), [r69] "=&v"(r69), [r70] "=&v"(r70), [r71] "=&v"(r71), [r72] "=&v"(r72), [r73] "=&v"(r73), [r74] "=&v"(r74), [r75] "=&v"(r75), [r76] "=&v"(r76), [r77] "=&v"(r77), [r78] "=&v"(r78), [r79] "=&v"(r79), [r80] "=&v"(r80), [r81] "=&v"(r81), [r82] "=&v"(r82), [r83] "=&v"(r83), [r84] "=&v"(r84), [r85] "=&v"(r85), [r86] "=&v"(r86), [r87] "=&v"(r87), [r88] "=&v"(r88), [r89] "=&v"(r89), [r90] "=&v"(r90), [r91] "=&v"(r91), [r92] "=&v"(r92), [r93] "=&v"(r93), [r94] "=&v"(r94), [r95] "=&v"(r95),
+
+          [n0n] "=&v"(n0n), [n1n] "=&v"(n1n), [n2n] "=&v"(n2n), [n3n] "=&v"(n3n), [n4n] "=&v"(n4n), [n5n] "=&v"(n5n), [n6n] "=&v"(n6n), [n7n] "=&v"(n7n), [n8n] "=&v"(n8n), [n9n] "=&v"(n9n), [n10n] "=&v"(n10n), [n11n] "=&v"(n11n), [n12n] "=&v"(n12n), [n13n] "=&v"(n13n), [n14n] "=&v"(n14n), [n15n] "=&v"(n15n), [n16n] "=&v"(n16n), [n17n] "=&v"(n17n), [n18n] "=&v"(n18n), [n19n] "=&v"(n19n), [n20n] "=&v"(n20n), [n21n] "=&v"(n21n), [n22n] "=&v"(n22n), [n23n] "=&v"(n23n), [n24n] "=&v"(n24n), [n25n] "=&v"(n25n), [n26n] "=&v"(n26n), [n27n] "=&v"(n27n), [n28n] "=&v"(n28n), [n29n] "=&v"(n29n), [n30n] "=&v"(n30n), [n31n] "=&v"(n31n), [n32n] "=&v"(n32n), [n33n] "=&v"(n33n), [n34n] "=&v"(n34n), [n35n] "=&v"(n35n), [n36n] "=&v"(n36n), [n37n] "=&v"(n37n), [n38n] "=&v"(n38n), [n39n] "=&v"(n39n), [n40n] "=&v"(n40n), [n41n] "=&v"(n41n), [n42n] "=&v"(n42n), [n43n] "=&v"(n43n), [n44n] "=&v"(n44n), [n45n] "=&v"(n45n), [n46n] "=&v"(n46n), [n47n] "=&v"(n47n), [n48n] "=&v"(n48n), [n49n] "=&v"(n49n), [n50n] "=&v"(n50n), [n51n] "=&v"(n51n), [n52n] "=&v"(n52n), [n53n] "=&v"(n53n), [n54n] "=&v"(n54n), [n55n] "=&v"(n55n), [n56n] "=&v"(n56n), [n57n] "=&v"(n57n), [n58n] "=&v"(n58n), [n59n] "=&v"(n59n), [n60n] "=&v"(n60n), [n61n] "=&v"(n61n), [n62n] "=&v"(n62n), [n63n] "=&v"(n63n), [n64n] "=&v"(n64n), [n65n] "=&v"(n65n), [n66n] "=&v"(n66n), [n67n] "=&v"(n67n), [n68n] "=&v"(n68n), [n69n] "=&v"(n69n), [n70n] "=&v"(n70n), [n71n] "=&v"(n71n), [n72n] "=&v"(n72n), [n73n] "=&v"(n73n), [n74n] "=&v"(n74n), [n75n] "=&v"(n75n), [n76n] "=&v"(n76n), [n77n] "=&v"(n77n), [n78n] "=&v"(n78n), [n79n] "=&v"(n79n), [n80n] "=&v"(n80n), [n81n] "=&v"(n81n), [n82n] "=&v"(n82n), [n83n] "=&v"(n83n), [n84n] "=&v"(n84n), [n85n] "=&v"(n85n), [n86n] "=&v"(n86n), [n87n] "=&v"(n87n), [n88n] "=&v"(n88n), [n89n] "=&v"(n89n), [n90n] "=&v"(n90n), [n91n] "=&v"(n91n), [n92n] "=&v"(n92n), [n93n] "=&v"(n93n), [n94n] "=&v"(n94n), [n95n] "=&v"(n95n),
+
+          [ca] "=&v"(ca), [cs] "=&v"(cs)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31), [a32] "v"(a32), [b32] "v"(b32), [a33] "v"(a33), [b33] "v"(b33), [a34] "v"(a34), [b34] "v"(b34), [a35] "v"(a35), [b35] "v"(b35), [a36] "v"(a36), [b36] "v"(b36), [a37] "v"(a37), [b37] "v"(b37), [a38] "v"(a38), [b38] "v"(b38), [a39] "v"(a39), [b39] "v"(b39), [a40] "v"(a40), [b40] "v"(b40), [a41] "v"(a41), [b41] "v"(b41), [a42] "v"(a42), [b42] "v"(b42), [a43] "v"(a43), [b43] "v"(b43), [a44] "v"(a44), [b44] "v"(b44), [a45] "v"(a45), [b45] "v"(b45), [a46] "v"(a46), [b46] "v"(b46), [a47] "v"(a47), [b47] "v"(b47), [a48] "v"(a48), [b48] "v"(b48), [a49] "v"(a49), [b49] "v"(b49), [a50] "v"(a50), [b50] "v"(b50), [a51] "v"(a51), [b51] "v"(b51), [a52] "v"(a52), [b52] "v"(b52), [a53] "v"(a53), [b53] "v"(b53), [a54] "v"(a54), [b54] "v"(b54), [a55] "v"(a55), [b55] "v"(b55), [a56] "v"(a56), [b56] "v"(b56), [a57] "v"(a57), [b57] "v"(b57), [a58] "v"(a58), [b58] "v"(b58), [a59] "v"(a59), [b59] "v"(b59), [a60] "v"(a60), [b60] "v"(b60), [a61] "v"(a61), [b61] "v"(b61), [a62] "v"(a62), [b62] "v"(b62), [a63] "v"(a63), [b63] "v"(b63), [a64] "v"(a64), [b64] "v"(b64), [a65] "v"(a65), [b65] "v"(b65), [a66] "v"(a66), [b66] "v"(b66), [a67] "v"(a67), [b67] "v"(b67), [a68] "v"(a68), [b68] "v"(b68), [a69] "v"(a69), [b69] "v"(b69), [a70] "v"(a70), [b70] "v"(b70), [a71] "v"(a71), [b71] "v"(b71), [a72] "v"(a72), [b72] "v"(b72), [a73] "v"(a73), [b73] "v"(b73), [a74] "v"(a74), [b74] "v"(b74), [a75] "v"(a75), [b75] "v"(b75), [a76] "v"(a76), [b76] "v"(b76), [a77] "v"(a77), [b77] "v"(b77), [a78] "v"(a78), [b78] "v"(b78), [a79] "v"(a79), [b79] "v"(b79), [a80] "v"(a80), [b80] "v"(b80), [a81] "v"(a81), [b81] "v"(b81), [a82] "v"(a82), [b82] "v"(b82), [a83] "v"(a83), [b83] "v"(b83), [a84] "v"(a84), [b84] "v"(b84), [a85] "v"(a85), [b85] "v"(b85), [a86] "v"(a86), [b86] "v"(b86), [a87] "v"(a87), [b87] "v"(b87), [a88] "v"(a88), [b88] "v"(b88), [a89] "v"(a89), [b89] "v"(b89), [a90] "v"(a90), [b90] "v"(b90), [a91] "v"(a91), [b91] "v"(b91), [a92] "v"(a92), [b92] "v"(b92), [a93] "v"(a93), [b93] "v"(b93), [a94] "v"(a94), [b94] "v"(b94), [a95] "v"(a95), [b95] "v"(b95),
+
+          [n0] "v"(n0), [n1] "v"(n1), [n2] "v"(n2), [n3] "v"(n3), [n4] "v"(n4), [n5] "v"(n5), [n6] "v"(n6), [n7] "v"(n7), [n8] "v"(n8), [n9] "v"(n9), [n10] "v"(n10), [n11] "v"(n11), [n12] "v"(n12), [n13] "v"(n13), [n14] "v"(n14), [n15] "v"(n15), [n16] "v"(n16), [n17] "v"(n17), [n18] "v"(n18), [n19] "v"(n19), [n20] "v"(n20), [n21] "v"(n21), [n22] "v"(n22), [n23] "v"(n23), [n24] "v"(n24), [n25] "v"(n25), [n26] "v"(n26), [n27] "v"(n27), [n28] "v"(n28), [n29] "v"(n29), [n30] "v"(n30), [n31] "v"(n31), [n32] "v"(n32), [n33] "v"(n33), [n34] "v"(n34), [n35] "v"(n35), [n36] "v"(n36), [n37] "v"(n37), [n38] "v"(n38), [n39] "v"(n39), [n40] "v"(n40), [n41] "v"(n41), [n42] "v"(n42), [n43] "v"(n43), [n44] "v"(n44), [n45] "v"(n45), [n46] "v"(n46), [n47] "v"(n47), [n48] "v"(n48), [n49] "v"(n49), [n50] "v"(n50), [n51] "v"(n51), [n52] "v"(n52), [n53] "v"(n53), [n54] "v"(n54), [n55] "v"(n55), [n56] "v"(n56), [n57] "v"(n57), [n58] "v"(n58), [n59] "v"(n59), [n60] "v"(n60), [n61] "v"(n61), [n62] "v"(n62), [n63] "v"(n63), [n64] "v"(n64), [n65] "v"(n65), [n66] "v"(n66), [n67] "v"(n67), [n68] "v"(n68), [n69] "v"(n69), [n70] "v"(n70), [n71] "v"(n71), [n72] "v"(n72), [n73] "v"(n73), [n74] "v"(n74), [n75] "v"(n75), [n76] "v"(n76), [n77] "v"(n77), [n78] "v"(n78), [n79] "v"(n79), [n80] "v"(n80), [n81] "v"(n81), [n82] "v"(n82), [n83] "v"(n83), [n84] "v"(n84), [n85] "v"(n85), [n86] "v"(n86), [n87] "v"(n87), [n88] "v"(n88), [n89] "v"(n89), [n90] "v"(n90), [n91] "v"(n91), [n92] "v"(n92), [n93] "v"(n93), [n94] "v"(n94), [n95] "v"(n95),
+
+          [ca_bit] "v"(ca_bit), [cs_bit] "v"(cs_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if ((ca | cs) == 0u) {
+
+        c_fix_add_n96(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, &r32, &r33, &r34, &r35, &r36, &r37, &r38, &r39, &r40, &r41, &r42, &r43, &r44, &r45, &r46, &r47, &r48, &r49, &r50, &r51, &r52, &r53, &r54, &r55, &r56, &r57, &r58, &r59, &r60, &r61, &r62, &r63, &r64, &r65, &r66, &r67, &r68, &r69, &r70, &r71, &r72, &r73, &r74, &r75, &r76, &r77, &r78, &r79, &r80, &r81, &r82, &r83, &r84, &r85, &r86, &r87, &r88, &r89, &r90, &r91, &r92, &r93, &r94, &r95, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47, n48, n49, n50, n51, n52, n53, n54, n55, n56, n57, n58, n59, n60, n61, n62, n63, n64, n65, n66, n67, n68, n69, n70, n71, n72, n73, n74, n75, n76, n77, n78, n79, n80, n81, n82, n83, n84, n85, n86, n87, n88, n89, n90, n91, n92, n93, n94, n95);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    r[32] = r32;
+    r[33] = r33;
+    r[34] = r34;
+    r[35] = r35;
+    r[36] = r36;
+    r[37] = r37;
+    r[38] = r38;
+    r[39] = r39;
+    r[40] = r40;
+    r[41] = r41;
+    r[42] = r42;
+    r[43] = r43;
+    r[44] = r44;
+    r[45] = r45;
+    r[46] = r46;
+    r[47] = r47;
+    r[48] = r48;
+    r[49] = r49;
+    r[50] = r50;
+    r[51] = r51;
+    r[52] = r52;
+    r[53] = r53;
+    r[54] = r54;
+    r[55] = r55;
+    r[56] = r56;
+    r[57] = r57;
+    r[58] = r58;
+    r[59] = r59;
+    r[60] = r60;
+    r[61] = r61;
+    r[62] = r62;
+    r[63] = r63;
+    r[64] = r64;
+    r[65] = r65;
+    r[66] = r66;
+    r[67] = r67;
+    r[68] = r68;
+    r[69] = r69;
+    r[70] = r70;
+    r[71] = r71;
+    r[72] = r72;
+    r[73] = r73;
+    r[74] = r74;
+    r[75] = r75;
+    r[76] = r76;
+    r[77] = r77;
+    r[78] = r78;
+    r[79] = r79;
+    r[80] = r80;
+    r[81] = r81;
+    r[82] = r82;
+    r[83] = r83;
+    r[84] = r84;
+    r[85] = r85;
+    r[86] = r86;
+    r[87] = r87;
+    r[88] = r88;
+    r[89] = r89;
+    r[90] = r90;
+    r[91] = r91;
+    r[92] = r92;
+    r[93] = r93;
+    r[94] = r94;
+    r[95] = r95;
+    *ca_out = ca;
+
+    *cs_out = cs;
+
+}
+#endif
+#ifndef ASM_COMMON_FUSED_BLOCK112_PRIV_DEFINED
+#define ASM_COMMON_FUSED_BLOCK112_PRIV_DEFINED
+// 112-limb fused add-mod block (private stage1).
+
+static inline void asm_fused_block112_priv(const uint *a, const uint *b,
+
+                                   const uint *n, uint *r, uint ca_in,
+
+                                   uint cs_in, uint *ca_out, uint *cs_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint a32 = a[32];
+    uint a33 = a[33];
+    uint a34 = a[34];
+    uint a35 = a[35];
+    uint a36 = a[36];
+    uint a37 = a[37];
+    uint a38 = a[38];
+    uint a39 = a[39];
+    uint a40 = a[40];
+    uint a41 = a[41];
+    uint a42 = a[42];
+    uint a43 = a[43];
+    uint a44 = a[44];
+    uint a45 = a[45];
+    uint a46 = a[46];
+    uint a47 = a[47];
+    uint a48 = a[48];
+    uint a49 = a[49];
+    uint a50 = a[50];
+    uint a51 = a[51];
+    uint a52 = a[52];
+    uint a53 = a[53];
+    uint a54 = a[54];
+    uint a55 = a[55];
+    uint a56 = a[56];
+    uint a57 = a[57];
+    uint a58 = a[58];
+    uint a59 = a[59];
+    uint a60 = a[60];
+    uint a61 = a[61];
+    uint a62 = a[62];
+    uint a63 = a[63];
+    uint a64 = a[64];
+    uint a65 = a[65];
+    uint a66 = a[66];
+    uint a67 = a[67];
+    uint a68 = a[68];
+    uint a69 = a[69];
+    uint a70 = a[70];
+    uint a71 = a[71];
+    uint a72 = a[72];
+    uint a73 = a[73];
+    uint a74 = a[74];
+    uint a75 = a[75];
+    uint a76 = a[76];
+    uint a77 = a[77];
+    uint a78 = a[78];
+    uint a79 = a[79];
+    uint a80 = a[80];
+    uint a81 = a[81];
+    uint a82 = a[82];
+    uint a83 = a[83];
+    uint a84 = a[84];
+    uint a85 = a[85];
+    uint a86 = a[86];
+    uint a87 = a[87];
+    uint a88 = a[88];
+    uint a89 = a[89];
+    uint a90 = a[90];
+    uint a91 = a[91];
+    uint a92 = a[92];
+    uint a93 = a[93];
+    uint a94 = a[94];
+    uint a95 = a[95];
+    uint a96 = a[96];
+    uint a97 = a[97];
+    uint a98 = a[98];
+    uint a99 = a[99];
+    uint a100 = a[100];
+    uint a101 = a[101];
+    uint a102 = a[102];
+    uint a103 = a[103];
+    uint a104 = a[104];
+    uint a105 = a[105];
+    uint a106 = a[106];
+    uint a107 = a[107];
+    uint a108 = a[108];
+    uint a109 = a[109];
+    uint a110 = a[110];
+    uint a111 = a[111];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint b32 = b[32];
+    uint b33 = b[33];
+    uint b34 = b[34];
+    uint b35 = b[35];
+    uint b36 = b[36];
+    uint b37 = b[37];
+    uint b38 = b[38];
+    uint b39 = b[39];
+    uint b40 = b[40];
+    uint b41 = b[41];
+    uint b42 = b[42];
+    uint b43 = b[43];
+    uint b44 = b[44];
+    uint b45 = b[45];
+    uint b46 = b[46];
+    uint b47 = b[47];
+    uint b48 = b[48];
+    uint b49 = b[49];
+    uint b50 = b[50];
+    uint b51 = b[51];
+    uint b52 = b[52];
+    uint b53 = b[53];
+    uint b54 = b[54];
+    uint b55 = b[55];
+    uint b56 = b[56];
+    uint b57 = b[57];
+    uint b58 = b[58];
+    uint b59 = b[59];
+    uint b60 = b[60];
+    uint b61 = b[61];
+    uint b62 = b[62];
+    uint b63 = b[63];
+    uint b64 = b[64];
+    uint b65 = b[65];
+    uint b66 = b[66];
+    uint b67 = b[67];
+    uint b68 = b[68];
+    uint b69 = b[69];
+    uint b70 = b[70];
+    uint b71 = b[71];
+    uint b72 = b[72];
+    uint b73 = b[73];
+    uint b74 = b[74];
+    uint b75 = b[75];
+    uint b76 = b[76];
+    uint b77 = b[77];
+    uint b78 = b[78];
+    uint b79 = b[79];
+    uint b80 = b[80];
+    uint b81 = b[81];
+    uint b82 = b[82];
+    uint b83 = b[83];
+    uint b84 = b[84];
+    uint b85 = b[85];
+    uint b86 = b[86];
+    uint b87 = b[87];
+    uint b88 = b[88];
+    uint b89 = b[89];
+    uint b90 = b[90];
+    uint b91 = b[91];
+    uint b92 = b[92];
+    uint b93 = b[93];
+    uint b94 = b[94];
+    uint b95 = b[95];
+    uint b96 = b[96];
+    uint b97 = b[97];
+    uint b98 = b[98];
+    uint b99 = b[99];
+    uint b100 = b[100];
+    uint b101 = b[101];
+    uint b102 = b[102];
+    uint b103 = b[103];
+    uint b104 = b[104];
+    uint b105 = b[105];
+    uint b106 = b[106];
+    uint b107 = b[107];
+    uint b108 = b[108];
+    uint b109 = b[109];
+    uint b110 = b[110];
+    uint b111 = b[111];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint n32 = n[32];
+    uint n33 = n[33];
+    uint n34 = n[34];
+    uint n35 = n[35];
+    uint n36 = n[36];
+    uint n37 = n[37];
+    uint n38 = n[38];
+    uint n39 = n[39];
+    uint n40 = n[40];
+    uint n41 = n[41];
+    uint n42 = n[42];
+    uint n43 = n[43];
+    uint n44 = n[44];
+    uint n45 = n[45];
+    uint n46 = n[46];
+    uint n47 = n[47];
+    uint n48 = n[48];
+    uint n49 = n[49];
+    uint n50 = n[50];
+    uint n51 = n[51];
+    uint n52 = n[52];
+    uint n53 = n[53];
+    uint n54 = n[54];
+    uint n55 = n[55];
+    uint n56 = n[56];
+    uint n57 = n[57];
+    uint n58 = n[58];
+    uint n59 = n[59];
+    uint n60 = n[60];
+    uint n61 = n[61];
+    uint n62 = n[62];
+    uint n63 = n[63];
+    uint n64 = n[64];
+    uint n65 = n[65];
+    uint n66 = n[66];
+    uint n67 = n[67];
+    uint n68 = n[68];
+    uint n69 = n[69];
+    uint n70 = n[70];
+    uint n71 = n[71];
+    uint n72 = n[72];
+    uint n73 = n[73];
+    uint n74 = n[74];
+    uint n75 = n[75];
+    uint n76 = n[76];
+    uint n77 = n[77];
+    uint n78 = n[78];
+    uint n79 = n[79];
+    uint n80 = n[80];
+    uint n81 = n[81];
+    uint n82 = n[82];
+    uint n83 = n[83];
+    uint n84 = n[84];
+    uint n85 = n[85];
+    uint n86 = n[86];
+    uint n87 = n[87];
+    uint n88 = n[88];
+    uint n89 = n[89];
+    uint n90 = n[90];
+    uint n91 = n[91];
+    uint n92 = n[92];
+    uint n93 = n[93];
+    uint n94 = n[94];
+    uint n95 = n[95];
+    uint n96 = n[96];
+    uint n97 = n[97];
+    uint n98 = n[98];
+    uint n99 = n[99];
+    uint n100 = n[100];
+    uint n101 = n[101];
+    uint n102 = n[102];
+    uint n103 = n[103];
+    uint n104 = n[104];
+    uint n105 = n[105];
+    uint n106 = n[106];
+    uint n107 = n[107];
+    uint n108 = n[108];
+    uint n109 = n[109];
+    uint n110 = n[110];
+    uint n111 = n[111];
+    uint s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, s21, s22, s23, s24, s25, s26, s27, s28, s29, s30, s31, s32, s33, s34, s35, s36, s37, s38, s39, s40, s41, s42, s43, s44, s45, s46, s47, s48, s49, s50, s51, s52, s53, s54, s55, s56, s57, s58, s59, s60, s61, s62, s63, s64, s65, s66, s67, s68, s69, s70, s71, s72, s73, s74, s75, s76, s77, s78, s79, s80, s81, s82, s83, s84, s85, s86, s87, s88, s89, s90, s91, s92, s93, s94, s95, s96, s97, s98, s99, s100, s101, s102, s103, s104, s105, s106, s107, s108, s109, s110, s111;
+
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47, r48, r49, r50, r51, r52, r53, r54, r55, r56, r57, r58, r59, r60, r61, r62, r63, r64, r65, r66, r67, r68, r69, r70, r71, r72, r73, r74, r75, r76, r77, r78, r79, r80, r81, r82, r83, r84, r85, r86, r87, r88, r89, r90, r91, r92, r93, r94, r95, r96, r97, r98, r99, r100, r101, r102, r103, r104, r105, r106, r107, r108, r109, r110, r111;
+
+    uint n0n, n1n, n2n, n3n, n4n, n5n, n6n, n7n, n8n, n9n, n10n, n11n, n12n, n13n, n14n, n15n, n16n, n17n, n18n, n19n, n20n, n21n, n22n, n23n, n24n, n25n, n26n, n27n, n28n, n29n, n30n, n31n, n32n, n33n, n34n, n35n, n36n, n37n, n38n, n39n, n40n, n41n, n42n, n43n, n44n, n45n, n46n, n47n, n48n, n49n, n50n, n51n, n52n, n53n, n54n, n55n, n56n, n57n, n58n, n59n, n60n, n61n, n62n, n63n, n64n, n65n, n66n, n67n, n68n, n69n, n70n, n71n, n72n, n73n, n74n, n75n, n76n, n77n, n78n, n79n, n80n, n81n, n82n, n83n, n84n, n85n, n86n, n87n, n88n, n89n, n90n, n91n, n92n, n93n, n94n, n95n, n96n, n97n, n98n, n99n, n100n, n101n, n102n, n103n, n104n, n105n, n106n, n107n, n108n, n109n, n110n, n111n;
+
+    uint ca = 0u, cs = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint ca_bit = ca_in ? o : z;
+
+    uint cs_bit = cs_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[ca_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[s0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s32], vcc_lo, %[a32], %[b32], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s33], vcc_lo, %[a33], %[b33], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s34], vcc_lo, %[a34], %[b34], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s35], vcc_lo, %[a35], %[b35], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s36], vcc_lo, %[a36], %[b36], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s37], vcc_lo, %[a37], %[b37], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s38], vcc_lo, %[a38], %[b38], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s39], vcc_lo, %[a39], %[b39], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s40], vcc_lo, %[a40], %[b40], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s41], vcc_lo, %[a41], %[b41], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s42], vcc_lo, %[a42], %[b42], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s43], vcc_lo, %[a43], %[b43], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s44], vcc_lo, %[a44], %[b44], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s45], vcc_lo, %[a45], %[b45], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s46], vcc_lo, %[a46], %[b46], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s47], vcc_lo, %[a47], %[b47], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s48], vcc_lo, %[a48], %[b48], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s49], vcc_lo, %[a49], %[b49], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s50], vcc_lo, %[a50], %[b50], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s51], vcc_lo, %[a51], %[b51], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s52], vcc_lo, %[a52], %[b52], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s53], vcc_lo, %[a53], %[b53], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s54], vcc_lo, %[a54], %[b54], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s55], vcc_lo, %[a55], %[b55], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s56], vcc_lo, %[a56], %[b56], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s57], vcc_lo, %[a57], %[b57], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s58], vcc_lo, %[a58], %[b58], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s59], vcc_lo, %[a59], %[b59], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s60], vcc_lo, %[a60], %[b60], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s61], vcc_lo, %[a61], %[b61], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s62], vcc_lo, %[a62], %[b62], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s63], vcc_lo, %[a63], %[b63], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s64], vcc_lo, %[a64], %[b64], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s65], vcc_lo, %[a65], %[b65], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s66], vcc_lo, %[a66], %[b66], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s67], vcc_lo, %[a67], %[b67], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s68], vcc_lo, %[a68], %[b68], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s69], vcc_lo, %[a69], %[b69], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s70], vcc_lo, %[a70], %[b70], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s71], vcc_lo, %[a71], %[b71], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s72], vcc_lo, %[a72], %[b72], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s73], vcc_lo, %[a73], %[b73], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s74], vcc_lo, %[a74], %[b74], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s75], vcc_lo, %[a75], %[b75], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s76], vcc_lo, %[a76], %[b76], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s77], vcc_lo, %[a77], %[b77], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s78], vcc_lo, %[a78], %[b78], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s79], vcc_lo, %[a79], %[b79], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s80], vcc_lo, %[a80], %[b80], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s81], vcc_lo, %[a81], %[b81], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s82], vcc_lo, %[a82], %[b82], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s83], vcc_lo, %[a83], %[b83], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s84], vcc_lo, %[a84], %[b84], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s85], vcc_lo, %[a85], %[b85], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s86], vcc_lo, %[a86], %[b86], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s87], vcc_lo, %[a87], %[b87], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s88], vcc_lo, %[a88], %[b88], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s89], vcc_lo, %[a89], %[b89], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s90], vcc_lo, %[a90], %[b90], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s91], vcc_lo, %[a91], %[b91], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s92], vcc_lo, %[a92], %[b92], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s93], vcc_lo, %[a93], %[b93], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s94], vcc_lo, %[a94], %[b94], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s95], vcc_lo, %[a95], %[b95], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s96], vcc_lo, %[a96], %[b96], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s97], vcc_lo, %[a97], %[b97], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s98], vcc_lo, %[a98], %[b98], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s99], vcc_lo, %[a99], %[b99], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s100], vcc_lo, %[a100], %[b100], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s101], vcc_lo, %[a101], %[b101], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s102], vcc_lo, %[a102], %[b102], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s103], vcc_lo, %[a103], %[b103], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s104], vcc_lo, %[a104], %[b104], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s105], vcc_lo, %[a105], %[b105], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s106], vcc_lo, %[a106], %[b106], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s107], vcc_lo, %[a107], %[b107], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s108], vcc_lo, %[a108], %[b108], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s109], vcc_lo, %[a109], %[b109], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s110], vcc_lo, %[a110], %[b110], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[s111], vcc_lo, %[a111], %[b111], vcc_lo\n\t"
+        "v_cndmask_b32   %[ca], %[z], %[o], vcc_lo\n\t"
+        "v_not_b32       %[n0n], %[n0]\n\t"
+        "v_not_b32       %[n1n], %[n1]\n\t"
+        "v_not_b32       %[n2n], %[n2]\n\t"
+        "v_not_b32       %[n3n], %[n3]\n\t"
+        "v_not_b32       %[n4n], %[n4]\n\t"
+        "v_not_b32       %[n5n], %[n5]\n\t"
+        "v_not_b32       %[n6n], %[n6]\n\t"
+        "v_not_b32       %[n7n], %[n7]\n\t"
+        "v_not_b32       %[n8n], %[n8]\n\t"
+        "v_not_b32       %[n9n], %[n9]\n\t"
+        "v_not_b32       %[n10n], %[n10]\n\t"
+        "v_not_b32       %[n11n], %[n11]\n\t"
+        "v_not_b32       %[n12n], %[n12]\n\t"
+        "v_not_b32       %[n13n], %[n13]\n\t"
+        "v_not_b32       %[n14n], %[n14]\n\t"
+        "v_not_b32       %[n15n], %[n15]\n\t"
+        "v_not_b32       %[n16n], %[n16]\n\t"
+        "v_not_b32       %[n17n], %[n17]\n\t"
+        "v_not_b32       %[n18n], %[n18]\n\t"
+        "v_not_b32       %[n19n], %[n19]\n\t"
+        "v_not_b32       %[n20n], %[n20]\n\t"
+        "v_not_b32       %[n21n], %[n21]\n\t"
+        "v_not_b32       %[n22n], %[n22]\n\t"
+        "v_not_b32       %[n23n], %[n23]\n\t"
+        "v_not_b32       %[n24n], %[n24]\n\t"
+        "v_not_b32       %[n25n], %[n25]\n\t"
+        "v_not_b32       %[n26n], %[n26]\n\t"
+        "v_not_b32       %[n27n], %[n27]\n\t"
+        "v_not_b32       %[n28n], %[n28]\n\t"
+        "v_not_b32       %[n29n], %[n29]\n\t"
+        "v_not_b32       %[n30n], %[n30]\n\t"
+        "v_not_b32       %[n31n], %[n31]\n\t"
+        "v_not_b32       %[n32n], %[n32]\n\t"
+        "v_not_b32       %[n33n], %[n33]\n\t"
+        "v_not_b32       %[n34n], %[n34]\n\t"
+        "v_not_b32       %[n35n], %[n35]\n\t"
+        "v_not_b32       %[n36n], %[n36]\n\t"
+        "v_not_b32       %[n37n], %[n37]\n\t"
+        "v_not_b32       %[n38n], %[n38]\n\t"
+        "v_not_b32       %[n39n], %[n39]\n\t"
+        "v_not_b32       %[n40n], %[n40]\n\t"
+        "v_not_b32       %[n41n], %[n41]\n\t"
+        "v_not_b32       %[n42n], %[n42]\n\t"
+        "v_not_b32       %[n43n], %[n43]\n\t"
+        "v_not_b32       %[n44n], %[n44]\n\t"
+        "v_not_b32       %[n45n], %[n45]\n\t"
+        "v_not_b32       %[n46n], %[n46]\n\t"
+        "v_not_b32       %[n47n], %[n47]\n\t"
+        "v_not_b32       %[n48n], %[n48]\n\t"
+        "v_not_b32       %[n49n], %[n49]\n\t"
+        "v_not_b32       %[n50n], %[n50]\n\t"
+        "v_not_b32       %[n51n], %[n51]\n\t"
+        "v_not_b32       %[n52n], %[n52]\n\t"
+        "v_not_b32       %[n53n], %[n53]\n\t"
+        "v_not_b32       %[n54n], %[n54]\n\t"
+        "v_not_b32       %[n55n], %[n55]\n\t"
+        "v_not_b32       %[n56n], %[n56]\n\t"
+        "v_not_b32       %[n57n], %[n57]\n\t"
+        "v_not_b32       %[n58n], %[n58]\n\t"
+        "v_not_b32       %[n59n], %[n59]\n\t"
+        "v_not_b32       %[n60n], %[n60]\n\t"
+        "v_not_b32       %[n61n], %[n61]\n\t"
+        "v_not_b32       %[n62n], %[n62]\n\t"
+        "v_not_b32       %[n63n], %[n63]\n\t"
+        "v_not_b32       %[n64n], %[n64]\n\t"
+        "v_not_b32       %[n65n], %[n65]\n\t"
+        "v_not_b32       %[n66n], %[n66]\n\t"
+        "v_not_b32       %[n67n], %[n67]\n\t"
+        "v_not_b32       %[n68n], %[n68]\n\t"
+        "v_not_b32       %[n69n], %[n69]\n\t"
+        "v_not_b32       %[n70n], %[n70]\n\t"
+        "v_not_b32       %[n71n], %[n71]\n\t"
+        "v_not_b32       %[n72n], %[n72]\n\t"
+        "v_not_b32       %[n73n], %[n73]\n\t"
+        "v_not_b32       %[n74n], %[n74]\n\t"
+        "v_not_b32       %[n75n], %[n75]\n\t"
+        "v_not_b32       %[n76n], %[n76]\n\t"
+        "v_not_b32       %[n77n], %[n77]\n\t"
+        "v_not_b32       %[n78n], %[n78]\n\t"
+        "v_not_b32       %[n79n], %[n79]\n\t"
+        "v_not_b32       %[n80n], %[n80]\n\t"
+        "v_not_b32       %[n81n], %[n81]\n\t"
+        "v_not_b32       %[n82n], %[n82]\n\t"
+        "v_not_b32       %[n83n], %[n83]\n\t"
+        "v_not_b32       %[n84n], %[n84]\n\t"
+        "v_not_b32       %[n85n], %[n85]\n\t"
+        "v_not_b32       %[n86n], %[n86]\n\t"
+        "v_not_b32       %[n87n], %[n87]\n\t"
+        "v_not_b32       %[n88n], %[n88]\n\t"
+        "v_not_b32       %[n89n], %[n89]\n\t"
+        "v_not_b32       %[n90n], %[n90]\n\t"
+        "v_not_b32       %[n91n], %[n91]\n\t"
+        "v_not_b32       %[n92n], %[n92]\n\t"
+        "v_not_b32       %[n93n], %[n93]\n\t"
+        "v_not_b32       %[n94n], %[n94]\n\t"
+        "v_not_b32       %[n95n], %[n95]\n\t"
+        "v_not_b32       %[n96n], %[n96]\n\t"
+        "v_not_b32       %[n97n], %[n97]\n\t"
+        "v_not_b32       %[n98n], %[n98]\n\t"
+        "v_not_b32       %[n99n], %[n99]\n\t"
+        "v_not_b32       %[n100n], %[n100]\n\t"
+        "v_not_b32       %[n101n], %[n101]\n\t"
+        "v_not_b32       %[n102n], %[n102]\n\t"
+        "v_not_b32       %[n103n], %[n103]\n\t"
+        "v_not_b32       %[n104n], %[n104]\n\t"
+        "v_not_b32       %[n105n], %[n105]\n\t"
+        "v_not_b32       %[n106n], %[n106]\n\t"
+        "v_not_b32       %[n107n], %[n107]\n\t"
+        "v_not_b32       %[n108n], %[n108]\n\t"
+        "v_not_b32       %[n109n], %[n109]\n\t"
+        "v_not_b32       %[n110n], %[n110]\n\t"
+        "v_not_b32       %[n111n], %[n111]\n\t"
+        "v_cmp_eq_u32    vcc_lo, %[cs_bit], %[o]\n\t"
+        "v_add_co_ci_u32 %[r0], vcc_lo, %[s0], %[n0n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r1], vcc_lo, %[s1], %[n1n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r2], vcc_lo, %[s2], %[n2n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r3], vcc_lo, %[s3], %[n3n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r4], vcc_lo, %[s4], %[n4n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r5], vcc_lo, %[s5], %[n5n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r6], vcc_lo, %[s6], %[n6n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r7], vcc_lo, %[s7], %[n7n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r8], vcc_lo, %[s8], %[n8n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r9], vcc_lo, %[s9], %[n9n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r10], vcc_lo, %[s10], %[n10n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r11], vcc_lo, %[s11], %[n11n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r12], vcc_lo, %[s12], %[n12n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r13], vcc_lo, %[s13], %[n13n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r14], vcc_lo, %[s14], %[n14n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r15], vcc_lo, %[s15], %[n15n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r16], vcc_lo, %[s16], %[n16n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r17], vcc_lo, %[s17], %[n17n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r18], vcc_lo, %[s18], %[n18n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r19], vcc_lo, %[s19], %[n19n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r20], vcc_lo, %[s20], %[n20n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r21], vcc_lo, %[s21], %[n21n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r22], vcc_lo, %[s22], %[n22n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r23], vcc_lo, %[s23], %[n23n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r24], vcc_lo, %[s24], %[n24n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r25], vcc_lo, %[s25], %[n25n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r26], vcc_lo, %[s26], %[n26n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r27], vcc_lo, %[s27], %[n27n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r28], vcc_lo, %[s28], %[n28n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r29], vcc_lo, %[s29], %[n29n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r30], vcc_lo, %[s30], %[n30n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r31], vcc_lo, %[s31], %[n31n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r32], vcc_lo, %[s32], %[n32n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r33], vcc_lo, %[s33], %[n33n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r34], vcc_lo, %[s34], %[n34n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r35], vcc_lo, %[s35], %[n35n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r36], vcc_lo, %[s36], %[n36n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r37], vcc_lo, %[s37], %[n37n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r38], vcc_lo, %[s38], %[n38n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r39], vcc_lo, %[s39], %[n39n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r40], vcc_lo, %[s40], %[n40n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r41], vcc_lo, %[s41], %[n41n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r42], vcc_lo, %[s42], %[n42n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r43], vcc_lo, %[s43], %[n43n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r44], vcc_lo, %[s44], %[n44n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r45], vcc_lo, %[s45], %[n45n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r46], vcc_lo, %[s46], %[n46n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r47], vcc_lo, %[s47], %[n47n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r48], vcc_lo, %[s48], %[n48n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r49], vcc_lo, %[s49], %[n49n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r50], vcc_lo, %[s50], %[n50n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r51], vcc_lo, %[s51], %[n51n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r52], vcc_lo, %[s52], %[n52n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r53], vcc_lo, %[s53], %[n53n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r54], vcc_lo, %[s54], %[n54n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r55], vcc_lo, %[s55], %[n55n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r56], vcc_lo, %[s56], %[n56n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r57], vcc_lo, %[s57], %[n57n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r58], vcc_lo, %[s58], %[n58n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r59], vcc_lo, %[s59], %[n59n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r60], vcc_lo, %[s60], %[n60n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r61], vcc_lo, %[s61], %[n61n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r62], vcc_lo, %[s62], %[n62n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r63], vcc_lo, %[s63], %[n63n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r64], vcc_lo, %[s64], %[n64n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r65], vcc_lo, %[s65], %[n65n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r66], vcc_lo, %[s66], %[n66n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r67], vcc_lo, %[s67], %[n67n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r68], vcc_lo, %[s68], %[n68n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r69], vcc_lo, %[s69], %[n69n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r70], vcc_lo, %[s70], %[n70n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r71], vcc_lo, %[s71], %[n71n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r72], vcc_lo, %[s72], %[n72n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r73], vcc_lo, %[s73], %[n73n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r74], vcc_lo, %[s74], %[n74n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r75], vcc_lo, %[s75], %[n75n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r76], vcc_lo, %[s76], %[n76n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r77], vcc_lo, %[s77], %[n77n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r78], vcc_lo, %[s78], %[n78n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r79], vcc_lo, %[s79], %[n79n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r80], vcc_lo, %[s80], %[n80n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r81], vcc_lo, %[s81], %[n81n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r82], vcc_lo, %[s82], %[n82n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r83], vcc_lo, %[s83], %[n83n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r84], vcc_lo, %[s84], %[n84n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r85], vcc_lo, %[s85], %[n85n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r86], vcc_lo, %[s86], %[n86n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r87], vcc_lo, %[s87], %[n87n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r88], vcc_lo, %[s88], %[n88n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r89], vcc_lo, %[s89], %[n89n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r90], vcc_lo, %[s90], %[n90n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r91], vcc_lo, %[s91], %[n91n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r92], vcc_lo, %[s92], %[n92n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r93], vcc_lo, %[s93], %[n93n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r94], vcc_lo, %[s94], %[n94n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r95], vcc_lo, %[s95], %[n95n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r96], vcc_lo, %[s96], %[n96n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r97], vcc_lo, %[s97], %[n97n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r98], vcc_lo, %[s98], %[n98n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r99], vcc_lo, %[s99], %[n99n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r100], vcc_lo, %[s100], %[n100n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r101], vcc_lo, %[s101], %[n101n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r102], vcc_lo, %[s102], %[n102n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r103], vcc_lo, %[s103], %[n103n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r104], vcc_lo, %[s104], %[n104n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r105], vcc_lo, %[s105], %[n105n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r106], vcc_lo, %[s106], %[n106n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r107], vcc_lo, %[s107], %[n107n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r108], vcc_lo, %[s108], %[n108n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r109], vcc_lo, %[s109], %[n109n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r110], vcc_lo, %[s110], %[n110n], vcc_lo\n\t"
+        "v_add_co_ci_u32 %[r111], vcc_lo, %[s111], %[n111n], vcc_lo\n\t"
+        "v_cndmask_b32   %[cs], %[z], %[o], vcc_lo"
+
+        : [s0] "=&v"(s0), [s1] "=&v"(s1), [s2] "=&v"(s2), [s3] "=&v"(s3), [s4] "=&v"(s4), [s5] "=&v"(s5), [s6] "=&v"(s6), [s7] "=&v"(s7), [s8] "=&v"(s8), [s9] "=&v"(s9), [s10] "=&v"(s10), [s11] "=&v"(s11), [s12] "=&v"(s12), [s13] "=&v"(s13), [s14] "=&v"(s14), [s15] "=&v"(s15), [s16] "=&v"(s16), [s17] "=&v"(s17), [s18] "=&v"(s18), [s19] "=&v"(s19), [s20] "=&v"(s20), [s21] "=&v"(s21), [s22] "=&v"(s22), [s23] "=&v"(s23), [s24] "=&v"(s24), [s25] "=&v"(s25), [s26] "=&v"(s26), [s27] "=&v"(s27), [s28] "=&v"(s28), [s29] "=&v"(s29), [s30] "=&v"(s30), [s31] "=&v"(s31), [s32] "=&v"(s32), [s33] "=&v"(s33), [s34] "=&v"(s34), [s35] "=&v"(s35), [s36] "=&v"(s36), [s37] "=&v"(s37), [s38] "=&v"(s38), [s39] "=&v"(s39), [s40] "=&v"(s40), [s41] "=&v"(s41), [s42] "=&v"(s42), [s43] "=&v"(s43), [s44] "=&v"(s44), [s45] "=&v"(s45), [s46] "=&v"(s46), [s47] "=&v"(s47), [s48] "=&v"(s48), [s49] "=&v"(s49), [s50] "=&v"(s50), [s51] "=&v"(s51), [s52] "=&v"(s52), [s53] "=&v"(s53), [s54] "=&v"(s54), [s55] "=&v"(s55), [s56] "=&v"(s56), [s57] "=&v"(s57), [s58] "=&v"(s58), [s59] "=&v"(s59), [s60] "=&v"(s60), [s61] "=&v"(s61), [s62] "=&v"(s62), [s63] "=&v"(s63), [s64] "=&v"(s64), [s65] "=&v"(s65), [s66] "=&v"(s66), [s67] "=&v"(s67), [s68] "=&v"(s68), [s69] "=&v"(s69), [s70] "=&v"(s70), [s71] "=&v"(s71), [s72] "=&v"(s72), [s73] "=&v"(s73), [s74] "=&v"(s74), [s75] "=&v"(s75), [s76] "=&v"(s76), [s77] "=&v"(s77), [s78] "=&v"(s78), [s79] "=&v"(s79), [s80] "=&v"(s80), [s81] "=&v"(s81), [s82] "=&v"(s82), [s83] "=&v"(s83), [s84] "=&v"(s84), [s85] "=&v"(s85), [s86] "=&v"(s86), [s87] "=&v"(s87), [s88] "=&v"(s88), [s89] "=&v"(s89), [s90] "=&v"(s90), [s91] "=&v"(s91), [s92] "=&v"(s92), [s93] "=&v"(s93), [s94] "=&v"(s94), [s95] "=&v"(s95), [s96] "=&v"(s96), [s97] "=&v"(s97), [s98] "=&v"(s98), [s99] "=&v"(s99), [s100] "=&v"(s100), [s101] "=&v"(s101), [s102] "=&v"(s102), [s103] "=&v"(s103), [s104] "=&v"(s104), [s105] "=&v"(s105), [s106] "=&v"(s106), [s107] "=&v"(s107), [s108] "=&v"(s108), [s109] "=&v"(s109), [s110] "=&v"(s110), [s111] "=&v"(s111),
+
+          [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31), [r32] "=&v"(r32), [r33] "=&v"(r33), [r34] "=&v"(r34), [r35] "=&v"(r35), [r36] "=&v"(r36), [r37] "=&v"(r37), [r38] "=&v"(r38), [r39] "=&v"(r39), [r40] "=&v"(r40), [r41] "=&v"(r41), [r42] "=&v"(r42), [r43] "=&v"(r43), [r44] "=&v"(r44), [r45] "=&v"(r45), [r46] "=&v"(r46), [r47] "=&v"(r47), [r48] "=&v"(r48), [r49] "=&v"(r49), [r50] "=&v"(r50), [r51] "=&v"(r51), [r52] "=&v"(r52), [r53] "=&v"(r53), [r54] "=&v"(r54), [r55] "=&v"(r55), [r56] "=&v"(r56), [r57] "=&v"(r57), [r58] "=&v"(r58), [r59] "=&v"(r59), [r60] "=&v"(r60), [r61] "=&v"(r61), [r62] "=&v"(r62), [r63] "=&v"(r63), [r64] "=&v"(r64), [r65] "=&v"(r65), [r66] "=&v"(r66), [r67] "=&v"(r67), [r68] "=&v"(r68), [r69] "=&v"(r69), [r70] "=&v"(r70), [r71] "=&v"(r71), [r72] "=&v"(r72), [r73] "=&v"(r73), [r74] "=&v"(r74), [r75] "=&v"(r75), [r76] "=&v"(r76), [r77] "=&v"(r77), [r78] "=&v"(r78), [r79] "=&v"(r79), [r80] "=&v"(r80), [r81] "=&v"(r81), [r82] "=&v"(r82), [r83] "=&v"(r83), [r84] "=&v"(r84), [r85] "=&v"(r85), [r86] "=&v"(r86), [r87] "=&v"(r87), [r88] "=&v"(r88), [r89] "=&v"(r89), [r90] "=&v"(r90), [r91] "=&v"(r91), [r92] "=&v"(r92), [r93] "=&v"(r93), [r94] "=&v"(r94), [r95] "=&v"(r95), [r96] "=&v"(r96), [r97] "=&v"(r97), [r98] "=&v"(r98), [r99] "=&v"(r99), [r100] "=&v"(r100), [r101] "=&v"(r101), [r102] "=&v"(r102), [r103] "=&v"(r103), [r104] "=&v"(r104), [r105] "=&v"(r105), [r106] "=&v"(r106), [r107] "=&v"(r107), [r108] "=&v"(r108), [r109] "=&v"(r109), [r110] "=&v"(r110), [r111] "=&v"(r111),
+
+          [n0n] "=&v"(n0n), [n1n] "=&v"(n1n), [n2n] "=&v"(n2n), [n3n] "=&v"(n3n), [n4n] "=&v"(n4n), [n5n] "=&v"(n5n), [n6n] "=&v"(n6n), [n7n] "=&v"(n7n), [n8n] "=&v"(n8n), [n9n] "=&v"(n9n), [n10n] "=&v"(n10n), [n11n] "=&v"(n11n), [n12n] "=&v"(n12n), [n13n] "=&v"(n13n), [n14n] "=&v"(n14n), [n15n] "=&v"(n15n), [n16n] "=&v"(n16n), [n17n] "=&v"(n17n), [n18n] "=&v"(n18n), [n19n] "=&v"(n19n), [n20n] "=&v"(n20n), [n21n] "=&v"(n21n), [n22n] "=&v"(n22n), [n23n] "=&v"(n23n), [n24n] "=&v"(n24n), [n25n] "=&v"(n25n), [n26n] "=&v"(n26n), [n27n] "=&v"(n27n), [n28n] "=&v"(n28n), [n29n] "=&v"(n29n), [n30n] "=&v"(n30n), [n31n] "=&v"(n31n), [n32n] "=&v"(n32n), [n33n] "=&v"(n33n), [n34n] "=&v"(n34n), [n35n] "=&v"(n35n), [n36n] "=&v"(n36n), [n37n] "=&v"(n37n), [n38n] "=&v"(n38n), [n39n] "=&v"(n39n), [n40n] "=&v"(n40n), [n41n] "=&v"(n41n), [n42n] "=&v"(n42n), [n43n] "=&v"(n43n), [n44n] "=&v"(n44n), [n45n] "=&v"(n45n), [n46n] "=&v"(n46n), [n47n] "=&v"(n47n), [n48n] "=&v"(n48n), [n49n] "=&v"(n49n), [n50n] "=&v"(n50n), [n51n] "=&v"(n51n), [n52n] "=&v"(n52n), [n53n] "=&v"(n53n), [n54n] "=&v"(n54n), [n55n] "=&v"(n55n), [n56n] "=&v"(n56n), [n57n] "=&v"(n57n), [n58n] "=&v"(n58n), [n59n] "=&v"(n59n), [n60n] "=&v"(n60n), [n61n] "=&v"(n61n), [n62n] "=&v"(n62n), [n63n] "=&v"(n63n), [n64n] "=&v"(n64n), [n65n] "=&v"(n65n), [n66n] "=&v"(n66n), [n67n] "=&v"(n67n), [n68n] "=&v"(n68n), [n69n] "=&v"(n69n), [n70n] "=&v"(n70n), [n71n] "=&v"(n71n), [n72n] "=&v"(n72n), [n73n] "=&v"(n73n), [n74n] "=&v"(n74n), [n75n] "=&v"(n75n), [n76n] "=&v"(n76n), [n77n] "=&v"(n77n), [n78n] "=&v"(n78n), [n79n] "=&v"(n79n), [n80n] "=&v"(n80n), [n81n] "=&v"(n81n), [n82n] "=&v"(n82n), [n83n] "=&v"(n83n), [n84n] "=&v"(n84n), [n85n] "=&v"(n85n), [n86n] "=&v"(n86n), [n87n] "=&v"(n87n), [n88n] "=&v"(n88n), [n89n] "=&v"(n89n), [n90n] "=&v"(n90n), [n91n] "=&v"(n91n), [n92n] "=&v"(n92n), [n93n] "=&v"(n93n), [n94n] "=&v"(n94n), [n95n] "=&v"(n95n), [n96n] "=&v"(n96n), [n97n] "=&v"(n97n), [n98n] "=&v"(n98n), [n99n] "=&v"(n99n), [n100n] "=&v"(n100n), [n101n] "=&v"(n101n), [n102n] "=&v"(n102n), [n103n] "=&v"(n103n), [n104n] "=&v"(n104n), [n105n] "=&v"(n105n), [n106n] "=&v"(n106n), [n107n] "=&v"(n107n), [n108n] "=&v"(n108n), [n109n] "=&v"(n109n), [n110n] "=&v"(n110n), [n111n] "=&v"(n111n),
+
+          [ca] "=&v"(ca), [cs] "=&v"(cs)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31), [a32] "v"(a32), [b32] "v"(b32), [a33] "v"(a33), [b33] "v"(b33), [a34] "v"(a34), [b34] "v"(b34), [a35] "v"(a35), [b35] "v"(b35), [a36] "v"(a36), [b36] "v"(b36), [a37] "v"(a37), [b37] "v"(b37), [a38] "v"(a38), [b38] "v"(b38), [a39] "v"(a39), [b39] "v"(b39), [a40] "v"(a40), [b40] "v"(b40), [a41] "v"(a41), [b41] "v"(b41), [a42] "v"(a42), [b42] "v"(b42), [a43] "v"(a43), [b43] "v"(b43), [a44] "v"(a44), [b44] "v"(b44), [a45] "v"(a45), [b45] "v"(b45), [a46] "v"(a46), [b46] "v"(b46), [a47] "v"(a47), [b47] "v"(b47), [a48] "v"(a48), [b48] "v"(b48), [a49] "v"(a49), [b49] "v"(b49), [a50] "v"(a50), [b50] "v"(b50), [a51] "v"(a51), [b51] "v"(b51), [a52] "v"(a52), [b52] "v"(b52), [a53] "v"(a53), [b53] "v"(b53), [a54] "v"(a54), [b54] "v"(b54), [a55] "v"(a55), [b55] "v"(b55), [a56] "v"(a56), [b56] "v"(b56), [a57] "v"(a57), [b57] "v"(b57), [a58] "v"(a58), [b58] "v"(b58), [a59] "v"(a59), [b59] "v"(b59), [a60] "v"(a60), [b60] "v"(b60), [a61] "v"(a61), [b61] "v"(b61), [a62] "v"(a62), [b62] "v"(b62), [a63] "v"(a63), [b63] "v"(b63), [a64] "v"(a64), [b64] "v"(b64), [a65] "v"(a65), [b65] "v"(b65), [a66] "v"(a66), [b66] "v"(b66), [a67] "v"(a67), [b67] "v"(b67), [a68] "v"(a68), [b68] "v"(b68), [a69] "v"(a69), [b69] "v"(b69), [a70] "v"(a70), [b70] "v"(b70), [a71] "v"(a71), [b71] "v"(b71), [a72] "v"(a72), [b72] "v"(b72), [a73] "v"(a73), [b73] "v"(b73), [a74] "v"(a74), [b74] "v"(b74), [a75] "v"(a75), [b75] "v"(b75), [a76] "v"(a76), [b76] "v"(b76), [a77] "v"(a77), [b77] "v"(b77), [a78] "v"(a78), [b78] "v"(b78), [a79] "v"(a79), [b79] "v"(b79), [a80] "v"(a80), [b80] "v"(b80), [a81] "v"(a81), [b81] "v"(b81), [a82] "v"(a82), [b82] "v"(b82), [a83] "v"(a83), [b83] "v"(b83), [a84] "v"(a84), [b84] "v"(b84), [a85] "v"(a85), [b85] "v"(b85), [a86] "v"(a86), [b86] "v"(b86), [a87] "v"(a87), [b87] "v"(b87), [a88] "v"(a88), [b88] "v"(b88), [a89] "v"(a89), [b89] "v"(b89), [a90] "v"(a90), [b90] "v"(b90), [a91] "v"(a91), [b91] "v"(b91), [a92] "v"(a92), [b92] "v"(b92), [a93] "v"(a93), [b93] "v"(b93), [a94] "v"(a94), [b94] "v"(b94), [a95] "v"(a95), [b95] "v"(b95), [a96] "v"(a96), [b96] "v"(b96), [a97] "v"(a97), [b97] "v"(b97), [a98] "v"(a98), [b98] "v"(b98), [a99] "v"(a99), [b99] "v"(b99), [a100] "v"(a100), [b100] "v"(b100), [a101] "v"(a101), [b101] "v"(b101), [a102] "v"(a102), [b102] "v"(b102), [a103] "v"(a103), [b103] "v"(b103), [a104] "v"(a104), [b104] "v"(b104), [a105] "v"(a105), [b105] "v"(b105), [a106] "v"(a106), [b106] "v"(b106), [a107] "v"(a107), [b107] "v"(b107), [a108] "v"(a108), [b108] "v"(b108), [a109] "v"(a109), [b109] "v"(b109), [a110] "v"(a110), [b110] "v"(b110), [a111] "v"(a111), [b111] "v"(b111),
+
+          [n0] "v"(n0), [n1] "v"(n1), [n2] "v"(n2), [n3] "v"(n3), [n4] "v"(n4), [n5] "v"(n5), [n6] "v"(n6), [n7] "v"(n7), [n8] "v"(n8), [n9] "v"(n9), [n10] "v"(n10), [n11] "v"(n11), [n12] "v"(n12), [n13] "v"(n13), [n14] "v"(n14), [n15] "v"(n15), [n16] "v"(n16), [n17] "v"(n17), [n18] "v"(n18), [n19] "v"(n19), [n20] "v"(n20), [n21] "v"(n21), [n22] "v"(n22), [n23] "v"(n23), [n24] "v"(n24), [n25] "v"(n25), [n26] "v"(n26), [n27] "v"(n27), [n28] "v"(n28), [n29] "v"(n29), [n30] "v"(n30), [n31] "v"(n31), [n32] "v"(n32), [n33] "v"(n33), [n34] "v"(n34), [n35] "v"(n35), [n36] "v"(n36), [n37] "v"(n37), [n38] "v"(n38), [n39] "v"(n39), [n40] "v"(n40), [n41] "v"(n41), [n42] "v"(n42), [n43] "v"(n43), [n44] "v"(n44), [n45] "v"(n45), [n46] "v"(n46), [n47] "v"(n47), [n48] "v"(n48), [n49] "v"(n49), [n50] "v"(n50), [n51] "v"(n51), [n52] "v"(n52), [n53] "v"(n53), [n54] "v"(n54), [n55] "v"(n55), [n56] "v"(n56), [n57] "v"(n57), [n58] "v"(n58), [n59] "v"(n59), [n60] "v"(n60), [n61] "v"(n61), [n62] "v"(n62), [n63] "v"(n63), [n64] "v"(n64), [n65] "v"(n65), [n66] "v"(n66), [n67] "v"(n67), [n68] "v"(n68), [n69] "v"(n69), [n70] "v"(n70), [n71] "v"(n71), [n72] "v"(n72), [n73] "v"(n73), [n74] "v"(n74), [n75] "v"(n75), [n76] "v"(n76), [n77] "v"(n77), [n78] "v"(n78), [n79] "v"(n79), [n80] "v"(n80), [n81] "v"(n81), [n82] "v"(n82), [n83] "v"(n83), [n84] "v"(n84), [n85] "v"(n85), [n86] "v"(n86), [n87] "v"(n87), [n88] "v"(n88), [n89] "v"(n89), [n90] "v"(n90), [n91] "v"(n91), [n92] "v"(n92), [n93] "v"(n93), [n94] "v"(n94), [n95] "v"(n95), [n96] "v"(n96), [n97] "v"(n97), [n98] "v"(n98), [n99] "v"(n99), [n100] "v"(n100), [n101] "v"(n101), [n102] "v"(n102), [n103] "v"(n103), [n104] "v"(n104), [n105] "v"(n105), [n106] "v"(n106), [n107] "v"(n107), [n108] "v"(n108), [n109] "v"(n109), [n110] "v"(n110), [n111] "v"(n111),
+
+          [ca_bit] "v"(ca_bit), [cs_bit] "v"(cs_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if ((ca | cs) == 0u) {
+
+        c_fix_add_n112(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, &r32, &r33, &r34, &r35, &r36, &r37, &r38, &r39, &r40, &r41, &r42, &r43, &r44, &r45, &r46, &r47, &r48, &r49, &r50, &r51, &r52, &r53, &r54, &r55, &r56, &r57, &r58, &r59, &r60, &r61, &r62, &r63, &r64, &r65, &r66, &r67, &r68, &r69, &r70, &r71, &r72, &r73, &r74, &r75, &r76, &r77, &r78, &r79, &r80, &r81, &r82, &r83, &r84, &r85, &r86, &r87, &r88, &r89, &r90, &r91, &r92, &r93, &r94, &r95, &r96, &r97, &r98, &r99, &r100, &r101, &r102, &r103, &r104, &r105, &r106, &r107, &r108, &r109, &r110, &r111, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47, n48, n49, n50, n51, n52, n53, n54, n55, n56, n57, n58, n59, n60, n61, n62, n63, n64, n65, n66, n67, n68, n69, n70, n71, n72, n73, n74, n75, n76, n77, n78, n79, n80, n81, n82, n83, n84, n85, n86, n87, n88, n89, n90, n91, n92, n93, n94, n95, n96, n97, n98, n99, n100, n101, n102, n103, n104, n105, n106, n107, n108, n109, n110, n111);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    r[32] = r32;
+    r[33] = r33;
+    r[34] = r34;
+    r[35] = r35;
+    r[36] = r36;
+    r[37] = r37;
+    r[38] = r38;
+    r[39] = r39;
+    r[40] = r40;
+    r[41] = r41;
+    r[42] = r42;
+    r[43] = r43;
+    r[44] = r44;
+    r[45] = r45;
+    r[46] = r46;
+    r[47] = r47;
+    r[48] = r48;
+    r[49] = r49;
+    r[50] = r50;
+    r[51] = r51;
+    r[52] = r52;
+    r[53] = r53;
+    r[54] = r54;
+    r[55] = r55;
+    r[56] = r56;
+    r[57] = r57;
+    r[58] = r58;
+    r[59] = r59;
+    r[60] = r60;
+    r[61] = r61;
+    r[62] = r62;
+    r[63] = r63;
+    r[64] = r64;
+    r[65] = r65;
+    r[66] = r66;
+    r[67] = r67;
+    r[68] = r68;
+    r[69] = r69;
+    r[70] = r70;
+    r[71] = r71;
+    r[72] = r72;
+    r[73] = r73;
+    r[74] = r74;
+    r[75] = r75;
+    r[76] = r76;
+    r[77] = r77;
+    r[78] = r78;
+    r[79] = r79;
+    r[80] = r80;
+    r[81] = r81;
+    r[82] = r82;
+    r[83] = r83;
+    r[84] = r84;
+    r[85] = r85;
+    r[86] = r86;
+    r[87] = r87;
+    r[88] = r88;
+    r[89] = r89;
+    r[90] = r90;
+    r[91] = r91;
+    r[92] = r92;
+    r[93] = r93;
+    r[94] = r94;
+    r[95] = r95;
+    r[96] = r96;
+    r[97] = r97;
+    r[98] = r98;
+    r[99] = r99;
+    r[100] = r100;
+    r[101] = r101;
+    r[102] = r102;
+    r[103] = r103;
+    r[104] = r104;
+    r[105] = r105;
+    r[106] = r106;
+    r[107] = r107;
+    r[108] = r108;
+    r[109] = r109;
+    r[110] = r110;
+    r[111] = r111;
+    *ca_out = ca;
+
+    *cs_out = cs;
+
+}
+#endif
 #ifndef ASM_COMMON_SUB_FUSED_BLOCK4_PRIV_DEFINED
 #define ASM_COMMON_SUB_FUSED_BLOCK4_PRIV_DEFINED
 // 4-limb fused sub-mod block (private stage1).
@@ -1150,6 +5274,2587 @@ static inline void asm_sub_fused_block16_priv(const uint *a, const uint *b,
     r[13] = r13;
     r[14] = r14;
     r[15] = r15;
+    *br_out = br;
+
+}
+#endif
+#ifndef ASM_COMMON_SUB_FUSED_BLOCK24_PRIV_DEFINED
+#define ASM_COMMON_SUB_FUSED_BLOCK24_PRIV_DEFINED
+// 24-limb fused sub-mod block (private stage1).
+
+static inline void asm_sub_fused_block24_priv(const uint *a, const uint *b,
+
+                                        const uint *n, uint *r, uint br_in,
+
+                                        uint *br_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23;
+
+    uint br = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint br_bit = br_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[br_bit], %[o]\n\t"
+        "v_sub_co_ci_u32 %[r0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_cndmask_b32   %[br], %[z], %[o], vcc_lo"
+
+        : [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23),
+
+          [br] "=&v"(br)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23),
+
+          [br_bit] "v"(br_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if (br != 0u) {
+
+        c_fix_add_n24(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    *br_out = br;
+
+}
+#endif
+#ifndef ASM_COMMON_SUB_FUSED_BLOCK32_PRIV_DEFINED
+#define ASM_COMMON_SUB_FUSED_BLOCK32_PRIV_DEFINED
+// 32-limb fused sub-mod block (private stage1).
+
+static inline void asm_sub_fused_block32_priv(const uint *a, const uint *b,
+
+                                        const uint *n, uint *r, uint br_in,
+
+                                        uint *br_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31;
+
+    uint br = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint br_bit = br_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[br_bit], %[o]\n\t"
+        "v_sub_co_ci_u32 %[r0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_cndmask_b32   %[br], %[z], %[o], vcc_lo"
+
+        : [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31),
+
+          [br] "=&v"(br)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31),
+
+          [br_bit] "v"(br_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if (br != 0u) {
+
+        c_fix_add_n32(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    *br_out = br;
+
+}
+#endif
+#ifndef ASM_COMMON_SUB_FUSED_BLOCK48_PRIV_DEFINED
+#define ASM_COMMON_SUB_FUSED_BLOCK48_PRIV_DEFINED
+// 48-limb fused sub-mod block (private stage1).
+
+static inline void asm_sub_fused_block48_priv(const uint *a, const uint *b,
+
+                                        const uint *n, uint *r, uint br_in,
+
+                                        uint *br_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint a32 = a[32];
+    uint a33 = a[33];
+    uint a34 = a[34];
+    uint a35 = a[35];
+    uint a36 = a[36];
+    uint a37 = a[37];
+    uint a38 = a[38];
+    uint a39 = a[39];
+    uint a40 = a[40];
+    uint a41 = a[41];
+    uint a42 = a[42];
+    uint a43 = a[43];
+    uint a44 = a[44];
+    uint a45 = a[45];
+    uint a46 = a[46];
+    uint a47 = a[47];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint b32 = b[32];
+    uint b33 = b[33];
+    uint b34 = b[34];
+    uint b35 = b[35];
+    uint b36 = b[36];
+    uint b37 = b[37];
+    uint b38 = b[38];
+    uint b39 = b[39];
+    uint b40 = b[40];
+    uint b41 = b[41];
+    uint b42 = b[42];
+    uint b43 = b[43];
+    uint b44 = b[44];
+    uint b45 = b[45];
+    uint b46 = b[46];
+    uint b47 = b[47];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint n32 = n[32];
+    uint n33 = n[33];
+    uint n34 = n[34];
+    uint n35 = n[35];
+    uint n36 = n[36];
+    uint n37 = n[37];
+    uint n38 = n[38];
+    uint n39 = n[39];
+    uint n40 = n[40];
+    uint n41 = n[41];
+    uint n42 = n[42];
+    uint n43 = n[43];
+    uint n44 = n[44];
+    uint n45 = n[45];
+    uint n46 = n[46];
+    uint n47 = n[47];
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47;
+
+    uint br = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint br_bit = br_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[br_bit], %[o]\n\t"
+        "v_sub_co_ci_u32 %[r0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r32], vcc_lo, %[a32], %[b32], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r33], vcc_lo, %[a33], %[b33], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r34], vcc_lo, %[a34], %[b34], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r35], vcc_lo, %[a35], %[b35], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r36], vcc_lo, %[a36], %[b36], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r37], vcc_lo, %[a37], %[b37], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r38], vcc_lo, %[a38], %[b38], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r39], vcc_lo, %[a39], %[b39], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r40], vcc_lo, %[a40], %[b40], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r41], vcc_lo, %[a41], %[b41], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r42], vcc_lo, %[a42], %[b42], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r43], vcc_lo, %[a43], %[b43], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r44], vcc_lo, %[a44], %[b44], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r45], vcc_lo, %[a45], %[b45], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r46], vcc_lo, %[a46], %[b46], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r47], vcc_lo, %[a47], %[b47], vcc_lo\n\t"
+        "v_cndmask_b32   %[br], %[z], %[o], vcc_lo"
+
+        : [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31), [r32] "=&v"(r32), [r33] "=&v"(r33), [r34] "=&v"(r34), [r35] "=&v"(r35), [r36] "=&v"(r36), [r37] "=&v"(r37), [r38] "=&v"(r38), [r39] "=&v"(r39), [r40] "=&v"(r40), [r41] "=&v"(r41), [r42] "=&v"(r42), [r43] "=&v"(r43), [r44] "=&v"(r44), [r45] "=&v"(r45), [r46] "=&v"(r46), [r47] "=&v"(r47),
+
+          [br] "=&v"(br)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31), [a32] "v"(a32), [b32] "v"(b32), [a33] "v"(a33), [b33] "v"(b33), [a34] "v"(a34), [b34] "v"(b34), [a35] "v"(a35), [b35] "v"(b35), [a36] "v"(a36), [b36] "v"(b36), [a37] "v"(a37), [b37] "v"(b37), [a38] "v"(a38), [b38] "v"(b38), [a39] "v"(a39), [b39] "v"(b39), [a40] "v"(a40), [b40] "v"(b40), [a41] "v"(a41), [b41] "v"(b41), [a42] "v"(a42), [b42] "v"(b42), [a43] "v"(a43), [b43] "v"(b43), [a44] "v"(a44), [b44] "v"(b44), [a45] "v"(a45), [b45] "v"(b45), [a46] "v"(a46), [b46] "v"(b46), [a47] "v"(a47), [b47] "v"(b47),
+
+          [br_bit] "v"(br_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if (br != 0u) {
+
+        c_fix_add_n48(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, &r32, &r33, &r34, &r35, &r36, &r37, &r38, &r39, &r40, &r41, &r42, &r43, &r44, &r45, &r46, &r47, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    r[32] = r32;
+    r[33] = r33;
+    r[34] = r34;
+    r[35] = r35;
+    r[36] = r36;
+    r[37] = r37;
+    r[38] = r38;
+    r[39] = r39;
+    r[40] = r40;
+    r[41] = r41;
+    r[42] = r42;
+    r[43] = r43;
+    r[44] = r44;
+    r[45] = r45;
+    r[46] = r46;
+    r[47] = r47;
+    *br_out = br;
+
+}
+#endif
+#ifndef ASM_COMMON_SUB_FUSED_BLOCK64_PRIV_DEFINED
+#define ASM_COMMON_SUB_FUSED_BLOCK64_PRIV_DEFINED
+// 64-limb fused sub-mod block (private stage1).
+
+static inline void asm_sub_fused_block64_priv(const uint *a, const uint *b,
+
+                                        const uint *n, uint *r, uint br_in,
+
+                                        uint *br_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint a32 = a[32];
+    uint a33 = a[33];
+    uint a34 = a[34];
+    uint a35 = a[35];
+    uint a36 = a[36];
+    uint a37 = a[37];
+    uint a38 = a[38];
+    uint a39 = a[39];
+    uint a40 = a[40];
+    uint a41 = a[41];
+    uint a42 = a[42];
+    uint a43 = a[43];
+    uint a44 = a[44];
+    uint a45 = a[45];
+    uint a46 = a[46];
+    uint a47 = a[47];
+    uint a48 = a[48];
+    uint a49 = a[49];
+    uint a50 = a[50];
+    uint a51 = a[51];
+    uint a52 = a[52];
+    uint a53 = a[53];
+    uint a54 = a[54];
+    uint a55 = a[55];
+    uint a56 = a[56];
+    uint a57 = a[57];
+    uint a58 = a[58];
+    uint a59 = a[59];
+    uint a60 = a[60];
+    uint a61 = a[61];
+    uint a62 = a[62];
+    uint a63 = a[63];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint b32 = b[32];
+    uint b33 = b[33];
+    uint b34 = b[34];
+    uint b35 = b[35];
+    uint b36 = b[36];
+    uint b37 = b[37];
+    uint b38 = b[38];
+    uint b39 = b[39];
+    uint b40 = b[40];
+    uint b41 = b[41];
+    uint b42 = b[42];
+    uint b43 = b[43];
+    uint b44 = b[44];
+    uint b45 = b[45];
+    uint b46 = b[46];
+    uint b47 = b[47];
+    uint b48 = b[48];
+    uint b49 = b[49];
+    uint b50 = b[50];
+    uint b51 = b[51];
+    uint b52 = b[52];
+    uint b53 = b[53];
+    uint b54 = b[54];
+    uint b55 = b[55];
+    uint b56 = b[56];
+    uint b57 = b[57];
+    uint b58 = b[58];
+    uint b59 = b[59];
+    uint b60 = b[60];
+    uint b61 = b[61];
+    uint b62 = b[62];
+    uint b63 = b[63];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint n32 = n[32];
+    uint n33 = n[33];
+    uint n34 = n[34];
+    uint n35 = n[35];
+    uint n36 = n[36];
+    uint n37 = n[37];
+    uint n38 = n[38];
+    uint n39 = n[39];
+    uint n40 = n[40];
+    uint n41 = n[41];
+    uint n42 = n[42];
+    uint n43 = n[43];
+    uint n44 = n[44];
+    uint n45 = n[45];
+    uint n46 = n[46];
+    uint n47 = n[47];
+    uint n48 = n[48];
+    uint n49 = n[49];
+    uint n50 = n[50];
+    uint n51 = n[51];
+    uint n52 = n[52];
+    uint n53 = n[53];
+    uint n54 = n[54];
+    uint n55 = n[55];
+    uint n56 = n[56];
+    uint n57 = n[57];
+    uint n58 = n[58];
+    uint n59 = n[59];
+    uint n60 = n[60];
+    uint n61 = n[61];
+    uint n62 = n[62];
+    uint n63 = n[63];
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47, r48, r49, r50, r51, r52, r53, r54, r55, r56, r57, r58, r59, r60, r61, r62, r63;
+
+    uint br = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint br_bit = br_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[br_bit], %[o]\n\t"
+        "v_sub_co_ci_u32 %[r0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r32], vcc_lo, %[a32], %[b32], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r33], vcc_lo, %[a33], %[b33], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r34], vcc_lo, %[a34], %[b34], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r35], vcc_lo, %[a35], %[b35], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r36], vcc_lo, %[a36], %[b36], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r37], vcc_lo, %[a37], %[b37], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r38], vcc_lo, %[a38], %[b38], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r39], vcc_lo, %[a39], %[b39], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r40], vcc_lo, %[a40], %[b40], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r41], vcc_lo, %[a41], %[b41], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r42], vcc_lo, %[a42], %[b42], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r43], vcc_lo, %[a43], %[b43], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r44], vcc_lo, %[a44], %[b44], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r45], vcc_lo, %[a45], %[b45], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r46], vcc_lo, %[a46], %[b46], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r47], vcc_lo, %[a47], %[b47], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r48], vcc_lo, %[a48], %[b48], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r49], vcc_lo, %[a49], %[b49], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r50], vcc_lo, %[a50], %[b50], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r51], vcc_lo, %[a51], %[b51], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r52], vcc_lo, %[a52], %[b52], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r53], vcc_lo, %[a53], %[b53], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r54], vcc_lo, %[a54], %[b54], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r55], vcc_lo, %[a55], %[b55], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r56], vcc_lo, %[a56], %[b56], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r57], vcc_lo, %[a57], %[b57], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r58], vcc_lo, %[a58], %[b58], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r59], vcc_lo, %[a59], %[b59], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r60], vcc_lo, %[a60], %[b60], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r61], vcc_lo, %[a61], %[b61], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r62], vcc_lo, %[a62], %[b62], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r63], vcc_lo, %[a63], %[b63], vcc_lo\n\t"
+        "v_cndmask_b32   %[br], %[z], %[o], vcc_lo"
+
+        : [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31), [r32] "=&v"(r32), [r33] "=&v"(r33), [r34] "=&v"(r34), [r35] "=&v"(r35), [r36] "=&v"(r36), [r37] "=&v"(r37), [r38] "=&v"(r38), [r39] "=&v"(r39), [r40] "=&v"(r40), [r41] "=&v"(r41), [r42] "=&v"(r42), [r43] "=&v"(r43), [r44] "=&v"(r44), [r45] "=&v"(r45), [r46] "=&v"(r46), [r47] "=&v"(r47), [r48] "=&v"(r48), [r49] "=&v"(r49), [r50] "=&v"(r50), [r51] "=&v"(r51), [r52] "=&v"(r52), [r53] "=&v"(r53), [r54] "=&v"(r54), [r55] "=&v"(r55), [r56] "=&v"(r56), [r57] "=&v"(r57), [r58] "=&v"(r58), [r59] "=&v"(r59), [r60] "=&v"(r60), [r61] "=&v"(r61), [r62] "=&v"(r62), [r63] "=&v"(r63),
+
+          [br] "=&v"(br)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31), [a32] "v"(a32), [b32] "v"(b32), [a33] "v"(a33), [b33] "v"(b33), [a34] "v"(a34), [b34] "v"(b34), [a35] "v"(a35), [b35] "v"(b35), [a36] "v"(a36), [b36] "v"(b36), [a37] "v"(a37), [b37] "v"(b37), [a38] "v"(a38), [b38] "v"(b38), [a39] "v"(a39), [b39] "v"(b39), [a40] "v"(a40), [b40] "v"(b40), [a41] "v"(a41), [b41] "v"(b41), [a42] "v"(a42), [b42] "v"(b42), [a43] "v"(a43), [b43] "v"(b43), [a44] "v"(a44), [b44] "v"(b44), [a45] "v"(a45), [b45] "v"(b45), [a46] "v"(a46), [b46] "v"(b46), [a47] "v"(a47), [b47] "v"(b47), [a48] "v"(a48), [b48] "v"(b48), [a49] "v"(a49), [b49] "v"(b49), [a50] "v"(a50), [b50] "v"(b50), [a51] "v"(a51), [b51] "v"(b51), [a52] "v"(a52), [b52] "v"(b52), [a53] "v"(a53), [b53] "v"(b53), [a54] "v"(a54), [b54] "v"(b54), [a55] "v"(a55), [b55] "v"(b55), [a56] "v"(a56), [b56] "v"(b56), [a57] "v"(a57), [b57] "v"(b57), [a58] "v"(a58), [b58] "v"(b58), [a59] "v"(a59), [b59] "v"(b59), [a60] "v"(a60), [b60] "v"(b60), [a61] "v"(a61), [b61] "v"(b61), [a62] "v"(a62), [b62] "v"(b62), [a63] "v"(a63), [b63] "v"(b63),
+
+          [br_bit] "v"(br_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if (br != 0u) {
+
+        c_fix_add_n64(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, &r32, &r33, &r34, &r35, &r36, &r37, &r38, &r39, &r40, &r41, &r42, &r43, &r44, &r45, &r46, &r47, &r48, &r49, &r50, &r51, &r52, &r53, &r54, &r55, &r56, &r57, &r58, &r59, &r60, &r61, &r62, &r63, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47, n48, n49, n50, n51, n52, n53, n54, n55, n56, n57, n58, n59, n60, n61, n62, n63);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    r[32] = r32;
+    r[33] = r33;
+    r[34] = r34;
+    r[35] = r35;
+    r[36] = r36;
+    r[37] = r37;
+    r[38] = r38;
+    r[39] = r39;
+    r[40] = r40;
+    r[41] = r41;
+    r[42] = r42;
+    r[43] = r43;
+    r[44] = r44;
+    r[45] = r45;
+    r[46] = r46;
+    r[47] = r47;
+    r[48] = r48;
+    r[49] = r49;
+    r[50] = r50;
+    r[51] = r51;
+    r[52] = r52;
+    r[53] = r53;
+    r[54] = r54;
+    r[55] = r55;
+    r[56] = r56;
+    r[57] = r57;
+    r[58] = r58;
+    r[59] = r59;
+    r[60] = r60;
+    r[61] = r61;
+    r[62] = r62;
+    r[63] = r63;
+    *br_out = br;
+
+}
+#endif
+#ifndef ASM_COMMON_SUB_FUSED_BLOCK80_PRIV_DEFINED
+#define ASM_COMMON_SUB_FUSED_BLOCK80_PRIV_DEFINED
+// 80-limb fused sub-mod block (private stage1).
+
+static inline void asm_sub_fused_block80_priv(const uint *a, const uint *b,
+
+                                        const uint *n, uint *r, uint br_in,
+
+                                        uint *br_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint a32 = a[32];
+    uint a33 = a[33];
+    uint a34 = a[34];
+    uint a35 = a[35];
+    uint a36 = a[36];
+    uint a37 = a[37];
+    uint a38 = a[38];
+    uint a39 = a[39];
+    uint a40 = a[40];
+    uint a41 = a[41];
+    uint a42 = a[42];
+    uint a43 = a[43];
+    uint a44 = a[44];
+    uint a45 = a[45];
+    uint a46 = a[46];
+    uint a47 = a[47];
+    uint a48 = a[48];
+    uint a49 = a[49];
+    uint a50 = a[50];
+    uint a51 = a[51];
+    uint a52 = a[52];
+    uint a53 = a[53];
+    uint a54 = a[54];
+    uint a55 = a[55];
+    uint a56 = a[56];
+    uint a57 = a[57];
+    uint a58 = a[58];
+    uint a59 = a[59];
+    uint a60 = a[60];
+    uint a61 = a[61];
+    uint a62 = a[62];
+    uint a63 = a[63];
+    uint a64 = a[64];
+    uint a65 = a[65];
+    uint a66 = a[66];
+    uint a67 = a[67];
+    uint a68 = a[68];
+    uint a69 = a[69];
+    uint a70 = a[70];
+    uint a71 = a[71];
+    uint a72 = a[72];
+    uint a73 = a[73];
+    uint a74 = a[74];
+    uint a75 = a[75];
+    uint a76 = a[76];
+    uint a77 = a[77];
+    uint a78 = a[78];
+    uint a79 = a[79];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint b32 = b[32];
+    uint b33 = b[33];
+    uint b34 = b[34];
+    uint b35 = b[35];
+    uint b36 = b[36];
+    uint b37 = b[37];
+    uint b38 = b[38];
+    uint b39 = b[39];
+    uint b40 = b[40];
+    uint b41 = b[41];
+    uint b42 = b[42];
+    uint b43 = b[43];
+    uint b44 = b[44];
+    uint b45 = b[45];
+    uint b46 = b[46];
+    uint b47 = b[47];
+    uint b48 = b[48];
+    uint b49 = b[49];
+    uint b50 = b[50];
+    uint b51 = b[51];
+    uint b52 = b[52];
+    uint b53 = b[53];
+    uint b54 = b[54];
+    uint b55 = b[55];
+    uint b56 = b[56];
+    uint b57 = b[57];
+    uint b58 = b[58];
+    uint b59 = b[59];
+    uint b60 = b[60];
+    uint b61 = b[61];
+    uint b62 = b[62];
+    uint b63 = b[63];
+    uint b64 = b[64];
+    uint b65 = b[65];
+    uint b66 = b[66];
+    uint b67 = b[67];
+    uint b68 = b[68];
+    uint b69 = b[69];
+    uint b70 = b[70];
+    uint b71 = b[71];
+    uint b72 = b[72];
+    uint b73 = b[73];
+    uint b74 = b[74];
+    uint b75 = b[75];
+    uint b76 = b[76];
+    uint b77 = b[77];
+    uint b78 = b[78];
+    uint b79 = b[79];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint n32 = n[32];
+    uint n33 = n[33];
+    uint n34 = n[34];
+    uint n35 = n[35];
+    uint n36 = n[36];
+    uint n37 = n[37];
+    uint n38 = n[38];
+    uint n39 = n[39];
+    uint n40 = n[40];
+    uint n41 = n[41];
+    uint n42 = n[42];
+    uint n43 = n[43];
+    uint n44 = n[44];
+    uint n45 = n[45];
+    uint n46 = n[46];
+    uint n47 = n[47];
+    uint n48 = n[48];
+    uint n49 = n[49];
+    uint n50 = n[50];
+    uint n51 = n[51];
+    uint n52 = n[52];
+    uint n53 = n[53];
+    uint n54 = n[54];
+    uint n55 = n[55];
+    uint n56 = n[56];
+    uint n57 = n[57];
+    uint n58 = n[58];
+    uint n59 = n[59];
+    uint n60 = n[60];
+    uint n61 = n[61];
+    uint n62 = n[62];
+    uint n63 = n[63];
+    uint n64 = n[64];
+    uint n65 = n[65];
+    uint n66 = n[66];
+    uint n67 = n[67];
+    uint n68 = n[68];
+    uint n69 = n[69];
+    uint n70 = n[70];
+    uint n71 = n[71];
+    uint n72 = n[72];
+    uint n73 = n[73];
+    uint n74 = n[74];
+    uint n75 = n[75];
+    uint n76 = n[76];
+    uint n77 = n[77];
+    uint n78 = n[78];
+    uint n79 = n[79];
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47, r48, r49, r50, r51, r52, r53, r54, r55, r56, r57, r58, r59, r60, r61, r62, r63, r64, r65, r66, r67, r68, r69, r70, r71, r72, r73, r74, r75, r76, r77, r78, r79;
+
+    uint br = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint br_bit = br_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[br_bit], %[o]\n\t"
+        "v_sub_co_ci_u32 %[r0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r32], vcc_lo, %[a32], %[b32], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r33], vcc_lo, %[a33], %[b33], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r34], vcc_lo, %[a34], %[b34], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r35], vcc_lo, %[a35], %[b35], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r36], vcc_lo, %[a36], %[b36], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r37], vcc_lo, %[a37], %[b37], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r38], vcc_lo, %[a38], %[b38], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r39], vcc_lo, %[a39], %[b39], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r40], vcc_lo, %[a40], %[b40], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r41], vcc_lo, %[a41], %[b41], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r42], vcc_lo, %[a42], %[b42], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r43], vcc_lo, %[a43], %[b43], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r44], vcc_lo, %[a44], %[b44], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r45], vcc_lo, %[a45], %[b45], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r46], vcc_lo, %[a46], %[b46], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r47], vcc_lo, %[a47], %[b47], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r48], vcc_lo, %[a48], %[b48], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r49], vcc_lo, %[a49], %[b49], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r50], vcc_lo, %[a50], %[b50], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r51], vcc_lo, %[a51], %[b51], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r52], vcc_lo, %[a52], %[b52], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r53], vcc_lo, %[a53], %[b53], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r54], vcc_lo, %[a54], %[b54], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r55], vcc_lo, %[a55], %[b55], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r56], vcc_lo, %[a56], %[b56], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r57], vcc_lo, %[a57], %[b57], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r58], vcc_lo, %[a58], %[b58], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r59], vcc_lo, %[a59], %[b59], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r60], vcc_lo, %[a60], %[b60], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r61], vcc_lo, %[a61], %[b61], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r62], vcc_lo, %[a62], %[b62], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r63], vcc_lo, %[a63], %[b63], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r64], vcc_lo, %[a64], %[b64], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r65], vcc_lo, %[a65], %[b65], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r66], vcc_lo, %[a66], %[b66], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r67], vcc_lo, %[a67], %[b67], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r68], vcc_lo, %[a68], %[b68], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r69], vcc_lo, %[a69], %[b69], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r70], vcc_lo, %[a70], %[b70], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r71], vcc_lo, %[a71], %[b71], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r72], vcc_lo, %[a72], %[b72], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r73], vcc_lo, %[a73], %[b73], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r74], vcc_lo, %[a74], %[b74], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r75], vcc_lo, %[a75], %[b75], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r76], vcc_lo, %[a76], %[b76], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r77], vcc_lo, %[a77], %[b77], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r78], vcc_lo, %[a78], %[b78], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r79], vcc_lo, %[a79], %[b79], vcc_lo\n\t"
+        "v_cndmask_b32   %[br], %[z], %[o], vcc_lo"
+
+        : [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31), [r32] "=&v"(r32), [r33] "=&v"(r33), [r34] "=&v"(r34), [r35] "=&v"(r35), [r36] "=&v"(r36), [r37] "=&v"(r37), [r38] "=&v"(r38), [r39] "=&v"(r39), [r40] "=&v"(r40), [r41] "=&v"(r41), [r42] "=&v"(r42), [r43] "=&v"(r43), [r44] "=&v"(r44), [r45] "=&v"(r45), [r46] "=&v"(r46), [r47] "=&v"(r47), [r48] "=&v"(r48), [r49] "=&v"(r49), [r50] "=&v"(r50), [r51] "=&v"(r51), [r52] "=&v"(r52), [r53] "=&v"(r53), [r54] "=&v"(r54), [r55] "=&v"(r55), [r56] "=&v"(r56), [r57] "=&v"(r57), [r58] "=&v"(r58), [r59] "=&v"(r59), [r60] "=&v"(r60), [r61] "=&v"(r61), [r62] "=&v"(r62), [r63] "=&v"(r63), [r64] "=&v"(r64), [r65] "=&v"(r65), [r66] "=&v"(r66), [r67] "=&v"(r67), [r68] "=&v"(r68), [r69] "=&v"(r69), [r70] "=&v"(r70), [r71] "=&v"(r71), [r72] "=&v"(r72), [r73] "=&v"(r73), [r74] "=&v"(r74), [r75] "=&v"(r75), [r76] "=&v"(r76), [r77] "=&v"(r77), [r78] "=&v"(r78), [r79] "=&v"(r79),
+
+          [br] "=&v"(br)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31), [a32] "v"(a32), [b32] "v"(b32), [a33] "v"(a33), [b33] "v"(b33), [a34] "v"(a34), [b34] "v"(b34), [a35] "v"(a35), [b35] "v"(b35), [a36] "v"(a36), [b36] "v"(b36), [a37] "v"(a37), [b37] "v"(b37), [a38] "v"(a38), [b38] "v"(b38), [a39] "v"(a39), [b39] "v"(b39), [a40] "v"(a40), [b40] "v"(b40), [a41] "v"(a41), [b41] "v"(b41), [a42] "v"(a42), [b42] "v"(b42), [a43] "v"(a43), [b43] "v"(b43), [a44] "v"(a44), [b44] "v"(b44), [a45] "v"(a45), [b45] "v"(b45), [a46] "v"(a46), [b46] "v"(b46), [a47] "v"(a47), [b47] "v"(b47), [a48] "v"(a48), [b48] "v"(b48), [a49] "v"(a49), [b49] "v"(b49), [a50] "v"(a50), [b50] "v"(b50), [a51] "v"(a51), [b51] "v"(b51), [a52] "v"(a52), [b52] "v"(b52), [a53] "v"(a53), [b53] "v"(b53), [a54] "v"(a54), [b54] "v"(b54), [a55] "v"(a55), [b55] "v"(b55), [a56] "v"(a56), [b56] "v"(b56), [a57] "v"(a57), [b57] "v"(b57), [a58] "v"(a58), [b58] "v"(b58), [a59] "v"(a59), [b59] "v"(b59), [a60] "v"(a60), [b60] "v"(b60), [a61] "v"(a61), [b61] "v"(b61), [a62] "v"(a62), [b62] "v"(b62), [a63] "v"(a63), [b63] "v"(b63), [a64] "v"(a64), [b64] "v"(b64), [a65] "v"(a65), [b65] "v"(b65), [a66] "v"(a66), [b66] "v"(b66), [a67] "v"(a67), [b67] "v"(b67), [a68] "v"(a68), [b68] "v"(b68), [a69] "v"(a69), [b69] "v"(b69), [a70] "v"(a70), [b70] "v"(b70), [a71] "v"(a71), [b71] "v"(b71), [a72] "v"(a72), [b72] "v"(b72), [a73] "v"(a73), [b73] "v"(b73), [a74] "v"(a74), [b74] "v"(b74), [a75] "v"(a75), [b75] "v"(b75), [a76] "v"(a76), [b76] "v"(b76), [a77] "v"(a77), [b77] "v"(b77), [a78] "v"(a78), [b78] "v"(b78), [a79] "v"(a79), [b79] "v"(b79),
+
+          [br_bit] "v"(br_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if (br != 0u) {
+
+        c_fix_add_n80(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, &r32, &r33, &r34, &r35, &r36, &r37, &r38, &r39, &r40, &r41, &r42, &r43, &r44, &r45, &r46, &r47, &r48, &r49, &r50, &r51, &r52, &r53, &r54, &r55, &r56, &r57, &r58, &r59, &r60, &r61, &r62, &r63, &r64, &r65, &r66, &r67, &r68, &r69, &r70, &r71, &r72, &r73, &r74, &r75, &r76, &r77, &r78, &r79, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47, n48, n49, n50, n51, n52, n53, n54, n55, n56, n57, n58, n59, n60, n61, n62, n63, n64, n65, n66, n67, n68, n69, n70, n71, n72, n73, n74, n75, n76, n77, n78, n79);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    r[32] = r32;
+    r[33] = r33;
+    r[34] = r34;
+    r[35] = r35;
+    r[36] = r36;
+    r[37] = r37;
+    r[38] = r38;
+    r[39] = r39;
+    r[40] = r40;
+    r[41] = r41;
+    r[42] = r42;
+    r[43] = r43;
+    r[44] = r44;
+    r[45] = r45;
+    r[46] = r46;
+    r[47] = r47;
+    r[48] = r48;
+    r[49] = r49;
+    r[50] = r50;
+    r[51] = r51;
+    r[52] = r52;
+    r[53] = r53;
+    r[54] = r54;
+    r[55] = r55;
+    r[56] = r56;
+    r[57] = r57;
+    r[58] = r58;
+    r[59] = r59;
+    r[60] = r60;
+    r[61] = r61;
+    r[62] = r62;
+    r[63] = r63;
+    r[64] = r64;
+    r[65] = r65;
+    r[66] = r66;
+    r[67] = r67;
+    r[68] = r68;
+    r[69] = r69;
+    r[70] = r70;
+    r[71] = r71;
+    r[72] = r72;
+    r[73] = r73;
+    r[74] = r74;
+    r[75] = r75;
+    r[76] = r76;
+    r[77] = r77;
+    r[78] = r78;
+    r[79] = r79;
+    *br_out = br;
+
+}
+#endif
+#ifndef ASM_COMMON_SUB_FUSED_BLOCK96_PRIV_DEFINED
+#define ASM_COMMON_SUB_FUSED_BLOCK96_PRIV_DEFINED
+// 96-limb fused sub-mod block (private stage1).
+
+static inline void asm_sub_fused_block96_priv(const uint *a, const uint *b,
+
+                                        const uint *n, uint *r, uint br_in,
+
+                                        uint *br_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint a32 = a[32];
+    uint a33 = a[33];
+    uint a34 = a[34];
+    uint a35 = a[35];
+    uint a36 = a[36];
+    uint a37 = a[37];
+    uint a38 = a[38];
+    uint a39 = a[39];
+    uint a40 = a[40];
+    uint a41 = a[41];
+    uint a42 = a[42];
+    uint a43 = a[43];
+    uint a44 = a[44];
+    uint a45 = a[45];
+    uint a46 = a[46];
+    uint a47 = a[47];
+    uint a48 = a[48];
+    uint a49 = a[49];
+    uint a50 = a[50];
+    uint a51 = a[51];
+    uint a52 = a[52];
+    uint a53 = a[53];
+    uint a54 = a[54];
+    uint a55 = a[55];
+    uint a56 = a[56];
+    uint a57 = a[57];
+    uint a58 = a[58];
+    uint a59 = a[59];
+    uint a60 = a[60];
+    uint a61 = a[61];
+    uint a62 = a[62];
+    uint a63 = a[63];
+    uint a64 = a[64];
+    uint a65 = a[65];
+    uint a66 = a[66];
+    uint a67 = a[67];
+    uint a68 = a[68];
+    uint a69 = a[69];
+    uint a70 = a[70];
+    uint a71 = a[71];
+    uint a72 = a[72];
+    uint a73 = a[73];
+    uint a74 = a[74];
+    uint a75 = a[75];
+    uint a76 = a[76];
+    uint a77 = a[77];
+    uint a78 = a[78];
+    uint a79 = a[79];
+    uint a80 = a[80];
+    uint a81 = a[81];
+    uint a82 = a[82];
+    uint a83 = a[83];
+    uint a84 = a[84];
+    uint a85 = a[85];
+    uint a86 = a[86];
+    uint a87 = a[87];
+    uint a88 = a[88];
+    uint a89 = a[89];
+    uint a90 = a[90];
+    uint a91 = a[91];
+    uint a92 = a[92];
+    uint a93 = a[93];
+    uint a94 = a[94];
+    uint a95 = a[95];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint b32 = b[32];
+    uint b33 = b[33];
+    uint b34 = b[34];
+    uint b35 = b[35];
+    uint b36 = b[36];
+    uint b37 = b[37];
+    uint b38 = b[38];
+    uint b39 = b[39];
+    uint b40 = b[40];
+    uint b41 = b[41];
+    uint b42 = b[42];
+    uint b43 = b[43];
+    uint b44 = b[44];
+    uint b45 = b[45];
+    uint b46 = b[46];
+    uint b47 = b[47];
+    uint b48 = b[48];
+    uint b49 = b[49];
+    uint b50 = b[50];
+    uint b51 = b[51];
+    uint b52 = b[52];
+    uint b53 = b[53];
+    uint b54 = b[54];
+    uint b55 = b[55];
+    uint b56 = b[56];
+    uint b57 = b[57];
+    uint b58 = b[58];
+    uint b59 = b[59];
+    uint b60 = b[60];
+    uint b61 = b[61];
+    uint b62 = b[62];
+    uint b63 = b[63];
+    uint b64 = b[64];
+    uint b65 = b[65];
+    uint b66 = b[66];
+    uint b67 = b[67];
+    uint b68 = b[68];
+    uint b69 = b[69];
+    uint b70 = b[70];
+    uint b71 = b[71];
+    uint b72 = b[72];
+    uint b73 = b[73];
+    uint b74 = b[74];
+    uint b75 = b[75];
+    uint b76 = b[76];
+    uint b77 = b[77];
+    uint b78 = b[78];
+    uint b79 = b[79];
+    uint b80 = b[80];
+    uint b81 = b[81];
+    uint b82 = b[82];
+    uint b83 = b[83];
+    uint b84 = b[84];
+    uint b85 = b[85];
+    uint b86 = b[86];
+    uint b87 = b[87];
+    uint b88 = b[88];
+    uint b89 = b[89];
+    uint b90 = b[90];
+    uint b91 = b[91];
+    uint b92 = b[92];
+    uint b93 = b[93];
+    uint b94 = b[94];
+    uint b95 = b[95];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint n32 = n[32];
+    uint n33 = n[33];
+    uint n34 = n[34];
+    uint n35 = n[35];
+    uint n36 = n[36];
+    uint n37 = n[37];
+    uint n38 = n[38];
+    uint n39 = n[39];
+    uint n40 = n[40];
+    uint n41 = n[41];
+    uint n42 = n[42];
+    uint n43 = n[43];
+    uint n44 = n[44];
+    uint n45 = n[45];
+    uint n46 = n[46];
+    uint n47 = n[47];
+    uint n48 = n[48];
+    uint n49 = n[49];
+    uint n50 = n[50];
+    uint n51 = n[51];
+    uint n52 = n[52];
+    uint n53 = n[53];
+    uint n54 = n[54];
+    uint n55 = n[55];
+    uint n56 = n[56];
+    uint n57 = n[57];
+    uint n58 = n[58];
+    uint n59 = n[59];
+    uint n60 = n[60];
+    uint n61 = n[61];
+    uint n62 = n[62];
+    uint n63 = n[63];
+    uint n64 = n[64];
+    uint n65 = n[65];
+    uint n66 = n[66];
+    uint n67 = n[67];
+    uint n68 = n[68];
+    uint n69 = n[69];
+    uint n70 = n[70];
+    uint n71 = n[71];
+    uint n72 = n[72];
+    uint n73 = n[73];
+    uint n74 = n[74];
+    uint n75 = n[75];
+    uint n76 = n[76];
+    uint n77 = n[77];
+    uint n78 = n[78];
+    uint n79 = n[79];
+    uint n80 = n[80];
+    uint n81 = n[81];
+    uint n82 = n[82];
+    uint n83 = n[83];
+    uint n84 = n[84];
+    uint n85 = n[85];
+    uint n86 = n[86];
+    uint n87 = n[87];
+    uint n88 = n[88];
+    uint n89 = n[89];
+    uint n90 = n[90];
+    uint n91 = n[91];
+    uint n92 = n[92];
+    uint n93 = n[93];
+    uint n94 = n[94];
+    uint n95 = n[95];
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47, r48, r49, r50, r51, r52, r53, r54, r55, r56, r57, r58, r59, r60, r61, r62, r63, r64, r65, r66, r67, r68, r69, r70, r71, r72, r73, r74, r75, r76, r77, r78, r79, r80, r81, r82, r83, r84, r85, r86, r87, r88, r89, r90, r91, r92, r93, r94, r95;
+
+    uint br = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint br_bit = br_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[br_bit], %[o]\n\t"
+        "v_sub_co_ci_u32 %[r0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r32], vcc_lo, %[a32], %[b32], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r33], vcc_lo, %[a33], %[b33], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r34], vcc_lo, %[a34], %[b34], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r35], vcc_lo, %[a35], %[b35], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r36], vcc_lo, %[a36], %[b36], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r37], vcc_lo, %[a37], %[b37], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r38], vcc_lo, %[a38], %[b38], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r39], vcc_lo, %[a39], %[b39], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r40], vcc_lo, %[a40], %[b40], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r41], vcc_lo, %[a41], %[b41], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r42], vcc_lo, %[a42], %[b42], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r43], vcc_lo, %[a43], %[b43], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r44], vcc_lo, %[a44], %[b44], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r45], vcc_lo, %[a45], %[b45], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r46], vcc_lo, %[a46], %[b46], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r47], vcc_lo, %[a47], %[b47], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r48], vcc_lo, %[a48], %[b48], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r49], vcc_lo, %[a49], %[b49], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r50], vcc_lo, %[a50], %[b50], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r51], vcc_lo, %[a51], %[b51], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r52], vcc_lo, %[a52], %[b52], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r53], vcc_lo, %[a53], %[b53], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r54], vcc_lo, %[a54], %[b54], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r55], vcc_lo, %[a55], %[b55], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r56], vcc_lo, %[a56], %[b56], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r57], vcc_lo, %[a57], %[b57], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r58], vcc_lo, %[a58], %[b58], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r59], vcc_lo, %[a59], %[b59], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r60], vcc_lo, %[a60], %[b60], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r61], vcc_lo, %[a61], %[b61], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r62], vcc_lo, %[a62], %[b62], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r63], vcc_lo, %[a63], %[b63], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r64], vcc_lo, %[a64], %[b64], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r65], vcc_lo, %[a65], %[b65], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r66], vcc_lo, %[a66], %[b66], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r67], vcc_lo, %[a67], %[b67], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r68], vcc_lo, %[a68], %[b68], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r69], vcc_lo, %[a69], %[b69], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r70], vcc_lo, %[a70], %[b70], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r71], vcc_lo, %[a71], %[b71], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r72], vcc_lo, %[a72], %[b72], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r73], vcc_lo, %[a73], %[b73], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r74], vcc_lo, %[a74], %[b74], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r75], vcc_lo, %[a75], %[b75], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r76], vcc_lo, %[a76], %[b76], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r77], vcc_lo, %[a77], %[b77], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r78], vcc_lo, %[a78], %[b78], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r79], vcc_lo, %[a79], %[b79], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r80], vcc_lo, %[a80], %[b80], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r81], vcc_lo, %[a81], %[b81], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r82], vcc_lo, %[a82], %[b82], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r83], vcc_lo, %[a83], %[b83], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r84], vcc_lo, %[a84], %[b84], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r85], vcc_lo, %[a85], %[b85], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r86], vcc_lo, %[a86], %[b86], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r87], vcc_lo, %[a87], %[b87], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r88], vcc_lo, %[a88], %[b88], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r89], vcc_lo, %[a89], %[b89], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r90], vcc_lo, %[a90], %[b90], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r91], vcc_lo, %[a91], %[b91], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r92], vcc_lo, %[a92], %[b92], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r93], vcc_lo, %[a93], %[b93], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r94], vcc_lo, %[a94], %[b94], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r95], vcc_lo, %[a95], %[b95], vcc_lo\n\t"
+        "v_cndmask_b32   %[br], %[z], %[o], vcc_lo"
+
+        : [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31), [r32] "=&v"(r32), [r33] "=&v"(r33), [r34] "=&v"(r34), [r35] "=&v"(r35), [r36] "=&v"(r36), [r37] "=&v"(r37), [r38] "=&v"(r38), [r39] "=&v"(r39), [r40] "=&v"(r40), [r41] "=&v"(r41), [r42] "=&v"(r42), [r43] "=&v"(r43), [r44] "=&v"(r44), [r45] "=&v"(r45), [r46] "=&v"(r46), [r47] "=&v"(r47), [r48] "=&v"(r48), [r49] "=&v"(r49), [r50] "=&v"(r50), [r51] "=&v"(r51), [r52] "=&v"(r52), [r53] "=&v"(r53), [r54] "=&v"(r54), [r55] "=&v"(r55), [r56] "=&v"(r56), [r57] "=&v"(r57), [r58] "=&v"(r58), [r59] "=&v"(r59), [r60] "=&v"(r60), [r61] "=&v"(r61), [r62] "=&v"(r62), [r63] "=&v"(r63), [r64] "=&v"(r64), [r65] "=&v"(r65), [r66] "=&v"(r66), [r67] "=&v"(r67), [r68] "=&v"(r68), [r69] "=&v"(r69), [r70] "=&v"(r70), [r71] "=&v"(r71), [r72] "=&v"(r72), [r73] "=&v"(r73), [r74] "=&v"(r74), [r75] "=&v"(r75), [r76] "=&v"(r76), [r77] "=&v"(r77), [r78] "=&v"(r78), [r79] "=&v"(r79), [r80] "=&v"(r80), [r81] "=&v"(r81), [r82] "=&v"(r82), [r83] "=&v"(r83), [r84] "=&v"(r84), [r85] "=&v"(r85), [r86] "=&v"(r86), [r87] "=&v"(r87), [r88] "=&v"(r88), [r89] "=&v"(r89), [r90] "=&v"(r90), [r91] "=&v"(r91), [r92] "=&v"(r92), [r93] "=&v"(r93), [r94] "=&v"(r94), [r95] "=&v"(r95),
+
+          [br] "=&v"(br)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31), [a32] "v"(a32), [b32] "v"(b32), [a33] "v"(a33), [b33] "v"(b33), [a34] "v"(a34), [b34] "v"(b34), [a35] "v"(a35), [b35] "v"(b35), [a36] "v"(a36), [b36] "v"(b36), [a37] "v"(a37), [b37] "v"(b37), [a38] "v"(a38), [b38] "v"(b38), [a39] "v"(a39), [b39] "v"(b39), [a40] "v"(a40), [b40] "v"(b40), [a41] "v"(a41), [b41] "v"(b41), [a42] "v"(a42), [b42] "v"(b42), [a43] "v"(a43), [b43] "v"(b43), [a44] "v"(a44), [b44] "v"(b44), [a45] "v"(a45), [b45] "v"(b45), [a46] "v"(a46), [b46] "v"(b46), [a47] "v"(a47), [b47] "v"(b47), [a48] "v"(a48), [b48] "v"(b48), [a49] "v"(a49), [b49] "v"(b49), [a50] "v"(a50), [b50] "v"(b50), [a51] "v"(a51), [b51] "v"(b51), [a52] "v"(a52), [b52] "v"(b52), [a53] "v"(a53), [b53] "v"(b53), [a54] "v"(a54), [b54] "v"(b54), [a55] "v"(a55), [b55] "v"(b55), [a56] "v"(a56), [b56] "v"(b56), [a57] "v"(a57), [b57] "v"(b57), [a58] "v"(a58), [b58] "v"(b58), [a59] "v"(a59), [b59] "v"(b59), [a60] "v"(a60), [b60] "v"(b60), [a61] "v"(a61), [b61] "v"(b61), [a62] "v"(a62), [b62] "v"(b62), [a63] "v"(a63), [b63] "v"(b63), [a64] "v"(a64), [b64] "v"(b64), [a65] "v"(a65), [b65] "v"(b65), [a66] "v"(a66), [b66] "v"(b66), [a67] "v"(a67), [b67] "v"(b67), [a68] "v"(a68), [b68] "v"(b68), [a69] "v"(a69), [b69] "v"(b69), [a70] "v"(a70), [b70] "v"(b70), [a71] "v"(a71), [b71] "v"(b71), [a72] "v"(a72), [b72] "v"(b72), [a73] "v"(a73), [b73] "v"(b73), [a74] "v"(a74), [b74] "v"(b74), [a75] "v"(a75), [b75] "v"(b75), [a76] "v"(a76), [b76] "v"(b76), [a77] "v"(a77), [b77] "v"(b77), [a78] "v"(a78), [b78] "v"(b78), [a79] "v"(a79), [b79] "v"(b79), [a80] "v"(a80), [b80] "v"(b80), [a81] "v"(a81), [b81] "v"(b81), [a82] "v"(a82), [b82] "v"(b82), [a83] "v"(a83), [b83] "v"(b83), [a84] "v"(a84), [b84] "v"(b84), [a85] "v"(a85), [b85] "v"(b85), [a86] "v"(a86), [b86] "v"(b86), [a87] "v"(a87), [b87] "v"(b87), [a88] "v"(a88), [b88] "v"(b88), [a89] "v"(a89), [b89] "v"(b89), [a90] "v"(a90), [b90] "v"(b90), [a91] "v"(a91), [b91] "v"(b91), [a92] "v"(a92), [b92] "v"(b92), [a93] "v"(a93), [b93] "v"(b93), [a94] "v"(a94), [b94] "v"(b94), [a95] "v"(a95), [b95] "v"(b95),
+
+          [br_bit] "v"(br_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if (br != 0u) {
+
+        c_fix_add_n96(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, &r32, &r33, &r34, &r35, &r36, &r37, &r38, &r39, &r40, &r41, &r42, &r43, &r44, &r45, &r46, &r47, &r48, &r49, &r50, &r51, &r52, &r53, &r54, &r55, &r56, &r57, &r58, &r59, &r60, &r61, &r62, &r63, &r64, &r65, &r66, &r67, &r68, &r69, &r70, &r71, &r72, &r73, &r74, &r75, &r76, &r77, &r78, &r79, &r80, &r81, &r82, &r83, &r84, &r85, &r86, &r87, &r88, &r89, &r90, &r91, &r92, &r93, &r94, &r95, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47, n48, n49, n50, n51, n52, n53, n54, n55, n56, n57, n58, n59, n60, n61, n62, n63, n64, n65, n66, n67, n68, n69, n70, n71, n72, n73, n74, n75, n76, n77, n78, n79, n80, n81, n82, n83, n84, n85, n86, n87, n88, n89, n90, n91, n92, n93, n94, n95);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    r[32] = r32;
+    r[33] = r33;
+    r[34] = r34;
+    r[35] = r35;
+    r[36] = r36;
+    r[37] = r37;
+    r[38] = r38;
+    r[39] = r39;
+    r[40] = r40;
+    r[41] = r41;
+    r[42] = r42;
+    r[43] = r43;
+    r[44] = r44;
+    r[45] = r45;
+    r[46] = r46;
+    r[47] = r47;
+    r[48] = r48;
+    r[49] = r49;
+    r[50] = r50;
+    r[51] = r51;
+    r[52] = r52;
+    r[53] = r53;
+    r[54] = r54;
+    r[55] = r55;
+    r[56] = r56;
+    r[57] = r57;
+    r[58] = r58;
+    r[59] = r59;
+    r[60] = r60;
+    r[61] = r61;
+    r[62] = r62;
+    r[63] = r63;
+    r[64] = r64;
+    r[65] = r65;
+    r[66] = r66;
+    r[67] = r67;
+    r[68] = r68;
+    r[69] = r69;
+    r[70] = r70;
+    r[71] = r71;
+    r[72] = r72;
+    r[73] = r73;
+    r[74] = r74;
+    r[75] = r75;
+    r[76] = r76;
+    r[77] = r77;
+    r[78] = r78;
+    r[79] = r79;
+    r[80] = r80;
+    r[81] = r81;
+    r[82] = r82;
+    r[83] = r83;
+    r[84] = r84;
+    r[85] = r85;
+    r[86] = r86;
+    r[87] = r87;
+    r[88] = r88;
+    r[89] = r89;
+    r[90] = r90;
+    r[91] = r91;
+    r[92] = r92;
+    r[93] = r93;
+    r[94] = r94;
+    r[95] = r95;
+    *br_out = br;
+
+}
+#endif
+#ifndef ASM_COMMON_SUB_FUSED_BLOCK112_PRIV_DEFINED
+#define ASM_COMMON_SUB_FUSED_BLOCK112_PRIV_DEFINED
+// 112-limb fused sub-mod block (private stage1).
+
+static inline void asm_sub_fused_block112_priv(const uint *a, const uint *b,
+
+                                        const uint *n, uint *r, uint br_in,
+
+                                        uint *br_out) {
+
+    uint a0 = a[0];
+    uint a1 = a[1];
+    uint a2 = a[2];
+    uint a3 = a[3];
+    uint a4 = a[4];
+    uint a5 = a[5];
+    uint a6 = a[6];
+    uint a7 = a[7];
+    uint a8 = a[8];
+    uint a9 = a[9];
+    uint a10 = a[10];
+    uint a11 = a[11];
+    uint a12 = a[12];
+    uint a13 = a[13];
+    uint a14 = a[14];
+    uint a15 = a[15];
+    uint a16 = a[16];
+    uint a17 = a[17];
+    uint a18 = a[18];
+    uint a19 = a[19];
+    uint a20 = a[20];
+    uint a21 = a[21];
+    uint a22 = a[22];
+    uint a23 = a[23];
+    uint a24 = a[24];
+    uint a25 = a[25];
+    uint a26 = a[26];
+    uint a27 = a[27];
+    uint a28 = a[28];
+    uint a29 = a[29];
+    uint a30 = a[30];
+    uint a31 = a[31];
+    uint a32 = a[32];
+    uint a33 = a[33];
+    uint a34 = a[34];
+    uint a35 = a[35];
+    uint a36 = a[36];
+    uint a37 = a[37];
+    uint a38 = a[38];
+    uint a39 = a[39];
+    uint a40 = a[40];
+    uint a41 = a[41];
+    uint a42 = a[42];
+    uint a43 = a[43];
+    uint a44 = a[44];
+    uint a45 = a[45];
+    uint a46 = a[46];
+    uint a47 = a[47];
+    uint a48 = a[48];
+    uint a49 = a[49];
+    uint a50 = a[50];
+    uint a51 = a[51];
+    uint a52 = a[52];
+    uint a53 = a[53];
+    uint a54 = a[54];
+    uint a55 = a[55];
+    uint a56 = a[56];
+    uint a57 = a[57];
+    uint a58 = a[58];
+    uint a59 = a[59];
+    uint a60 = a[60];
+    uint a61 = a[61];
+    uint a62 = a[62];
+    uint a63 = a[63];
+    uint a64 = a[64];
+    uint a65 = a[65];
+    uint a66 = a[66];
+    uint a67 = a[67];
+    uint a68 = a[68];
+    uint a69 = a[69];
+    uint a70 = a[70];
+    uint a71 = a[71];
+    uint a72 = a[72];
+    uint a73 = a[73];
+    uint a74 = a[74];
+    uint a75 = a[75];
+    uint a76 = a[76];
+    uint a77 = a[77];
+    uint a78 = a[78];
+    uint a79 = a[79];
+    uint a80 = a[80];
+    uint a81 = a[81];
+    uint a82 = a[82];
+    uint a83 = a[83];
+    uint a84 = a[84];
+    uint a85 = a[85];
+    uint a86 = a[86];
+    uint a87 = a[87];
+    uint a88 = a[88];
+    uint a89 = a[89];
+    uint a90 = a[90];
+    uint a91 = a[91];
+    uint a92 = a[92];
+    uint a93 = a[93];
+    uint a94 = a[94];
+    uint a95 = a[95];
+    uint a96 = a[96];
+    uint a97 = a[97];
+    uint a98 = a[98];
+    uint a99 = a[99];
+    uint a100 = a[100];
+    uint a101 = a[101];
+    uint a102 = a[102];
+    uint a103 = a[103];
+    uint a104 = a[104];
+    uint a105 = a[105];
+    uint a106 = a[106];
+    uint a107 = a[107];
+    uint a108 = a[108];
+    uint a109 = a[109];
+    uint a110 = a[110];
+    uint a111 = a[111];
+    uint b0 = b[0];
+    uint b1 = b[1];
+    uint b2 = b[2];
+    uint b3 = b[3];
+    uint b4 = b[4];
+    uint b5 = b[5];
+    uint b6 = b[6];
+    uint b7 = b[7];
+    uint b8 = b[8];
+    uint b9 = b[9];
+    uint b10 = b[10];
+    uint b11 = b[11];
+    uint b12 = b[12];
+    uint b13 = b[13];
+    uint b14 = b[14];
+    uint b15 = b[15];
+    uint b16 = b[16];
+    uint b17 = b[17];
+    uint b18 = b[18];
+    uint b19 = b[19];
+    uint b20 = b[20];
+    uint b21 = b[21];
+    uint b22 = b[22];
+    uint b23 = b[23];
+    uint b24 = b[24];
+    uint b25 = b[25];
+    uint b26 = b[26];
+    uint b27 = b[27];
+    uint b28 = b[28];
+    uint b29 = b[29];
+    uint b30 = b[30];
+    uint b31 = b[31];
+    uint b32 = b[32];
+    uint b33 = b[33];
+    uint b34 = b[34];
+    uint b35 = b[35];
+    uint b36 = b[36];
+    uint b37 = b[37];
+    uint b38 = b[38];
+    uint b39 = b[39];
+    uint b40 = b[40];
+    uint b41 = b[41];
+    uint b42 = b[42];
+    uint b43 = b[43];
+    uint b44 = b[44];
+    uint b45 = b[45];
+    uint b46 = b[46];
+    uint b47 = b[47];
+    uint b48 = b[48];
+    uint b49 = b[49];
+    uint b50 = b[50];
+    uint b51 = b[51];
+    uint b52 = b[52];
+    uint b53 = b[53];
+    uint b54 = b[54];
+    uint b55 = b[55];
+    uint b56 = b[56];
+    uint b57 = b[57];
+    uint b58 = b[58];
+    uint b59 = b[59];
+    uint b60 = b[60];
+    uint b61 = b[61];
+    uint b62 = b[62];
+    uint b63 = b[63];
+    uint b64 = b[64];
+    uint b65 = b[65];
+    uint b66 = b[66];
+    uint b67 = b[67];
+    uint b68 = b[68];
+    uint b69 = b[69];
+    uint b70 = b[70];
+    uint b71 = b[71];
+    uint b72 = b[72];
+    uint b73 = b[73];
+    uint b74 = b[74];
+    uint b75 = b[75];
+    uint b76 = b[76];
+    uint b77 = b[77];
+    uint b78 = b[78];
+    uint b79 = b[79];
+    uint b80 = b[80];
+    uint b81 = b[81];
+    uint b82 = b[82];
+    uint b83 = b[83];
+    uint b84 = b[84];
+    uint b85 = b[85];
+    uint b86 = b[86];
+    uint b87 = b[87];
+    uint b88 = b[88];
+    uint b89 = b[89];
+    uint b90 = b[90];
+    uint b91 = b[91];
+    uint b92 = b[92];
+    uint b93 = b[93];
+    uint b94 = b[94];
+    uint b95 = b[95];
+    uint b96 = b[96];
+    uint b97 = b[97];
+    uint b98 = b[98];
+    uint b99 = b[99];
+    uint b100 = b[100];
+    uint b101 = b[101];
+    uint b102 = b[102];
+    uint b103 = b[103];
+    uint b104 = b[104];
+    uint b105 = b[105];
+    uint b106 = b[106];
+    uint b107 = b[107];
+    uint b108 = b[108];
+    uint b109 = b[109];
+    uint b110 = b[110];
+    uint b111 = b[111];
+    uint n0 = n[0];
+    uint n1 = n[1];
+    uint n2 = n[2];
+    uint n3 = n[3];
+    uint n4 = n[4];
+    uint n5 = n[5];
+    uint n6 = n[6];
+    uint n7 = n[7];
+    uint n8 = n[8];
+    uint n9 = n[9];
+    uint n10 = n[10];
+    uint n11 = n[11];
+    uint n12 = n[12];
+    uint n13 = n[13];
+    uint n14 = n[14];
+    uint n15 = n[15];
+    uint n16 = n[16];
+    uint n17 = n[17];
+    uint n18 = n[18];
+    uint n19 = n[19];
+    uint n20 = n[20];
+    uint n21 = n[21];
+    uint n22 = n[22];
+    uint n23 = n[23];
+    uint n24 = n[24];
+    uint n25 = n[25];
+    uint n26 = n[26];
+    uint n27 = n[27];
+    uint n28 = n[28];
+    uint n29 = n[29];
+    uint n30 = n[30];
+    uint n31 = n[31];
+    uint n32 = n[32];
+    uint n33 = n[33];
+    uint n34 = n[34];
+    uint n35 = n[35];
+    uint n36 = n[36];
+    uint n37 = n[37];
+    uint n38 = n[38];
+    uint n39 = n[39];
+    uint n40 = n[40];
+    uint n41 = n[41];
+    uint n42 = n[42];
+    uint n43 = n[43];
+    uint n44 = n[44];
+    uint n45 = n[45];
+    uint n46 = n[46];
+    uint n47 = n[47];
+    uint n48 = n[48];
+    uint n49 = n[49];
+    uint n50 = n[50];
+    uint n51 = n[51];
+    uint n52 = n[52];
+    uint n53 = n[53];
+    uint n54 = n[54];
+    uint n55 = n[55];
+    uint n56 = n[56];
+    uint n57 = n[57];
+    uint n58 = n[58];
+    uint n59 = n[59];
+    uint n60 = n[60];
+    uint n61 = n[61];
+    uint n62 = n[62];
+    uint n63 = n[63];
+    uint n64 = n[64];
+    uint n65 = n[65];
+    uint n66 = n[66];
+    uint n67 = n[67];
+    uint n68 = n[68];
+    uint n69 = n[69];
+    uint n70 = n[70];
+    uint n71 = n[71];
+    uint n72 = n[72];
+    uint n73 = n[73];
+    uint n74 = n[74];
+    uint n75 = n[75];
+    uint n76 = n[76];
+    uint n77 = n[77];
+    uint n78 = n[78];
+    uint n79 = n[79];
+    uint n80 = n[80];
+    uint n81 = n[81];
+    uint n82 = n[82];
+    uint n83 = n[83];
+    uint n84 = n[84];
+    uint n85 = n[85];
+    uint n86 = n[86];
+    uint n87 = n[87];
+    uint n88 = n[88];
+    uint n89 = n[89];
+    uint n90 = n[90];
+    uint n91 = n[91];
+    uint n92 = n[92];
+    uint n93 = n[93];
+    uint n94 = n[94];
+    uint n95 = n[95];
+    uint n96 = n[96];
+    uint n97 = n[97];
+    uint n98 = n[98];
+    uint n99 = n[99];
+    uint n100 = n[100];
+    uint n101 = n[101];
+    uint n102 = n[102];
+    uint n103 = n[103];
+    uint n104 = n[104];
+    uint n105 = n[105];
+    uint n106 = n[106];
+    uint n107 = n[107];
+    uint n108 = n[108];
+    uint n109 = n[109];
+    uint n110 = n[110];
+    uint n111 = n[111];
+    uint r0, r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12, r13, r14, r15, r16, r17, r18, r19, r20, r21, r22, r23, r24, r25, r26, r27, r28, r29, r30, r31, r32, r33, r34, r35, r36, r37, r38, r39, r40, r41, r42, r43, r44, r45, r46, r47, r48, r49, r50, r51, r52, r53, r54, r55, r56, r57, r58, r59, r60, r61, r62, r63, r64, r65, r66, r67, r68, r69, r70, r71, r72, r73, r74, r75, r76, r77, r78, r79, r80, r81, r82, r83, r84, r85, r86, r87, r88, r89, r90, r91, r92, r93, r94, r95, r96, r97, r98, r99, r100, r101, r102, r103, r104, r105, r106, r107, r108, r109, r110, r111;
+
+    uint br = 0u;
+
+    const uint z = 0u, o = 1u;
+
+    uint br_bit = br_in ? o : z;
+
+    __asm volatile(
+
+        "v_cmp_eq_u32    vcc_lo, %[br_bit], %[o]\n\t"
+        "v_sub_co_ci_u32 %[r0], vcc_lo, %[a0], %[b0], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r1], vcc_lo, %[a1], %[b1], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r2], vcc_lo, %[a2], %[b2], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r3], vcc_lo, %[a3], %[b3], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r4], vcc_lo, %[a4], %[b4], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r5], vcc_lo, %[a5], %[b5], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r6], vcc_lo, %[a6], %[b6], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r7], vcc_lo, %[a7], %[b7], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r8], vcc_lo, %[a8], %[b8], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r9], vcc_lo, %[a9], %[b9], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r10], vcc_lo, %[a10], %[b10], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r11], vcc_lo, %[a11], %[b11], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r12], vcc_lo, %[a12], %[b12], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r13], vcc_lo, %[a13], %[b13], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r14], vcc_lo, %[a14], %[b14], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r15], vcc_lo, %[a15], %[b15], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r16], vcc_lo, %[a16], %[b16], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r17], vcc_lo, %[a17], %[b17], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r18], vcc_lo, %[a18], %[b18], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r19], vcc_lo, %[a19], %[b19], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r20], vcc_lo, %[a20], %[b20], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r21], vcc_lo, %[a21], %[b21], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r22], vcc_lo, %[a22], %[b22], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r23], vcc_lo, %[a23], %[b23], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r24], vcc_lo, %[a24], %[b24], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r25], vcc_lo, %[a25], %[b25], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r26], vcc_lo, %[a26], %[b26], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r27], vcc_lo, %[a27], %[b27], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r28], vcc_lo, %[a28], %[b28], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r29], vcc_lo, %[a29], %[b29], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r30], vcc_lo, %[a30], %[b30], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r31], vcc_lo, %[a31], %[b31], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r32], vcc_lo, %[a32], %[b32], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r33], vcc_lo, %[a33], %[b33], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r34], vcc_lo, %[a34], %[b34], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r35], vcc_lo, %[a35], %[b35], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r36], vcc_lo, %[a36], %[b36], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r37], vcc_lo, %[a37], %[b37], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r38], vcc_lo, %[a38], %[b38], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r39], vcc_lo, %[a39], %[b39], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r40], vcc_lo, %[a40], %[b40], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r41], vcc_lo, %[a41], %[b41], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r42], vcc_lo, %[a42], %[b42], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r43], vcc_lo, %[a43], %[b43], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r44], vcc_lo, %[a44], %[b44], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r45], vcc_lo, %[a45], %[b45], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r46], vcc_lo, %[a46], %[b46], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r47], vcc_lo, %[a47], %[b47], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r48], vcc_lo, %[a48], %[b48], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r49], vcc_lo, %[a49], %[b49], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r50], vcc_lo, %[a50], %[b50], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r51], vcc_lo, %[a51], %[b51], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r52], vcc_lo, %[a52], %[b52], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r53], vcc_lo, %[a53], %[b53], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r54], vcc_lo, %[a54], %[b54], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r55], vcc_lo, %[a55], %[b55], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r56], vcc_lo, %[a56], %[b56], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r57], vcc_lo, %[a57], %[b57], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r58], vcc_lo, %[a58], %[b58], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r59], vcc_lo, %[a59], %[b59], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r60], vcc_lo, %[a60], %[b60], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r61], vcc_lo, %[a61], %[b61], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r62], vcc_lo, %[a62], %[b62], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r63], vcc_lo, %[a63], %[b63], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r64], vcc_lo, %[a64], %[b64], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r65], vcc_lo, %[a65], %[b65], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r66], vcc_lo, %[a66], %[b66], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r67], vcc_lo, %[a67], %[b67], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r68], vcc_lo, %[a68], %[b68], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r69], vcc_lo, %[a69], %[b69], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r70], vcc_lo, %[a70], %[b70], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r71], vcc_lo, %[a71], %[b71], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r72], vcc_lo, %[a72], %[b72], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r73], vcc_lo, %[a73], %[b73], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r74], vcc_lo, %[a74], %[b74], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r75], vcc_lo, %[a75], %[b75], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r76], vcc_lo, %[a76], %[b76], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r77], vcc_lo, %[a77], %[b77], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r78], vcc_lo, %[a78], %[b78], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r79], vcc_lo, %[a79], %[b79], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r80], vcc_lo, %[a80], %[b80], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r81], vcc_lo, %[a81], %[b81], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r82], vcc_lo, %[a82], %[b82], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r83], vcc_lo, %[a83], %[b83], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r84], vcc_lo, %[a84], %[b84], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r85], vcc_lo, %[a85], %[b85], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r86], vcc_lo, %[a86], %[b86], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r87], vcc_lo, %[a87], %[b87], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r88], vcc_lo, %[a88], %[b88], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r89], vcc_lo, %[a89], %[b89], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r90], vcc_lo, %[a90], %[b90], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r91], vcc_lo, %[a91], %[b91], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r92], vcc_lo, %[a92], %[b92], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r93], vcc_lo, %[a93], %[b93], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r94], vcc_lo, %[a94], %[b94], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r95], vcc_lo, %[a95], %[b95], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r96], vcc_lo, %[a96], %[b96], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r97], vcc_lo, %[a97], %[b97], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r98], vcc_lo, %[a98], %[b98], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r99], vcc_lo, %[a99], %[b99], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r100], vcc_lo, %[a100], %[b100], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r101], vcc_lo, %[a101], %[b101], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r102], vcc_lo, %[a102], %[b102], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r103], vcc_lo, %[a103], %[b103], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r104], vcc_lo, %[a104], %[b104], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r105], vcc_lo, %[a105], %[b105], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r106], vcc_lo, %[a106], %[b106], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r107], vcc_lo, %[a107], %[b107], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r108], vcc_lo, %[a108], %[b108], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r109], vcc_lo, %[a109], %[b109], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r110], vcc_lo, %[a110], %[b110], vcc_lo\n\t"
+        "v_sub_co_ci_u32 %[r111], vcc_lo, %[a111], %[b111], vcc_lo\n\t"
+        "v_cndmask_b32   %[br], %[z], %[o], vcc_lo"
+
+        : [r0] "=&v"(r0), [r1] "=&v"(r1), [r2] "=&v"(r2), [r3] "=&v"(r3), [r4] "=&v"(r4), [r5] "=&v"(r5), [r6] "=&v"(r6), [r7] "=&v"(r7), [r8] "=&v"(r8), [r9] "=&v"(r9), [r10] "=&v"(r10), [r11] "=&v"(r11), [r12] "=&v"(r12), [r13] "=&v"(r13), [r14] "=&v"(r14), [r15] "=&v"(r15), [r16] "=&v"(r16), [r17] "=&v"(r17), [r18] "=&v"(r18), [r19] "=&v"(r19), [r20] "=&v"(r20), [r21] "=&v"(r21), [r22] "=&v"(r22), [r23] "=&v"(r23), [r24] "=&v"(r24), [r25] "=&v"(r25), [r26] "=&v"(r26), [r27] "=&v"(r27), [r28] "=&v"(r28), [r29] "=&v"(r29), [r30] "=&v"(r30), [r31] "=&v"(r31), [r32] "=&v"(r32), [r33] "=&v"(r33), [r34] "=&v"(r34), [r35] "=&v"(r35), [r36] "=&v"(r36), [r37] "=&v"(r37), [r38] "=&v"(r38), [r39] "=&v"(r39), [r40] "=&v"(r40), [r41] "=&v"(r41), [r42] "=&v"(r42), [r43] "=&v"(r43), [r44] "=&v"(r44), [r45] "=&v"(r45), [r46] "=&v"(r46), [r47] "=&v"(r47), [r48] "=&v"(r48), [r49] "=&v"(r49), [r50] "=&v"(r50), [r51] "=&v"(r51), [r52] "=&v"(r52), [r53] "=&v"(r53), [r54] "=&v"(r54), [r55] "=&v"(r55), [r56] "=&v"(r56), [r57] "=&v"(r57), [r58] "=&v"(r58), [r59] "=&v"(r59), [r60] "=&v"(r60), [r61] "=&v"(r61), [r62] "=&v"(r62), [r63] "=&v"(r63), [r64] "=&v"(r64), [r65] "=&v"(r65), [r66] "=&v"(r66), [r67] "=&v"(r67), [r68] "=&v"(r68), [r69] "=&v"(r69), [r70] "=&v"(r70), [r71] "=&v"(r71), [r72] "=&v"(r72), [r73] "=&v"(r73), [r74] "=&v"(r74), [r75] "=&v"(r75), [r76] "=&v"(r76), [r77] "=&v"(r77), [r78] "=&v"(r78), [r79] "=&v"(r79), [r80] "=&v"(r80), [r81] "=&v"(r81), [r82] "=&v"(r82), [r83] "=&v"(r83), [r84] "=&v"(r84), [r85] "=&v"(r85), [r86] "=&v"(r86), [r87] "=&v"(r87), [r88] "=&v"(r88), [r89] "=&v"(r89), [r90] "=&v"(r90), [r91] "=&v"(r91), [r92] "=&v"(r92), [r93] "=&v"(r93), [r94] "=&v"(r94), [r95] "=&v"(r95), [r96] "=&v"(r96), [r97] "=&v"(r97), [r98] "=&v"(r98), [r99] "=&v"(r99), [r100] "=&v"(r100), [r101] "=&v"(r101), [r102] "=&v"(r102), [r103] "=&v"(r103), [r104] "=&v"(r104), [r105] "=&v"(r105), [r106] "=&v"(r106), [r107] "=&v"(r107), [r108] "=&v"(r108), [r109] "=&v"(r109), [r110] "=&v"(r110), [r111] "=&v"(r111),
+
+          [br] "=&v"(br)
+
+        : [a0] "v"(a0), [b0] "v"(b0), [a1] "v"(a1), [b1] "v"(b1), [a2] "v"(a2), [b2] "v"(b2), [a3] "v"(a3), [b3] "v"(b3), [a4] "v"(a4), [b4] "v"(b4), [a5] "v"(a5), [b5] "v"(b5), [a6] "v"(a6), [b6] "v"(b6), [a7] "v"(a7), [b7] "v"(b7), [a8] "v"(a8), [b8] "v"(b8), [a9] "v"(a9), [b9] "v"(b9), [a10] "v"(a10), [b10] "v"(b10), [a11] "v"(a11), [b11] "v"(b11), [a12] "v"(a12), [b12] "v"(b12), [a13] "v"(a13), [b13] "v"(b13), [a14] "v"(a14), [b14] "v"(b14), [a15] "v"(a15), [b15] "v"(b15), [a16] "v"(a16), [b16] "v"(b16), [a17] "v"(a17), [b17] "v"(b17), [a18] "v"(a18), [b18] "v"(b18), [a19] "v"(a19), [b19] "v"(b19), [a20] "v"(a20), [b20] "v"(b20), [a21] "v"(a21), [b21] "v"(b21), [a22] "v"(a22), [b22] "v"(b22), [a23] "v"(a23), [b23] "v"(b23), [a24] "v"(a24), [b24] "v"(b24), [a25] "v"(a25), [b25] "v"(b25), [a26] "v"(a26), [b26] "v"(b26), [a27] "v"(a27), [b27] "v"(b27), [a28] "v"(a28), [b28] "v"(b28), [a29] "v"(a29), [b29] "v"(b29), [a30] "v"(a30), [b30] "v"(b30), [a31] "v"(a31), [b31] "v"(b31), [a32] "v"(a32), [b32] "v"(b32), [a33] "v"(a33), [b33] "v"(b33), [a34] "v"(a34), [b34] "v"(b34), [a35] "v"(a35), [b35] "v"(b35), [a36] "v"(a36), [b36] "v"(b36), [a37] "v"(a37), [b37] "v"(b37), [a38] "v"(a38), [b38] "v"(b38), [a39] "v"(a39), [b39] "v"(b39), [a40] "v"(a40), [b40] "v"(b40), [a41] "v"(a41), [b41] "v"(b41), [a42] "v"(a42), [b42] "v"(b42), [a43] "v"(a43), [b43] "v"(b43), [a44] "v"(a44), [b44] "v"(b44), [a45] "v"(a45), [b45] "v"(b45), [a46] "v"(a46), [b46] "v"(b46), [a47] "v"(a47), [b47] "v"(b47), [a48] "v"(a48), [b48] "v"(b48), [a49] "v"(a49), [b49] "v"(b49), [a50] "v"(a50), [b50] "v"(b50), [a51] "v"(a51), [b51] "v"(b51), [a52] "v"(a52), [b52] "v"(b52), [a53] "v"(a53), [b53] "v"(b53), [a54] "v"(a54), [b54] "v"(b54), [a55] "v"(a55), [b55] "v"(b55), [a56] "v"(a56), [b56] "v"(b56), [a57] "v"(a57), [b57] "v"(b57), [a58] "v"(a58), [b58] "v"(b58), [a59] "v"(a59), [b59] "v"(b59), [a60] "v"(a60), [b60] "v"(b60), [a61] "v"(a61), [b61] "v"(b61), [a62] "v"(a62), [b62] "v"(b62), [a63] "v"(a63), [b63] "v"(b63), [a64] "v"(a64), [b64] "v"(b64), [a65] "v"(a65), [b65] "v"(b65), [a66] "v"(a66), [b66] "v"(b66), [a67] "v"(a67), [b67] "v"(b67), [a68] "v"(a68), [b68] "v"(b68), [a69] "v"(a69), [b69] "v"(b69), [a70] "v"(a70), [b70] "v"(b70), [a71] "v"(a71), [b71] "v"(b71), [a72] "v"(a72), [b72] "v"(b72), [a73] "v"(a73), [b73] "v"(b73), [a74] "v"(a74), [b74] "v"(b74), [a75] "v"(a75), [b75] "v"(b75), [a76] "v"(a76), [b76] "v"(b76), [a77] "v"(a77), [b77] "v"(b77), [a78] "v"(a78), [b78] "v"(b78), [a79] "v"(a79), [b79] "v"(b79), [a80] "v"(a80), [b80] "v"(b80), [a81] "v"(a81), [b81] "v"(b81), [a82] "v"(a82), [b82] "v"(b82), [a83] "v"(a83), [b83] "v"(b83), [a84] "v"(a84), [b84] "v"(b84), [a85] "v"(a85), [b85] "v"(b85), [a86] "v"(a86), [b86] "v"(b86), [a87] "v"(a87), [b87] "v"(b87), [a88] "v"(a88), [b88] "v"(b88), [a89] "v"(a89), [b89] "v"(b89), [a90] "v"(a90), [b90] "v"(b90), [a91] "v"(a91), [b91] "v"(b91), [a92] "v"(a92), [b92] "v"(b92), [a93] "v"(a93), [b93] "v"(b93), [a94] "v"(a94), [b94] "v"(b94), [a95] "v"(a95), [b95] "v"(b95), [a96] "v"(a96), [b96] "v"(b96), [a97] "v"(a97), [b97] "v"(b97), [a98] "v"(a98), [b98] "v"(b98), [a99] "v"(a99), [b99] "v"(b99), [a100] "v"(a100), [b100] "v"(b100), [a101] "v"(a101), [b101] "v"(b101), [a102] "v"(a102), [b102] "v"(b102), [a103] "v"(a103), [b103] "v"(b103), [a104] "v"(a104), [b104] "v"(b104), [a105] "v"(a105), [b105] "v"(b105), [a106] "v"(a106), [b106] "v"(b106), [a107] "v"(a107), [b107] "v"(b107), [a108] "v"(a108), [b108] "v"(b108), [a109] "v"(a109), [b109] "v"(b109), [a110] "v"(a110), [b110] "v"(b110), [a111] "v"(a111), [b111] "v"(b111),
+
+          [br_bit] "v"(br_bit), [z] "v"(z), [o] "v"(o)
+
+        : "vcc_lo");
+
+    if (br != 0u) {
+
+        c_fix_add_n112(&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7, &r8, &r9, &r10, &r11, &r12, &r13, &r14, &r15, &r16, &r17, &r18, &r19, &r20, &r21, &r22, &r23, &r24, &r25, &r26, &r27, &r28, &r29, &r30, &r31, &r32, &r33, &r34, &r35, &r36, &r37, &r38, &r39, &r40, &r41, &r42, &r43, &r44, &r45, &r46, &r47, &r48, &r49, &r50, &r51, &r52, &r53, &r54, &r55, &r56, &r57, &r58, &r59, &r60, &r61, &r62, &r63, &r64, &r65, &r66, &r67, &r68, &r69, &r70, &r71, &r72, &r73, &r74, &r75, &r76, &r77, &r78, &r79, &r80, &r81, &r82, &r83, &r84, &r85, &r86, &r87, &r88, &r89, &r90, &r91, &r92, &r93, &r94, &r95, &r96, &r97, &r98, &r99, &r100, &r101, &r102, &r103, &r104, &r105, &r106, &r107, &r108, &r109, &r110, &r111, n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15, n16, n17, n18, n19, n20, n21, n22, n23, n24, n25, n26, n27, n28, n29, n30, n31, n32, n33, n34, n35, n36, n37, n38, n39, n40, n41, n42, n43, n44, n45, n46, n47, n48, n49, n50, n51, n52, n53, n54, n55, n56, n57, n58, n59, n60, n61, n62, n63, n64, n65, n66, n67, n68, n69, n70, n71, n72, n73, n74, n75, n76, n77, n78, n79, n80, n81, n82, n83, n84, n85, n86, n87, n88, n89, n90, n91, n92, n93, n94, n95, n96, n97, n98, n99, n100, n101, n102, n103, n104, n105, n106, n107, n108, n109, n110, n111);
+
+    }
+
+    r[0] = r0;
+    r[1] = r1;
+    r[2] = r2;
+    r[3] = r3;
+    r[4] = r4;
+    r[5] = r5;
+    r[6] = r6;
+    r[7] = r7;
+    r[8] = r8;
+    r[9] = r9;
+    r[10] = r10;
+    r[11] = r11;
+    r[12] = r12;
+    r[13] = r13;
+    r[14] = r14;
+    r[15] = r15;
+    r[16] = r16;
+    r[17] = r17;
+    r[18] = r18;
+    r[19] = r19;
+    r[20] = r20;
+    r[21] = r21;
+    r[22] = r22;
+    r[23] = r23;
+    r[24] = r24;
+    r[25] = r25;
+    r[26] = r26;
+    r[27] = r27;
+    r[28] = r28;
+    r[29] = r29;
+    r[30] = r30;
+    r[31] = r31;
+    r[32] = r32;
+    r[33] = r33;
+    r[34] = r34;
+    r[35] = r35;
+    r[36] = r36;
+    r[37] = r37;
+    r[38] = r38;
+    r[39] = r39;
+    r[40] = r40;
+    r[41] = r41;
+    r[42] = r42;
+    r[43] = r43;
+    r[44] = r44;
+    r[45] = r45;
+    r[46] = r46;
+    r[47] = r47;
+    r[48] = r48;
+    r[49] = r49;
+    r[50] = r50;
+    r[51] = r51;
+    r[52] = r52;
+    r[53] = r53;
+    r[54] = r54;
+    r[55] = r55;
+    r[56] = r56;
+    r[57] = r57;
+    r[58] = r58;
+    r[59] = r59;
+    r[60] = r60;
+    r[61] = r61;
+    r[62] = r62;
+    r[63] = r63;
+    r[64] = r64;
+    r[65] = r65;
+    r[66] = r66;
+    r[67] = r67;
+    r[68] = r68;
+    r[69] = r69;
+    r[70] = r70;
+    r[71] = r71;
+    r[72] = r72;
+    r[73] = r73;
+    r[74] = r74;
+    r[75] = r75;
+    r[76] = r76;
+    r[77] = r77;
+    r[78] = r78;
+    r[79] = r79;
+    r[80] = r80;
+    r[81] = r81;
+    r[82] = r82;
+    r[83] = r83;
+    r[84] = r84;
+    r[85] = r85;
+    r[86] = r86;
+    r[87] = r87;
+    r[88] = r88;
+    r[89] = r89;
+    r[90] = r90;
+    r[91] = r91;
+    r[92] = r92;
+    r[93] = r93;
+    r[94] = r94;
+    r[95] = r95;
+    r[96] = r96;
+    r[97] = r97;
+    r[98] = r98;
+    r[99] = r99;
+    r[100] = r100;
+    r[101] = r101;
+    r[102] = r102;
+    r[103] = r103;
+    r[104] = r104;
+    r[105] = r105;
+    r[106] = r106;
+    r[107] = r107;
+    r[108] = r108;
+    r[109] = r109;
+    r[110] = r110;
+    r[111] = r111;
     *br_out = br;
 
 }

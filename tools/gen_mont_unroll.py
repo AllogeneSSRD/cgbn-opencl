@@ -7,7 +7,8 @@ For each width: A active 32-bit limbs inside a C-limb container (zero-fill A..C-
 Both are CIOS Montgomery multiply, bit-exact (verified against a bignum reference).
 """
 import os, sys
-WIDTHS = [(192,6,6),(256,8,8),(384,12,12),(512,16,16),(768,24,24),(1024,32,32)]
+WIDTHS = [(192,6,6),(256,8,8),(384,12,12),(512,16,16),(768,24,24),(1024,32,32),
+         (1536,48,48),(2048,64,64),(2560,80,80),(3072,96,96),(3584,112,112)]
 ROOT = sys.argv[1] if len(sys.argv)>1 else "kernels/opencl/mont_mul"
 
 def body(stem, A, C, manual):

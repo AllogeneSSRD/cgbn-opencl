@@ -5,6 +5,7 @@ static inline int sub_mod_asm_384b_body(uint *r, const uint *a, const uint *b, c
     return br != 0u ? 1 : 0;
 }
 
+#if !defined(__AMDGCN__)
 static inline int sub_mod_unroll_384b_body(uint *r, const uint *a, const uint *b, const uint *N) {
     ulong br = 0ul;
     {
@@ -158,6 +159,7 @@ static inline int sub_mod_unroll_384b_body(uint *r, const uint *a, const uint *b
     return 0;
 }
 
+#endif
 #if defined(__AMDGCN__)
 static inline int sub_mod_asm_384b(uint *r, const uint *a, const uint *b,
                                       const uint *N, uint limbs) {

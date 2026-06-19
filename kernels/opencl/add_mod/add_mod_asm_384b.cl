@@ -4,6 +4,7 @@ static inline void add_mod_asm_384b_body(uint *r, const uint *a, const uint *b, 
     asm_fused_block12_priv(a, b, N, r, ca, cs, &ca, &cs);
 }
 
+#if !defined(__AMDGCN__)
 static inline void add_mod_unroll_384b_body(uint *r, const uint *a, const uint *b, const uint *N) {
     ulong carry_add = 0ul;
     ulong carry_sub = 1ul;
@@ -157,6 +158,7 @@ static inline void add_mod_unroll_384b_body(uint *r, const uint *a, const uint *
     }
 }
 
+#endif
 #if defined(__AMDGCN__)
 static inline void add_mod_asm_384b(uint *r, const uint *a, const uint *b,
                                        const uint *N, uint limbs) {

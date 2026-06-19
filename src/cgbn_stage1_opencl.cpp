@@ -927,7 +927,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         batches_complete = 0;
     }
 
-    uint64_t batch_size = 200;
+    uint64_t batch_size = 10;
 
     cl_int err;
     uint32_t s_words = (uint32_t)((s_num_bits + 31) / 32);
@@ -1073,7 +1073,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         if (batch_ms < 80.0) {
             batch_size = 11 * batch_size / 10;
         } else if (batch_ms > 120.0) {
-            batch_size = std::max<uint64_t>(100, 9 * batch_size / 10);
+            batch_size = std::max<uint64_t>(10, 9 * batch_size / 10);
         }
 
         s_partial += this_batch;
