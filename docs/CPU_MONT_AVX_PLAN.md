@@ -1,0 +1,73 @@
+# CPU AVX/AVX512 Montgomery 乘法 Benchmark 计划
+
+## 概述
+
+对标 `opencl_ecm_montsqr` bench 模式，实现不依赖 OpenCL 的纯 CPU Montgomery 乘法 benchmark。
+支持 AVX512F 和 AVX2 指令集，批处理模式（SoA 布局），逐位宽（512-bit, 1024-bit）性能测试。
+
+## 最终决策记录
+
+| 决策点 | 选择 | 理由 |
+|--------|------|------|
+| 位宽范围 | 512-bit, 1024-bit 优先 | 快速迭代，验证批处理CIOS在CPU上可行 |
+| SIMD策略 | 方案A: 批处理模式 (SoA) | 16/8 条曲线独立并行，匹配CIOS外循环特性 |
+| 指令集 | AVX512F 优先 + AVX2 回退 | Zen5 支持 AVX512F（不含IFMA52）；无AVX512时降级AVX2 |
+| 回退控制 | CPUID 自动检测 + `--avx2` 强制 | 开发/测试灵活 |
+| 集成方式 | 独立模块 (`cpu_mont_bench`) | 不侵入 OpenCL 路径，对标 `opencl_ecm_montsqr` bench 模式 |
+| 数据布局 | Structure of Arrays (SoA) | 最佳 SIMD load/store 效率 |
+| 算法 | CIOS (Coarsely Integrated Operand Scanning) | 与 OpenCL priv_opt 一致 |
+| 验证 | GMP 参考 + 固定测试向量 | benchmark 前自动 selftest |
+
+## 文件清单
+
+| 文件 | 作用 |
+|------|------|
+| `src/cpu_mont_bench.cpp` | main() 入口: CLI 解析 → selftest → benchmark 循环 |
+| `src/cpu_mont_avx.h` | 对外接口声明 |
+| `src/cpu_mont_avx.cpp` | AVX512/AVX2 手写 intrinsic 实现 (CIOS, 批处理) |
+| `src/cpu_mont_scalar.cpp` | 标量 CIOS 参考实现 + GMP 验证辅助 |
+| `src/cpu_mont_scalar.h` | 标量接口 + fill_to_gmp / fill_from_gmp 辅助函数 |
+| `test/cpu_mont_test_vectors.cpp` | 固定测试向量 (512-bit, 1024-bit) |
+| `test/cpu_mont_test_vectors.h` | 测试向量数据声明 |
+
+## CLI 接口
+
+```
+cpu_mont_bench --bits <512|1024> --iterations <n> [--instances <n>] [--launch-repeats <n>] [--avx2]
+```
+
+## CMakeLists.txt 集成
+
+```cmake
+add_executable(cpu_mont_bench
+    src/cpu_mont_bench.cpp
+    src/cpu_mont_avx.cpp
+    src/cpu_mont_scalar.cpp
+    test/cpu_mont_test_vectors.cpp
+)
+target_compile_definitions(cpu_mont_bench PRIVATE BUILD_CPU_MONT_MAIN=1)
+target_include_directories(cpu_mont_bench PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(cpu_mont_bench ${GMP_LIBRARY})
+# AVX2 在 MSVC 上默认启用，AVX512 单独编译选项:
+# set_source_files_properties(src/cpu_mont_avx.cpp PROPERTIES COMPILE_FLAGS "/arch:AVX512")
+```
+
+## 后续 TODO 路径
+
+下列方案已讨论但未在当前阶段实施，记录供后续评估：
+
+1. **AoS + gather/scatter 模式**: 对 prefetch-friendly 场景可能有优势
+2. **AVX512 IFMA52**: 需 AVX512-IFMA52 指令集 (Intel Sapphire Rapids+), 可替代 CIOS 中的 64-bit 乘积
+3. **更大位宽**: 2048-bit, 4096-bit — 需处理更多 limbs，SoA 缓冲区更大
+4. **多线程并行**: 在 NUMA 节点上拆分曲线批处理，用 OpenMP 或线程池
+5. **与 OpenCL GPU 交叉验证**: 同一输入在 CPU AVX 和 GPU 上运行并比对结果
+
+## 实现顺序
+
+- [ ] `src/cpu_mont_scalar.cpp` — 标量 CIOS 参考 + GMP 验证辅助
+- [ ] `src/cpu_mont_avx.cpp` — AVX512 批处理 CIOS (16 条曲线, SoA)
+- [ ] `src/cpu_mont_bench.cpp` — CLI + benchmark harness
+- [ ] AVX2 回退路径 (8 条曲线)
+- [ ] CMakeLists.txt 集成
+- [ ] `test/cpu_mont_test_vectors.cpp` — 固定测试向量
+- [ ] 编译验证 + 自测

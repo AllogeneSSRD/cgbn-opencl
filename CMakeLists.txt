@@ -222,3 +222,24 @@ target_link_libraries(opencl_addsub_isa_export
     OpenCL::OpenCL
     cgbn_opencl
 )
+
+# ── CPU Montgomery Benchmark (AVX512/AVX2 batched CIOS) ──
+add_executable(cpu_mont_bench
+    src/cpu_mont_bench.cpp
+    src/cpu_mont_avx.cpp
+    src/cpu_mont_scalar.cpp
+)
+
+target_include_directories(cpu_mont_bench PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
+)
+
+target_compile_definitions(cpu_mont_bench PRIVATE BUILD_CPU_MONT_MAIN=1)
+
+ecm_target_link_gmp(cpu_mont_bench)
+
+if(MSVC)
+    # AVX512 intrinsics require /arch:AVX512 on MSVC (avx512f, avx512dq used)
+    set_source_files_properties(src/cpu_mont_avx.cpp PROPERTIES COMPILE_FLAGS "/arch:AVX512")
+endif()
