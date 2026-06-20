@@ -157,6 +157,35 @@ target_link_libraries(opencl_ecm_addsub
 
 ecm_target_link_gmp(opencl_ecm_addsub)
 
+target_link_libraries(opencl_ecm_addsub
+    OpenSSL::Crypto
+    OpenSSL::SSL
+    cgbn_opencl
+)
+
+# CPU addsub micro-benchmark (no OpenCL dependency, GMP only)
+add_executable(cpu_addsub_bench
+    src/cpu_addsub_bench.cpp
+    ${CMAKE_SOURCE_DIR}/src/opencl_ecm_runtime_config.cpp
+)
+
+target_include_directories(cpu_addsub_bench PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+target_compile_definitions(cpu_addsub_bench PRIVATE BUILD_CPU_ADDSUB_MAIN=1)
+
+ecm_target_link_gmp(cpu_addsub_bench)
+
+# Enable AVX2/AVX512 if the compiler host supports them
+if(MSVC)
+    target_compile_options(cpu_addsub_bench PRIVATE /arch:AVX2)
+else()
+    target_compile_options(cpu_addsub_bench PRIVATE -mavx2 -mfma)
+    # AVX512 optional: GCC/Clang need -mavx512f -mavx512dq
+    # add if needed: target_compile_options(cpu_addsub_bench PRIVATE -mavx512f -mavx512dq)
+endif()
+
 add_executable(opencl_ecm_montsqr
     src/opencl_ecm_montsqr_bench.cpp
 )

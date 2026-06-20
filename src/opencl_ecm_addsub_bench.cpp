@@ -68,7 +68,7 @@ void query_kernel_resources(cl_kernel k, cl_device_id dev, size_t &private_bytes
 } // namespace
 
 bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances, int launch_repeats,
-                                 bool bench_unroll_only) {
+                                 bool bench_unroll_only, bool verbose) {
     if (bits <= 0 || (bits % 32) != 0 || (uint32_t)bits > MAX_BENCH_BITS) {
         std::cerr << "bits must be a positive multiple of 32 and <= " << MAX_BENCH_BITS
                   << std::endl;
@@ -206,6 +206,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                                    sizeof(uint32_t) * totalWords, nullptr, &err);
 
     cl_uint limbs = WORDS;
+    cl_uint vi = 1u;   // inner_iters=1 for verification / hot-loop single-shot kernels
     size_t global = (size_t)instances;
 
     const std::string &csv_path = ecm_runtime_config().bench_csv;
@@ -243,9 +244,11 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             clSetKernelArg(k, 2, sizeof(cl_mem), &bufOut);
             clSetKernelArg(k, 3, sizeof(cl_uint), &limbs);
         }
-        const int total_enqueues = launch_repeats * kernel_iterations;
+        cl_uint inner_iters = (cl_uint)kernel_iterations;
+        clSetKernelArg(k, needsN ? 5 : 4, sizeof(cl_uint), &inner_iters);
+        const int total_enqueues = launch_repeats;  // iterations now inside kernel
         bool ok = run_kernel(ctx.queue, k, global, total_enqueues, ms_out);
-        if (ok) {
+        if (verbose) {
             size_t priv_b = 0, loc_b = 0, pref = 0, wg = 0;
             query_kernel_resources(k, ctx.device, priv_b, loc_b, pref, wg);
             double op_count = (double)instances * (double)total_enqueues;
@@ -275,7 +278,9 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         clSetKernelArg(k, 2, sizeof(cl_mem), &bufN);
         clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
         clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
-        const int total_enqueues = launch_repeats * kernel_iterations;
+        cl_uint wg_iters = (cl_uint)kernel_iterations;
+        clSetKernelArg(k, 5, sizeof(cl_uint), &wg_iters);
+        const int total_enqueues = launch_repeats;
         size_t global_wg = (size_t)instances * local_size;
         auto t0 = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < total_enqueues; ++i) {
@@ -317,6 +322,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             clSetKernelArg(k, 2, sizeof(cl_mem), &bufN);
             clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
             clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+            clSetKernelArg(k, 5, sizeof(cl_uint), &vi);
             size_t g = 1u;
             cl_int err2 = clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
             clFinish(ctx.queue);
@@ -360,6 +366,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 clSetKernelArg(ku, 2, sizeof(cl_mem), &bufN);
                 clSetKernelArg(ku, 3, sizeof(cl_mem), &bufOut);
                 clSetKernelArg(ku, 4, sizeof(cl_uint), &limbs);
+                clSetKernelArg(ku, 5, sizeof(cl_uint), &vi);
                 size_t g = 1u;
                 err2 = clEnqueueNDRangeKernel(ctx.queue, ku, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
                 clFinish(ctx.queue);
@@ -374,6 +381,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 clSetKernelArg(ks, 2, sizeof(cl_mem), &bufN);
                 clSetKernelArg(ks, 3, sizeof(cl_mem), &bufOut);
                 clSetKernelArg(ks, 4, sizeof(cl_uint), &limbs);
+                clSetKernelArg(ks, 5, sizeof(cl_uint), &vi);
                 size_t g = 1u;
                 err2 = clEnqueueNDRangeKernel(ctx.queue, ks, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
                 clFinish(ctx.queue);
@@ -572,6 +580,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             clSetKernelArg(k, 2, sizeof(cl_mem), &bufN);
             clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
             clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
+            clSetKernelArg(k, 5, sizeof(cl_uint), &vi);
             size_t g = 1u;
             cl_int err2 =
                 clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &g, nullptr, 0, nullptr, nullptr);
@@ -599,6 +608,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 clSetKernelArg(ku, 2, sizeof(cl_mem), &bufN);
                 clSetKernelArg(ku, 3, sizeof(cl_mem), &bufOut);
                 clSetKernelArg(ku, 4, sizeof(cl_uint), &limbs);
+                clSetKernelArg(ku, 5, sizeof(cl_uint), &vi);
                 size_t g = 1u;
                 err2 = clEnqueueNDRangeKernel(ctx.queue, ku, 1, nullptr, &g, nullptr, 0, nullptr,
                                               nullptr);
@@ -614,6 +624,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 clSetKernelArg(ks, 2, sizeof(cl_mem), &bufN);
                 clSetKernelArg(ks, 3, sizeof(cl_mem), &bufOut);
                 clSetKernelArg(ks, 4, sizeof(cl_uint), &limbs);
+                clSetKernelArg(ks, 5, sizeof(cl_uint), &vi);
                 size_t g = 1u;
                 err2 = clEnqueueNDRangeKernel(ctx.queue, ks, 1, nullptr, &g, nullptr, 0, nullptr,
                                               nullptr);
@@ -1114,6 +1125,163 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     return true;
 }
 
+// ── Width-specific Stage-1 operator bench ────────────────────────────
+static bool run_width_specific_addsub_bench(int bits, int kernel_iterations,
+                                            int instances, int launch_repeats,
+                                            bool verbose) {
+    if (bits <= 0 || bits % 32 != 0) return false;
+
+    static const int kWidths[] = {128,192,256,384,512,768,1024,1536,2048,2560,3072,3584,4096};
+    int bench_width = 0;
+    for (int w : kWidths) { if (bits == w) { bench_width = w; break; } }
+    if (bench_width == 0) return true;
+
+    const std::string W  = std::to_string(bench_width);
+    const uint32_t WORDS = (uint32_t)bits / 32u;
+    const std::string UL = std::to_string(WORDS);
+
+    std::string add_asm_src = cgbn::opencl::load_kernel_file(("add_mod/add_mod_asm_" + W + "b.cl").c_str());
+    std::string sub_asm_src = cgbn::opencl::load_kernel_file(("sub_mod/sub_mod_asm_" + W + "b.cl").c_str());
+    std::string add_unroll_src = cgbn::opencl::load_kernel_file(("add_mod/add_mod_unroll_" + W + "b.cl").c_str());
+    std::string sub_unroll_src = cgbn::opencl::load_kernel_file(("sub_mod/sub_mod_unroll_" + W + "b.cl").c_str());
+    std::string asm_common_src = cgbn::opencl::load_kernel_file("common/asm_common.h.cl");
+
+    bool have_asm = !add_asm_src.empty() && !sub_asm_src.empty() && !asm_common_src.empty();
+    bool have_unroll = !add_unroll_src.empty() && !sub_unroll_src.empty();
+    if (!have_asm && !have_unroll) return true;
+
+    cgbn::opencl::context_t ctx;
+    cl_int err = cgbn::opencl::create_context(ctx);
+    if (err != CL_SUCCESS) { std::cerr << "width bench: context failed " << err << "\n"; return false; }
+
+    // Detect GPU vendor: ASM paths only valid on AMD (asm_common.h.cl macros)
+    char vendor_str[256] = {};
+    clGetDeviceInfo(ctx.device, CL_DEVICE_VENDOR, sizeof(vendor_str), vendor_str, nullptr);
+    const bool is_amd = (std::strstr(vendor_str, "AMD") != nullptr ||
+                         std::strstr(vendor_str, "Advanced Micro Devices") != nullptr);
+
+    // ASM program: include asm_common.h.cl + asm wrappers, AMD only
+    cl_program prog_asm = nullptr;
+    if (have_asm && is_amd) {
+        const std::string kiters = std::to_string(kernel_iterations);
+        std::string src_asm = asm_common_src + "\n" + add_asm_src + "\n" + sub_asm_src;
+        src_asm +=
+            "\n__kernel void ecm_add_asm_" + W + "b_bench(__global uint *a,__global uint *b,"
+            "__global uint *n,__global uint *out,uint limbs){\n"
+            " uint gid=get_global_id(0);uint base=gid*limbs;\n"
+            " uint la["+UL+"],lb["+UL+"],ln["+UL+"],lout["+UL+"];\n"
+            " for(uint i=0;i<limbs;++i){la[i]=a[base+i];lb[i]=b[base+i];ln[i]=n[i];}\n"
+            " for(uint it=0;it<"+kiters+";++it){\n"
+            "  if(it==0)add_mod_asm_"+W+"b(lout,la,lb,ln,limbs);\n"
+            "  else add_mod_asm_"+W+"b(lout,lout,lb,ln,limbs);\n"
+            " }\n"
+            " for(uint i=0;i<limbs;++i)out[base+i]=lout[i];\n}\n"
+            "\n__kernel void ecm_sub_asm_" + W + "b_bench(__global uint *a,__global uint *b,"
+            "__global uint *n,__global uint *out,uint limbs){\n"
+            " uint gid=get_global_id(0);uint base=gid*limbs;\n"
+            " uint la["+UL+"],lb["+UL+"],ln["+UL+"],lout["+UL+"];\n"
+            " for(uint i=0;i<limbs;++i){la[i]=a[base+i];lb[i]=b[base+i];ln[i]=n[i];}\n"
+            " for(uint it=0;it<"+kiters+";++it){\n"
+            "  if(it==0)sub_mod_asm_"+W+"b(lout,la,lb,ln,limbs);\n"
+            "  else sub_mod_asm_"+W+"b(lout,lout,lb,ln,limbs);\n"
+            " }\n"
+            " for(uint i=0;i<limbs;++i)out[base+i]=lout[i];\n}\n";
+        cl_int berr = CL_SUCCESS;
+        prog_asm = cgbn::opencl::build_program_from_source(ctx, src_asm.c_str(),
+            ("-DMAX_LIMBS=" + std::to_string(WORDS)).c_str(), berr);
+    }
+
+    // Unroll program — inline-loop uses kernel_iterations to amortise global↔private copy
+    cl_program prog_unroll = nullptr;
+    if (have_unroll) {
+        const std::string kiters = std::to_string(kernel_iterations);
+        std::string src_unroll = add_unroll_src + "\n" + sub_unroll_src;
+        src_unroll +=
+            "\n__kernel void ecm_add_unroll_" + W + "b_bench(__global uint *a,__global uint *b,"
+            "__global uint *n,__global uint *out,uint limbs){\n"
+            " uint gid=get_global_id(0);uint base=gid*limbs;\n"
+            " uint la["+UL+"],lb["+UL+"],ln["+UL+"],lout["+UL+"];\n"
+            " for(uint i=0;i<limbs;++i){la[i]=a[base+i];lb[i]=b[base+i];ln[i]=n[i];}\n"
+            " for(uint it=0;it<"+kiters+";++it){\n"
+            "  if(it==0)add_mod_unroll_"+W+"b(lout,la,lb,ln,limbs);\n"
+            "  else add_mod_unroll_"+W+"b(lout,lout,lb,ln,limbs);\n"
+            " }\n"
+            " for(uint i=0;i<limbs;++i)out[base+i]=lout[i];\n}\n"
+            "\n__kernel void ecm_sub_unroll_" + W + "b_bench(__global uint *a,__global uint *b,"
+            "__global uint *n,__global uint *out,uint limbs){\n"
+            " uint gid=get_global_id(0);uint base=gid*limbs;\n"
+            " uint la["+UL+"],lb["+UL+"],ln["+UL+"],lout["+UL+"];\n"
+            " for(uint i=0;i<limbs;++i){la[i]=a[base+i];lb[i]=b[base+i];ln[i]=n[i];}\n"
+            " for(uint it=0;it<"+kiters+";++it){\n"
+            "  if(it==0)sub_mod_unroll_"+W+"b(lout,la,lb,ln,limbs);\n"
+            "  else sub_mod_unroll_"+W+"b(lout,lout,lb,ln,limbs);\n"
+            " }\n"
+            " for(uint i=0;i<limbs;++i)out[base+i]=lout[i];\n}\n";
+        cl_int berr = CL_SUCCESS;
+        prog_unroll = cgbn::opencl::build_program_from_source(ctx, src_unroll.c_str(),
+            ("-DMAX_LIMBS=" + std::to_string(WORDS)).c_str(), berr);
+    }
+
+    size_t totalWords = (size_t)instances * WORDS;
+    std::vector<uint32_t> host_a(totalWords), host_b(totalWords), host_n(WORDS);
+    cl_int cerr;
+    cl_mem bufA = clCreateBuffer(ctx.ctx, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,sizeof(uint32_t)*totalWords,host_a.data(),&cerr);
+    cl_mem bufB = clCreateBuffer(ctx.ctx, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,sizeof(uint32_t)*totalWords,host_b.data(),&cerr);
+    cl_mem bufN = clCreateBuffer(ctx.ctx, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,sizeof(uint32_t)*WORDS,     host_n.data(),&cerr);
+    cl_mem bufO = clCreateBuffer(ctx.ctx, CL_MEM_READ_WRITE,                          sizeof(uint32_t)*totalWords,nullptr,&cerr);
+    cl_uint limbs = WORDS;
+    size_t global = (size_t)instances;
+
+    auto wrun = [&](cl_program prog, const char *kname, bool is_add, double &ms) -> bool {
+        if (prog == nullptr) return false;
+        cl_int kerr; cl_kernel k = clCreateKernel(prog, kname, &kerr);
+        if (kerr != CL_SUCCESS) return false;
+        clSetKernelArg(k, 0, sizeof(cl_mem), &bufA);
+        if (is_add) {clSetKernelArg(k,1,sizeof(cl_mem),&bufB);clSetKernelArg(k,2,sizeof(cl_mem),&bufN);clSetKernelArg(k,3,sizeof(cl_mem),&bufO);clSetKernelArg(k,4,sizeof(cl_uint),&limbs);}
+        else        {clSetKernelArg(k,1,sizeof(cl_mem),&bufB);clSetKernelArg(k,2,sizeof(cl_mem),&bufN);clSetKernelArg(k,3,sizeof(cl_mem),&bufO);clSetKernelArg(k,4,sizeof(cl_uint),&limbs);}
+        int total = launch_repeats;  // kernel_iterations now inside the bench wrapper loop
+        auto t0 = std::chrono::high_resolution_clock::now();
+        for (int i = 0; i < total; ++i)
+            if (clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &global, nullptr, 0, nullptr, nullptr) != CL_SUCCESS)
+                { clReleaseKernel(k); return false; }
+        clFinish(ctx.queue);
+        auto t1 = std::chrono::high_resolution_clock::now();
+        ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+        if (verbose) {
+            size_t pb=0,lb=0,pr=0,wg=0;
+            query_kernel_resources(k, ctx.device, pb, lb, pr, wg);
+            std::cout << "  [" << kname << "] priv=" << pb << "B loc=" << lb << "B pref=" << pr << " wg=" << wg << "\n";
+        }
+        clReleaseKernel(k);
+        return true;
+    };
+
+    std::cout << "\n-- Stage-1 fixed-width -- " << bench_width << "b --\n";
+    double ta=0,tu=0,tsa=0,tsu=0;
+    if (wrun(prog_asm, ("ecm_add_asm_"+W+"b_bench").c_str(), true, ta)) {
+        double ops = (double)instances*kernel_iterations*launch_repeats/(ta/1000.0);
+        std::cout << "  add_mod_asm_" << W << "b:     " << ta << " ms, " << ops << " ops/s\n";
+    }
+    if (wrun(prog_unroll, ("ecm_add_unroll_"+W+"b_bench").c_str(), true, tu)) {
+        double ops = (double)instances*kernel_iterations*launch_repeats/(tu/1000.0);
+        std::cout << "  add_mod_unroll_" << W << "b:  " << tu << " ms, " << ops << " ops/s\n";
+    }
+    if (wrun(prog_asm, ("ecm_sub_asm_"+W+"b_bench").c_str(), false, tsa)) {
+        double ops = (double)instances*kernel_iterations*launch_repeats/(tsa/1000.0);
+        std::cout << "  sub_mod_asm_" << W << "b:     " << tsa << " ms, " << ops << " ops/s\n";
+    }
+    if (wrun(prog_unroll, ("ecm_sub_unroll_"+W+"b_bench").c_str(), false, tsu)) {
+        double ops = (double)instances*kernel_iterations*launch_repeats/(tsu/1000.0);
+        std::cout << "  sub_mod_unroll_" << W << "b:  " << tsu << " ms, " << ops << " ops/s\n";
+    }
+
+    clReleaseMemObject(bufA); clReleaseMemObject(bufB); clReleaseMemObject(bufN); clReleaseMemObject(bufO);
+    if (prog_asm) clReleaseProgram(prog_asm);
+    if (prog_unroll) clReleaseProgram(prog_unroll);
+    cgbn::opencl::destroy_context(ctx);
+    return true;
+}
+
 #ifdef BUILD_OPENCL_ECM_ADDSUB_MAIN
 #include <cstdlib>
 int main(int argc, char **argv) {
@@ -1122,6 +1290,8 @@ int main(int argc, char **argv) {
     int instances = 128;
     int launch_repeats = 10;
     bool bench_unroll_only = false;
+    bool verbose = false;
+    bool fixed_width_only = false;
     int device_index = -1;
     auto print_usage = [&]() {
         std::cout
@@ -1129,6 +1299,8 @@ int main(int argc, char **argv) {
                "[--unroll] [kernel_iterations] [instances] [launch_repeats]\n"
             << "  --bits <bits>            Benchmark bit width (multiple of 32, <= 8192)\n"
             << "  --unroll                 Only benchmark fused_unroll / asm unroll / lpt paths\n"
+            << "  --fixed                  Only benchmark Stage-1 fixed-width operators\n"
+            << "  -v, --verbose            Verbose: print kernel resource details\n"
             << "  -d, --device <index>     OpenCL device index\n"
             << "  --no-asm                 Skip AMD asm kernels (was ECM_ADDSUB_ASM_DISABLE)\n"
             << "  --asm-b64                Enable b64 asm kernels (was ECM_ADDSUB_ASM_B64)\n"
@@ -1149,6 +1321,14 @@ int main(int argc, char **argv) {
         }
         if (a == "--unroll") {
             bench_unroll_only = true;
+            continue;
+        }
+        if (a == "-v" || a == "--verbose") {
+            verbose = true;
+            continue;
+        }
+        if (a == "--fixed") {
+            fixed_width_only = true;
             continue;
         }
         if ((a == "-d" || a == "--device") && i + 1 < argc) {
@@ -1174,8 +1354,14 @@ int main(int argc, char **argv) {
 #endif
         std::cout << "OpenCL device override: CGBN_OPENCL_DEVICE_INDEX=" << dev << std::endl;
     }
-    bool ok = runOpenClEcmAddSubBenchmark(bits, kernel_iterations, instances, launch_repeats,
-                                          bench_unroll_only);
+    bool ok = true;
+    if (!fixed_width_only) {
+        ok = runOpenClEcmAddSubBenchmark(bits, kernel_iterations, instances, launch_repeats,
+                                         bench_unroll_only, verbose);
+    }
+    if (ok || fixed_width_only) {
+        run_width_specific_addsub_bench(bits, kernel_iterations, instances, launch_repeats, verbose);
+    }
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 #endif
