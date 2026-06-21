@@ -232,6 +232,8 @@ static inline void mont_mul_stage1_coop(
             out[i] = op_out[i];
         }
     }
+#elif ECM_STAGE1_MUL_PATH == 5 || ECM_STAGE1_MUL_PATH == (5 + 63)
+    mont_mul_stage1_karatsuba_2048_coop(out, a, b, N, mont_scratch, lid);
 #else
     if (lid == 0u) {
         mont_mul_unroll_4096b(out, a, b, N, np0, MONT_FIXED_4096_LIMBS);
@@ -279,6 +281,8 @@ static inline void mont_sqr_stage1_coop(
             out[i] = op_out[i];
         }
     }
+#elif ECM_STAGE1_SQR_PATH == 5
+    mont_mul_stage1_karatsuba_2048_coop(out, a, a, N, mont_scratch, lid);
 #else
     if (lid == 0u) {
         mont_mul_unroll_4096b(out, a, a, N, np0, MONT_FIXED_4096_LIMBS);
@@ -288,59 +292,4 @@ static inline void mont_sqr_stage1_coop(
 }
 #endif
 
-// Simultaneous double-and-add (CUDA curve_t::double_add_v2)
-//
-// Note: each call executes a fixed "operator mix" and is the performance hotspot:
-//   - mp_add_mod:      4 calls
-//   - mp_sub_mod:      4 calls
-//   - mont_mul_priv:   4 calls
-//   - mont_sqr_priv:   4 calls
-//   - mont_normalize:  8 calls
-//   - special_mult_ui32: 1 call
-//   - mp_shift_left_1_mod: 1 call
-#if ECM_STAGE1_USE_COOP_WG
-__kernel __attribute__((reqd_work_group_size(ECM_STAGE1_COOP_WG, 1, 1)))
-#else
-__kernel
-#endif
-void kernel_double_add(
-    __global const uint *s_bits,
-    ulong s_num_bits,
-    ulong s_bits_start,
-    ulong s_bits_interval,
-    __global uint *data,
-    uint count,
-    uint sigma_0,
-    uint np0,
-    uint limbs)
-{
-#if ECM_STAGE1_USE_COOP_WG
-    __local uint N_local[MONT_FIXED_4096_LIMBS];
-    __local uint mont_op_a[MONT_FIXED_4096_LIMBS];
-    __local uint mont_op_b[MONT_FIXED_4096_LIMBS];
-    __local uint mont_op_out[MONT_FIXED_4096_LIMBS];
-    __local uint mont_scratch[ECM_STAGE1_COOP_SCRATCH_U32];
-    const uint instance_i = get_group_id(0);
-    const uint lid = get_local_id(0);
-    if (instance_i >= count) {
-        return;
-    }
-    if (limbs != MONT_FIXED_4096_LIMBS) {
-        return;
-    }
-    run_double_add_instance_mt2_wg(instance_i, s_bits, s_num_bits, s_bits_start, s_bits_interval,
-                                   data, sigma_0, np0, limbs, N_local, mont_op_a, mont_op_b,
-                                   mont_op_out, mont_scratch, lid);
-#else
-    uint instance_i = get_global_id(0);
-    if (instance_i >= count) {
-        return;
-    }
-    if (limbs == 0u || limbs > MAX_LIMBS) {
-        return;
-    }
-    run_double_add_instance(instance_i, s_bits, s_num_bits, s_bits_start, s_bits_interval, data,
-                            sigma_0, np0, limbs);
-#endif
-}
-#endif
+#endif // ECM_STAGE1_USE_COOP_WG

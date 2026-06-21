@@ -106,18 +106,17 @@ static inline void run_double_add_instance(uint instance_i, __global const uint 
 #define ECM_STAGE1_USE_COOP_WG 0
 #endif
 
-#if !ECM_STAGE1_USE_COOP_WG
-__kernel void kernel_double_add(__global const uint *s_bits, ulong s_num_bits, ulong s_bits_start,
-                                ulong s_bits_interval, __global uint *data, uint count,
-                                uint sigma_0, uint np0, uint limbs) {
+#if ECM_STAGE1_COOP_WG > 1
+__kernel __attribute__((reqd_work_group_size(ECM_STAGE1_COOP_WG, 1, 1)))
+#else
+__kernel
+#endif
+void kernel_double_add(__global const uint *s_bits, ulong s_num_bits, ulong s_bits_start,
+                       ulong s_bits_interval, __global uint *data, uint count,
+                       uint sigma_0, uint np0, uint limbs) {
     uint instance_i = get_global_id(0);
-    if (instance_i >= count) {
-        return;
-    }
-    if (limbs == 0u || limbs > MAX_LIMBS) {
-        return;
-    }
+    if (instance_i >= count) return;
+    if (limbs == 0u || limbs > MAX_LIMBS) return;
     run_double_add_instance(instance_i, s_bits, s_num_bits, s_bits_start, s_bits_interval, data,
                             sigma_0, np0, limbs);
 }
-#endif

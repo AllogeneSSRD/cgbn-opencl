@@ -98,7 +98,8 @@ enum ecm_stage1_mont_mode {
 // select the right multi-threaded inner function. Zero means "no coop".
 // Derived from desc->cl_name, not stored in the descriptor struct.
 enum { EcmCoopKernelPath_None = 0, EcmCoopKernelPath_FIPS4096 = 2,
-       EcmCoopKernelPath_FIPS4096_MT8 = 3, EcmCoopKernelPath_FIPS4096_MT16 = 4 };
+       EcmCoopKernelPath_FIPS4096_MT8 = 3, EcmCoopKernelPath_FIPS4096_MT16 = 4,
+       EcmCoopKernelPath_K2048_MT4 = 5 };
 
 enum {
     ECM_ADDSUB_PATH_FUSED = 0,

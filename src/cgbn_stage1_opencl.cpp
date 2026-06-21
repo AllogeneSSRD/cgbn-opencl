@@ -582,15 +582,13 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
     const uint32_t limbs = plan.limbs;
     const uint32_t tpi = plan.tpi;
     int coop_wg = 1;
-    if (limbs == 128u) {
-        if (plan.mul != nullptr) {
-            coop_wg = std::max(coop_wg, static_cast<int>(plan.mul->coop_work_group_size));
-        }
-        if (plan.sqr != nullptr) {
-            coop_wg = std::max(coop_wg, static_cast<int>(plan.sqr->coop_work_group_size));
-        }
+    if (plan.mul != nullptr) {
+        coop_wg = std::max(coop_wg, static_cast<int>(plan.mul->coop_work_group_size));
     }
-    const bool use_coop_wg = (limbs == 128u) && (coop_wg > 1);
+    if (plan.sqr != nullptr) {
+        coop_wg = std::max(coop_wg, static_cast<int>(plan.sqr->coop_work_group_size));
+    }
+    const bool use_coop_wg = (coop_wg > 1);
     if (!g_ctx_ready) {
         cl_int err = cgbn::opencl::create_context(g_ctx);
         if (err != CL_SUCCESS) {
@@ -951,13 +949,18 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             "GPU: OpenCL<%u limbs, %u thread%s> kernel, %zu-bit N, s=%llu bits, np0=0x%08x\n",
             container_limbs, wg_threads, wg_threads > 1u ? "s" : "",
             n_log2, (unsigned long long)s_num_bits, np0);
-    const char *mont_mul_op = (mul != nullptr && mul->cl_name) ? mul->cl_name : "?";
-    const char *mont_sqr_op = (sqr != nullptr && sqr->cl_name) ? sqr->cl_name : "?";
+    const char *mont_mul_op = (mul != nullptr && mul->id) ? mul->id : "?";
+    const char *mont_sqr_op = (sqr != nullptr && sqr->id) ? sqr->id : "?";
     const char *add_op = add != nullptr ? add->cl_name : "unknown";
     const char *sub_op = sub != nullptr ? sub->cl_name : "unknown";
     const char *special_op = special_mult2 != nullptr ? special_mult2->cl_name : "special_mult_ui32_generic";
-    ecm_ts_fprintf(stdout, "GPU: stage1 operators: mul=%s, sqr=%s, add=%s, sub=%s, special_mult=%s\n",
-                   mont_mul_op, mont_sqr_op, add_op, sub_op, special_op);
+    if (wg_threads > 1u) {
+        ecm_ts_fprintf(stdout, "GPU: stage1 operators: mul=%s, sqr=%s, add=%s, sub=%s, special_mult=%s, coop_wg=%u\n",
+                       mont_mul_op, mont_sqr_op, add_op, sub_op, special_op, wg_threads);
+    } else {
+        ecm_ts_fprintf(stdout, "GPU: stage1 operators: mul=%s, sqr=%s, add=%s, sub=%s, special_mult=%s\n",
+                       mont_mul_op, mont_sqr_op, add_op, sub_op, special_op);
+    }
     if (device_init_ms > 0.0) {
         ecm_ts_fprintf(stdout, "GPU: kernel compile/build for this limb size took %.0fms\n",
                 device_init_ms);

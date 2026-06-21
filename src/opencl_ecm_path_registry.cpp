@@ -64,6 +64,8 @@ constexpr uint32_t kAddSubNoMaxLimbs = 0;
         "unroll_3584b", "unroll_manual_3584b", "mont_" S "_priv_unroll_manual_3584b", nullptr};   \
     static const char *const kMontAliases_##side##_unroll64_4096[] = {"unroll64_4096", nullptr};  \
     static const char *const kMontAliases_##side##_fips4096[] = {"fips4096", nullptr};            \
+    static const char *const kMontAliases_##side##_karatsuba_2048b[] = {"karatsuba_2048b", nullptr}; \
+    static const char *const kMontAliases_##side##_karatsuba_2048b_mt4[] = {"karatsuba_2048b_mt4", nullptr}; \
     static const char *const kMontAliases_##side##_fips4096_mt8[] = {"fips4096_mt8", nullptr};    \
     static const char *const kMontAliases_##side##_fips4096_mt16[] = {"fips4096_mt16", nullptr};  \
     static const char *const kMontAliases_##side##_unroll32[] = {                                 \
@@ -106,6 +108,8 @@ ECM_MONT_ALIAS_TABLE(sqr, "sqr")
 \
     X(unroll64_4096, unroll_4096b,  23,  96, 128, 128, OS_ANY, GPU_ANY, 0, true, 1, 0)     \
     X(fips4096, fips_4096b,         27,  96, 128, 128, OS_ANY, GPU_ANY, 0, true, 1, 0)     \
+    X(karatsuba_2048b, karatsuba_2048b, -1,  48,  64,  64, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(karatsuba_2048b_mt4, karatsuba_2048b, -1,  48,  64,  64, OS_ANY, GPU_ANY, 0, true, 4, 320)  \
     X(fips4096_mt8, fips_4096b,     29,  96, 128, 128, OS_ANY, GPU_ANY, 0, true, 8, 897)   \
     X(fips4096_mt16, fips_4096b,    31,  96, 128, 128, OS_ANY, GPU_ANY, 0, true, 16, 897)  \
 \
@@ -635,6 +639,7 @@ int ecm_coop_kernel_path_from_desc(const EcmMontPathDescriptor *desc) {
     if (strstr(desc->cl_name, "fips4096_mt16"))  return EcmCoopKernelPath_FIPS4096_MT16;
     if (strstr(desc->cl_name, "fips4096_mt8"))   return EcmCoopKernelPath_FIPS4096_MT8;
     if (strstr(desc->cl_name, "fips_4096b"))     return EcmCoopKernelPath_FIPS4096;
+    if (strstr(desc->cl_name, "karatsuba_2048b")) return EcmCoopKernelPath_K2048_MT4;
     return EcmCoopKernelPath_None;
 }
 
@@ -855,17 +860,24 @@ std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildP
 
     const int coop_wg = stage1_coop_wg_for_plan(plan);
     int coop_scratch = 0;
+    uint32_t coop_container_limbs = 128u;
     if (plan.mul != nullptr && plan.mul->coop_work_group_size > 1u) {
         coop_scratch = std::max(coop_scratch, static_cast<int>(plan.mul->local_scratch_u32));
+        if (plan.mul->max_container_limbs > 0u)
+            coop_container_limbs = plan.mul->max_container_limbs;
     }
     if (plan.sqr != nullptr && plan.sqr->coop_work_group_size > 1u) {
         coop_scratch = std::max(coop_scratch, static_cast<int>(plan.sqr->local_scratch_u32));
+        if (plan.sqr->max_container_limbs > 0u)
+            coop_container_limbs = plan.sqr->max_container_limbs;
     }
     const bool has_fips4096 =
         mont_kernel_path_needs_fips4096(plan.mul != nullptr ? plan.mul->kernel_path : nullptr) ||
         mont_kernel_path_needs_fips4096(plan.sqr != nullptr ? plan.sqr->kernel_path : nullptr);
     append_define(opts, "ECM_STAGE1_COOP_WG", coop_wg);
+    if (coop_wg > 1) append_define(opts, "ECM_STAGE1_USE_COOP_WG", 1);
     append_define(opts, "ECM_STAGE1_COOP_SCRATCH_U32", coop_scratch);
+    append_define(opts, "ECM_COOP_CONTAINER_LIMBS", coop_container_limbs);
     append_define(opts, "ECM_STAGE1_HAS_FIPS4096", has_fips4096 ? 1 : 0);
 
     return opts;
