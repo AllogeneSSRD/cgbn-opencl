@@ -831,6 +831,7 @@ int main(int argc, char **argv){
             // operator tuning
             if(a == "--force-normalize" && i+1<argc){ cfg.stage1_force_normalize = std::stoi(argv[++i]); continue; }
             if(a == "--addsub-fused-unroll" && i+1<argc){ cfg.add_mod_fused_unroll = std::stoi(argv[++i]); continue; }
+            if(a == "--sliced"){ cfg.gpu_sliced = true; continue; }
             // kernel source / cache group
             if(a == "--kernel-root" && i+1<argc){ cfg.kernel_root = argv[++i]; continue; }
             if(a == "--kernel-cache-dir" && i+1<argc){ cfg.cache_dir = argv[++i]; continue; }
