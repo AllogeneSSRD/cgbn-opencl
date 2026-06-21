@@ -69,6 +69,8 @@ def emit_add_block(n: int, global_addr: bool = True, fix_in_block: bool = True) 
     p = _ptr_qual(global_addr)
 
     suffix = "" if global_addr else "_priv"
+    if global_addr is False and fix_in_block is False:
+        suffix = "_priv_nofix"
 
     loads_a = _scalar_loads("a", "a", n)
 
@@ -219,6 +221,8 @@ def emit_sub_block(n: int, global_addr: bool = True, fix_in_block: bool = True) 
     p = _ptr_qual(global_addr)
 
     suffix = "" if global_addr else "_priv"
+    if global_addr is False and fix_in_block is False:
+        suffix = "_priv_nofix"
 
     loads_a = _scalar_loads("a", "a", n)
 
