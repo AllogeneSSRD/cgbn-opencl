@@ -1,21 +1,34 @@
 #pragma once
 // ============================================================================
-// cpu_addsub_impl.h — AVX2 / AVX512 fused modular addition / subtraction.
+// cpu_addsub_impl.h — fused modular addition / subtraction.
 //
-// Provides scalar + AVX2 + AVX512 implementations, with three algorithm
-// variants per ISA:
-//   - manual     SIMD bulk + scalar carry ripple over each SIMD-width chunk
-//   - lookahead  SIMD bulk + carry prediction via overflow/propagation masks
-//   - soa        Horizontal batch: N_INST instances in Structure-of-Arrays
-//                layout, processed simultaneously
+// Provides scalar + AVX2/AVX512 SoA (Structure-of-Arrays) implementations.
 //
-// API (per-instance, matches ECM stage1):
-//   void cpu_add_xxx(r, a, b, N, limbs);
-//   int  cpu_sub_xxx(r, a, b, N, limbs);
+// Scalar API (AoS layout, one instance):
+//   void cpu_add_fused_scalar(r, a, b, N, limbs);
+//   int  cpu_sub_fused_scalar(r, a, b, N, limbs);
+//
+// SoA API (K independent instances sharing N):
+//   arr[limb * K + instance] layout, K=8 (AVX2) or 16 (AVX512)
+//   void cpu_add_fused_avx2_soa(r_soa, a_soa, b_soa, N, limbs);
+//   void cpu_sub_fused_avx2_soa(r_soa, a_soa, b_soa, N, limbs);
+//
+//   void cpu_add_fused_k_soa(r_soa, a_soa, b_soa, N, limbs, K);
+//   void cpu_sub_fused_k_soa(r_soa, a_soa, b_soa, N, limbs, K);
+//     K must be 8 (AVX2) or 16 (AVX512).  AVX512 path only compiled when
+//     __AVX512F__ && __AVX512DQ__ is defined.
+//
+// The fused algorithm: add + conditional subtract in a single pass,
+// per-lane carry chains.  Conditional subtract uses predicated execution
+// (no lane divergence).  All K instances share the same modulus N.
+//
+// Historical: vertical SIMD (manual & lookahead) was evaluated at 0.48x/0.20x
+// scalar and abandoned.  See docs/DEV_CPU_ADDSUB_AVX.md.
 // ============================================================================
 
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 
 #if defined(__AVX512F__) && defined(__AVX512DQ__)
 #define CPU_ADDSUB_AVX512 1
@@ -28,7 +41,7 @@
 #endif
 
 // ══════════════════════════════════════════════════════════════════════════
-//  Scalar fused (always available, baseline)
+//  Scalar fused (baseline)
 // ══════════════════════════════════════════════════════════════════════════
 
 inline void cpu_add_fused_scalar(uint32_t *r, const uint32_t *a, const uint32_t *b,
@@ -69,392 +82,285 @@ inline int cpu_sub_fused_scalar(uint32_t *r, const uint32_t *a, const uint32_t *
 }
 
 // ══════════════════════════════════════════════════════════════════════════
-//  Unroll wrappers
-// ══════════════════════════════════════════════════════════════════════════
-
-#define CPU_ADDSUB_DECLARE_UNROLL(bits, limbs)                                          \
-    inline void cpu_add_mod_unroll_##bits##b(uint32_t *r, const uint32_t *a,            \
-                                             const uint32_t *b, const uint32_t *N,      \
-                                             uint32_t lim) {                            \
-        if (lim == (limbs)) cpu_add_fused_scalar(r, a, b, N, lim);                      \
-    }                                                                                   \
-    inline int  cpu_sub_mod_unroll_##bits##b(uint32_t *r, const uint32_t *a,            \
-                                             const uint32_t *b, const uint32_t *N,      \
-                                             uint32_t lim) {                            \
-        if (lim == (limbs)) return cpu_sub_fused_scalar(r, a, b, N, lim);               \
-        return 0;                                                                       \
-    }
-
-CPU_ADDSUB_DECLARE_UNROLL(192, 6)
-CPU_ADDSUB_DECLARE_UNROLL(256, 8)
-CPU_ADDSUB_DECLARE_UNROLL(384, 12)
-CPU_ADDSUB_DECLARE_UNROLL(512, 16)
-CPU_ADDSUB_DECLARE_UNROLL(768, 24)
-CPU_ADDSUB_DECLARE_UNROLL(1024, 32)
-CPU_ADDSUB_DECLARE_UNROLL(1536, 48)
-CPU_ADDSUB_DECLARE_UNROLL(2048, 64)
-CPU_ADDSUB_DECLARE_UNROLL(2560, 80)
-CPU_ADDSUB_DECLARE_UNROLL(3072, 96)
-CPU_ADDSUB_DECLARE_UNROLL(3584, 112)
-CPU_ADDSUB_DECLARE_UNROLL(4096, 128)
-#undef CPU_ADDSUB_DECLARE_UNROLL
-
-// ══════════════════════════════════════════════════════════════════════════
-//  AVX2: manual carry  (SIMD bulk + scalar carry ripple over 8-limb chunk)
+//  SoA fused add/sub (dispatched by K)
 // ══════════════════════════════════════════════════════════════════════════
 
 #ifdef CPU_ADDSUB_AVX2
 
-inline void cpu_add_fused_avx2_manual(uint32_t *r, const uint32_t *a, const uint32_t *b,
-                                       const uint32_t *N, uint32_t limbs) {
-    uint64_t carry_add = 0, carry_sub = 1;
-    uint32_t i = 0;
+// unsigned greater-than for 256-bit (AVX2 lacks _mm256_cmpgt_epu32)
+static inline __m256i _mm256_cmpgt_epu32_impl(__m256i a, __m256i b) {
+    __m256i flip = _mm256_set1_epi32(0x80000000u);
+    return _mm256_cmpgt_epi32(_mm256_xor_si256(a, flip), _mm256_xor_si256(b, flip));
+}
 
-    for (; i + 8 <= limbs; i += 8) {
-        __m256i va = _mm256_loadu_si256((const __m256i*)(a + i));
-        __m256i vb = _mm256_loadu_si256((const __m256i*)(b + i));
-        __m256i vN = _mm256_loadu_si256((const __m256i*)(N + i));
-        __m256i vnotN = _mm256_xor_si256(vN, _mm256_set1_epi32(0xFFFFFFFFu));
+// ── Predicated conditional add-N (r += N where mask != 0) ───────────
+// mask: -1 (0xFF..FF) or 0 per lane.  Runs a single scalar pass across
+// limbs for the lanes that need it (acceptable because conditional sub
+// is rare and at the end of the fused loop).
+static inline void _add_n_predicated_256(uint32_t *r, const uint32_t *N,
+                                          uint32_t limbs, __m256i vmask) {
+    __m256i vones = _mm256_set1_epi32(0xFFFFFFFFu);
+    __m256i vneed = _mm256_xor_si256(vmask, vones); // invert: -1 where sub needed
+    alignas(32) uint32_t need[8];
+    _mm256_store_si256((__m256i*)need, vneed);
 
-        __m256i vsum = _mm256_add_epi32(va, vb);
-        __m256i vtmp = _mm256_add_epi32(vsum, vnotN);
-
-        alignas(32) uint32_t sum_arr[8], tmp_arr[8];
-        _mm256_store_si256((__m256i*)sum_arr, vsum);
-        _mm256_store_si256((__m256i*)tmp_arr, vtmp);
-
+    // Per-lane carry for N-addition (very short chain, ~4 limbs typical)
+    uint32_t carry[8] = {0};
+    for (uint32_t i = 0; i < limbs; ++i) {
+        uint32_t *rp = r + i * 8;
+        uint32_t ni = N[i];
         for (int j = 0; j < 8; ++j) {
-            uint64_t s = (uint64_t)sum_arr[j] + (carry_add & 1);
-            carry_add = (carry_add >> 1) | ((s >> 32) << 7);
-            uint64_t t = (uint64_t)tmp_arr[j] + (carry_sub & 1);
-            carry_sub = (carry_sub >> 1) | ((t >> 32) << 7);
-            tmp_arr[j] = (uint32_t)t;
+            if (need[j]) {
+                uint64_t s = (uint64_t)rp[j] + (uint64_t)ni + (uint64_t)carry[j];
+                rp[j] = (uint32_t)s;
+                carry[j] = (uint32_t)(s >> 32);
+            }
         }
-        uint32_t ca_out = (uint32_t)(carry_add & 1);
-        uint32_t cs_out = (uint32_t)(carry_sub & 1);
-        carry_add = (carry_add >> 8) | ((uint64_t)ca_out << 56);
-        carry_sub = (carry_sub >> 8) | ((uint64_t)cs_out << 56);
-
-        _mm256_storeu_si256((__m256i*)(r + i), _mm256_load_si256((__m256i*)tmp_arr));
-    }
-
-    for (; i < limbs; ++i) {
-        uint64_t s = (uint64_t)a[i] + (uint64_t)b[i] + (carry_add & 1);
-        carry_add = (carry_add >> 1) | ((s >> 32) << 63);
-        uint64_t t = (uint64_t)(uint32_t)s + (uint64_t)(~N[i]) + (carry_sub & 1);
-        carry_sub = (carry_sub >> 1) | ((t >> 32) << 63);
-        r[i] = (uint32_t)t;
-    }
-
-    carry_add &= 1; carry_sub &= 1;
-    if ((carry_add | carry_sub) == 0) {
-        uint64_t c = 0;
-        for (uint32_t j = 0; j < limbs; ++j) {
-            uint64_t s = (uint64_t)r[j] + (uint64_t)N[j] + c;
-            r[j] = (uint32_t)s;
-            c = s >> 32;
+        // Add carry to next limb (wrap around for the final carry)
+        if (i + 1 < limbs) {
+            uint32_t *next_rp = r + (i + 1) * 8;
+            for (int j = 0; j < 8; ++j) {
+                if (need[j]) {
+                    uint64_t s2 = (uint64_t)next_rp[j] + (uint64_t)carry[j];
+                    next_rp[j] = (uint32_t)s2;
+                    carry[j] = (uint32_t)(s2 >> 32);
+                }
+            }
         }
     }
 }
 
-inline int cpu_sub_fused_avx2_manual(uint32_t *r, const uint32_t *a, const uint32_t *b,
-                                      const uint32_t *N, uint32_t limbs) {
-    uint64_t borrow = 1;
-    uint32_t i = 0;
+// ── AVX2 SoA fused add (8 instances) ────────────────────────────────
 
-    for (; i + 8 <= limbs; i += 8) {
-        __m256i va = _mm256_loadu_si256((const __m256i*)(a + i));
-        __m256i vb = _mm256_loadu_si256((const __m256i*)(b + i));
-        __m256i vnotB = _mm256_xor_si256(vb, _mm256_set1_epi32(0xFFFFFFFFu));
-        __m256i vtmp  = _mm256_add_epi32(va, vnotB);
+inline void cpu_add_fused_avx2_soa(uint32_t *r, const uint32_t *a,
+                                    const uint32_t *b, const uint32_t *N,
+                                    uint32_t limbs) {
+    __m256i vones = _mm256_set1_epi32(0xFFFFFFFFu);
+    __m256i vzero = _mm256_setzero_si256();
+    __m256i vcarry_add = vzero;   // -1 where carry=1, 0 where carry=0
+    __m256i vcarry_sub = vones;   // borrow-in starts at 1
 
-        alignas(32) uint32_t tmp_arr[8];
-        _mm256_store_si256((__m256i*)tmp_arr, vtmp);
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m256i va = _mm256_loadu_si256((const __m256i*)(a + i * 8));
+        __m256i vb = _mm256_loadu_si256((const __m256i*)(b + i * 8));
+        __m256i vN = _mm256_set1_epi32(N[i]);
+        __m256i vnotN = _mm256_xor_si256(vN, vones);
 
-        for (int j = 0; j < 8; ++j) {
-            uint64_t s = (uint64_t)tmp_arr[j] + (borrow & 1);
-            borrow = (borrow >> 1) | ((s >> 32) << 7);
-            tmp_arr[j] = (uint32_t)s;
-        }
-        uint32_t b_out = (uint32_t)(borrow & 1);
-        borrow = (borrow >> 8) | ((uint64_t)b_out << 56);
+        // Add chain
+        __m256i vsum0 = _mm256_add_epi32(va, vb);
+        __m256i vovf_ab = _mm256_cmpgt_epu32_impl(va, vsum0);
+        __m256i vsum = _mm256_sub_epi32(vsum0, vcarry_add); // sub(-1)=add 1
+        __m256i vovf_carry = _mm256_and_si256(vcarry_add, _mm256_cmpeq_epi32(vsum0, vones));
+        vcarry_add = _mm256_or_si256(vovf_ab, vovf_carry);
 
-        _mm256_storeu_si256((__m256i*)(r + i), _mm256_load_si256((__m256i*)tmp_arr));
+        // Sub chain
+        __m256i vtmp0 = _mm256_add_epi32(vsum, vnotN);
+        __m256i vovf_sub0 = _mm256_cmpgt_epu32_impl(vsum, vtmp0);
+        __m256i vtmp = _mm256_sub_epi32(vtmp0, vcarry_sub);
+        __m256i vovf_carry_sub = _mm256_and_si256(vcarry_sub, _mm256_cmpeq_epi32(vtmp0, vones));
+        vcarry_sub = _mm256_or_si256(vovf_sub0, vovf_carry_sub);
+
+        _mm256_storeu_si256((__m256i*)(r + i * 8), vtmp);
     }
 
-    for (; i < limbs; ++i) {
-        uint64_t s = (uint64_t)a[i] + (uint64_t)(~b[i]) + (borrow & 1);
-        borrow = (borrow >> 1) | ((s >> 32) << 63);
-        r[i] = (uint32_t)s;
-    }
-
-    borrow &= 1;
-    if (borrow != 0) return 1;
-    borrow = 0;
-    for (uint32_t j = 0; j < limbs; ++j) {
-        uint64_t diff = (uint64_t)r[j] - (uint64_t)N[j] - borrow;
-        borrow = ((int64_t)diff < 0) ? 1 : 0;
-        r[j] = (uint32_t)diff;
-    }
-    return borrow != 0 ? 0 : 1;
+    // Conditional add-N for lanes with (carry_add|carry_sub)==0
+    __m256i vmask = _mm256_or_si256(vcarry_add, vcarry_sub);
+    _add_n_predicated_256(r, N, limbs, vmask);
 }
 
-// ══════════════════════════════════════════════════════════════════════════
-//  AVX2: carry-lookahead  (overflow + propagation mask)
-// ══════════════════════════════════════════════════════════════════════════
+// ── AVX2 SoA fused sub (8 instances) ────────────────────────────────
 
-inline void cpu_add_fused_avx2_lookahead(uint32_t *r, const uint32_t *a, const uint32_t *b,
-                                          const uint32_t *N, uint32_t limbs) {
-    uint32_t carry_add = 0, carry_sub = 1;
-    uint32_t i = 0;
+inline void cpu_sub_fused_avx2_soa(uint32_t *r, const uint32_t *a,
+                                    const uint32_t *b, const uint32_t *N,
+                                    uint32_t limbs) {
+    __m256i vones = _mm256_set1_epi32(0xFFFFFFFFu);
+    __m256i vborrow = vones;  // -1 where borrow=1
 
-    for (; i + 8 <= limbs; i += 8) {
-        __m256i va = _mm256_loadu_si256((const __m256i*)(a + i));
-        __m256i vb = _mm256_loadu_si256((const __m256i*)(b + i));
-        __m256i vN = _mm256_loadu_si256((const __m256i*)(N + i));
-        __m256i vnotN = _mm256_xor_si256(vN, _mm256_set1_epi32(0xFFFFFFFFu));
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m256i va = _mm256_loadu_si256((const __m256i*)(a + i * 8));
+        __m256i vb = _mm256_loadu_si256((const __m256i*)(b + i * 8));
+        __m256i vnotB = _mm256_xor_si256(vb, vones);
 
-        __m256i vsum = _mm256_add_epi32(va, vb);
-        __m256i vtmp = _mm256_add_epi32(vsum, vnotN);
+        __m256i vsum0 = _mm256_add_epi32(va, vnotB);
+        __m256i vovf = _mm256_cmpgt_epu32_impl(va, vsum0);
+        __m256i vsum = _mm256_sub_epi32(vsum0, vborrow);
+        __m256i vovf_b = _mm256_and_si256(vborrow, _mm256_cmpeq_epi32(vsum0, vones));
+        vborrow = _mm256_or_si256(vovf, vovf_b);
 
-        alignas(32) uint32_t sum_arr[8], tmp_arr[8];
-        _mm256_store_si256((__m256i*)sum_arr, vsum);
-        _mm256_store_si256((__m256i*)tmp_arr, vtmp);
-
-        uint32_t ovf_add = 0, prop_add = 0;
-        uint32_t ovf_sub = 0, prop_sub = 0;
-        // Extract for scalar access (MSVC extract requires compile-time index)
-        alignas(32) uint32_t va_arr[8], vb_arr[8], vn_arr[8];
-        _mm256_store_si256((__m256i*)va_arr, va);
-        _mm256_store_si256((__m256i*)vb_arr, vb);
-        _mm256_store_si256((__m256i*)vn_arr, vnotN);
-        for (int j = 0; j < 8; ++j) {
-            if (sum_arr[j] < va_arr[j] || sum_arr[j] < vb_arr[j]) ovf_add |= (1u << j);
-            if (sum_arr[j] == 0xFFFFFFFFu) prop_add |= (1u << j);
-
-            if (tmp_arr[j] < sum_arr[j] || tmp_arr[j] < vn_arr[j]) ovf_sub |= (1u << j);
-            if (tmp_arr[j] == 0xFFFFFFFFu) prop_sub |= (1u << j);
-        }
-
-        uint32_t cin_add = 0, running = carry_add;
-        for (int j = 0; j < 8; ++j) {
-            if (running) cin_add |= (1u << j);
-            running = (ovf_add >> j) & 1u ? 1u : ((prop_add >> j) & 1u) ? running : 0u;
-        }
-        carry_add = running;
-
-        uint32_t cin_sub = 0;
-        running = carry_sub;
-        for (int j = 0; j < 8; ++j) {
-            if (running) cin_sub |= (1u << j);
-            running = (ovf_sub >> j) & 1u ? 1u : ((prop_sub >> j) & 1u) ? running : 0u;
-        }
-        carry_sub = running;
-
-        alignas(32) uint32_t cin_add_arr[8] = {0};
-        alignas(32) uint32_t cin_sub_arr[8] = {0};
-        for (int j = 0; j < 8; ++j) {
-            cin_add_arr[j] = (cin_add >> j) & 1u;
-            cin_sub_arr[j] = (cin_sub >> j) & 1u;
-        }
-        vsum = _mm256_add_epi32(vsum, _mm256_load_si256((__m256i*)cin_add_arr));
-        vtmp = _mm256_add_epi32(vtmp, _mm256_load_si256((__m256i*)cin_sub_arr));
-
-        _mm256_storeu_si256((__m256i*)(r + i), vtmp);
+        _mm256_storeu_si256((__m256i*)(r + i * 8), vsum);
     }
 
-    uint64_t ca = carry_add, cs = carry_sub;
-    for (; i < limbs; ++i) {
-        uint64_t s = (uint64_t)a[i] + (uint64_t)b[i] + (ca & 1);
-        ca = (ca >> 1) | ((s >> 32) << 63);
-        uint64_t t = (uint64_t)(uint32_t)s + (uint64_t)(~N[i]) + (cs & 1);
-        cs = (cs >> 1) | ((t >> 32) << 63);
-        r[i] = (uint32_t)t;
-    }
-    ca &= 1; cs &= 1;
-    if ((ca | cs) == 0) {
-        uint64_t c = 0;
-        for (uint32_t j = 0; j < limbs; ++j) {
-            uint64_t s = (uint64_t)r[j] + (uint64_t)N[j] + c;
-            r[j] = (uint32_t)s;
-            c = s >> 32;
-        }
-    }
-}
+    // Conditional sub-N: lanes with borrow==0 need to subtract N
+    // vneed_sub = ~vborrow (inverted)
+    __m256i vneed_sub = _mm256_xor_si256(vborrow, vones);
+    alignas(32) uint32_t need[8];
+    _mm256_store_si256((__m256i*)need, vneed_sub);
 
-inline int cpu_sub_fused_avx2_lookahead(uint32_t *r, const uint32_t *a, const uint32_t *b,
-                                         const uint32_t *N, uint32_t limbs) {
-    uint32_t borrow = 1;
-    uint32_t i = 0;
-
-    for (; i + 8 <= limbs; i += 8) {
-        __m256i va = _mm256_loadu_si256((const __m256i*)(a + i));
-        __m256i vb = _mm256_loadu_si256((const __m256i*)(b + i));
-        __m256i vnotB = _mm256_xor_si256(vb, _mm256_set1_epi32(0xFFFFFFFFu));
-        __m256i vtmp  = _mm256_add_epi32(va, vnotB);
-
-        alignas(32) uint32_t tmp_arr[8];
-        _mm256_store_si256((__m256i*)tmp_arr, vtmp);
-
-        uint32_t ovf = 0, prop = 0;
-        alignas(32) uint32_t va_arr[8], vn_arr[8];
-        _mm256_store_si256((__m256i*)va_arr, va);
-        _mm256_store_si256((__m256i*)vn_arr, vnotB);
+    uint32_t borrow[8] = {0};
+    for (uint32_t i = 0; i < limbs; ++i) {
+        uint32_t *rp = r + i * 8;
+        uint32_t ni = N[i];
         for (int j = 0; j < 8; ++j) {
-            if (tmp_arr[j] < va_arr[j] || tmp_arr[j] < vn_arr[j]) ovf |= (1u << j);
-            if (tmp_arr[j] == 0xFFFFFFFFu) prop |= (1u << j);
+            if (need[j]) {
+                uint64_t d = (uint64_t)rp[j] - (uint64_t)ni - (uint64_t)borrow[j];
+                borrow[j] = ((int64_t)d < 0) ? 1u : 0u;
+                rp[j] = (uint32_t)d;
+            }
         }
-
-        uint32_t cin = 0, running = borrow;
-        for (int j = 0; j < 8; ++j) {
-            if (running) cin |= (1u << j);
-            running = (ovf >> j) & 1u ? 1u : ((prop >> j) & 1u) ? running : 0u;
-        }
-        borrow = running;
-
-        alignas(32) uint32_t cin_arr[8] = {0};
-        for (int j = 0; j < 8; ++j) cin_arr[j] = (cin >> j) & 1u;
-        vtmp = _mm256_add_epi32(vtmp, _mm256_load_si256((__m256i*)cin_arr));
-
-        _mm256_storeu_si256((__m256i*)(r + i), vtmp);
     }
-
-    uint64_t bw = borrow;
-    for (; i < limbs; ++i) {
-        uint64_t s = (uint64_t)a[i] + (uint64_t)(~b[i]) + (bw & 1);
-        bw = (bw >> 1) | ((s >> 32) << 63);
-        r[i] = (uint32_t)s;
-    }
-    bw &= 1;
-    if (bw != 0) return 1;
-    bw = 0;
-    for (uint32_t j = 0; j < limbs; ++j) {
-        uint64_t diff = (uint64_t)r[j] - (uint64_t)N[j] - bw;
-        bw = ((int64_t)diff < 0) ? 1 : 0;
-        r[j] = (uint32_t)diff;
-    }
-    return bw != 0 ? 0 : 1;
 }
 
 #endif // CPU_ADDSUB_AVX2
 
 // ══════════════════════════════════════════════════════════════════════════
-//  AVX512: manual carry  (SIMD bulk + scalar carry ripple over 16-limb chunk)
+//  AVX512 SoA fused add/sub  (K=16 instances)
 // ══════════════════════════════════════════════════════════════════════════
 
 #ifdef CPU_ADDSUB_AVX512
 
-inline void cpu_add_fused_avx512_manual(uint32_t *r, const uint32_t *a, const uint32_t *b,
-                                         const uint32_t *N, uint32_t limbs) {
-    uint64_t carry_add = 0, carry_sub = 1;
-    uint32_t i = 0;
+// unsigned gt, returns __m512i (-1 or 0 per lane) via single vpmovm2d
+static inline __m512i _mm512_cmpgt_epu32_m512i(__m512i a, __m512i b) {
+    __m512i flip = _mm512_set1_epi32(0x80000000u);
+    return _mm512_movm_epi32(
+        _mm512_cmpgt_epi32_mask(
+            _mm512_xor_si512(a, flip), _mm512_xor_si512(b, flip)));
+}
+// cmpeq → returns __m512i mask
+static inline __m512i _mm512_cmpeq_epi32_m512i(__m512i a, __m512i b) {
+    return _mm512_movm_epi32(_mm512_cmpeq_epi32_mask(a, b));
+}
 
-    for (; i + 16 <= limbs; i += 16) {
-        __m512i va = _mm512_loadu_si512((const void*)(a + i));
-        __m512i vb = _mm512_loadu_si512((const void*)(b + i));
-        __m512i vN = _mm512_loadu_si512((const void*)(N + i));
-        __m512i vnotN = _mm512_xor_si512(vN, _mm512_set1_epi32(0xFFFFFFFFu));
+inline void cpu_add_fused_avx512_soa(uint32_t *r, const uint32_t *a,
+                                      const uint32_t *b, const uint32_t *N,
+                                      uint32_t limbs) {
+    __m512i vones = _mm512_set1_epi32(0xFFFFFFFFu);
+    __m512i vzero = _mm512_setzero_si512();
+    __m512i vcarry_add = vzero;
+    __m512i vcarry_sub = vones;
 
-        __m512i vsum = _mm512_add_epi32(va, vb);
-        __m512i vtmp = _mm512_add_epi32(vsum, vnotN);
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m512i va = _mm512_loadu_si512((const void*)(a + i * 16));
+        __m512i vb = _mm512_loadu_si512((const void*)(b + i * 16));
+        __m512i vN = _mm512_set1_epi32(N[i]);
+        __m512i vnotN = _mm512_xor_si512(vN, vones);
 
-        alignas(64) uint32_t sum_arr[16], tmp_arr[16];
-        _mm512_store_si512((void*)sum_arr, vsum);
-        _mm512_store_si512((void*)tmp_arr, vtmp);
+        // Add chain
+        __m512i vsum0 = _mm512_add_epi32(va, vb);
+        __m512i vovf_ab = _mm512_cmpgt_epu32_m512i(va, vsum0);
+        __m512i vsum = _mm512_sub_epi32(vsum0, vcarry_add);
+        __m512i vovf_carry = _mm512_and_si512(vcarry_add, _mm512_cmpeq_epi32_m512i(vsum0, vones));
+        vcarry_add = _mm512_or_si512(vovf_ab, vovf_carry);
 
+        // Sub chain
+        __m512i vtmp0 = _mm512_add_epi32(vsum, vnotN);
+        __m512i vovf_sub0 = _mm512_cmpgt_epu32_m512i(vsum, vtmp0);
+        __m512i vtmp = _mm512_sub_epi32(vtmp0, vcarry_sub);
+        __m512i vovf_carry_sub = _mm512_and_si512(vcarry_sub, _mm512_cmpeq_epi32_m512i(vtmp0, vones));
+        vcarry_sub = _mm512_or_si512(vovf_sub0, vovf_carry_sub);
+
+        _mm512_storeu_si512((void*)(r + i * 16), vtmp);
+    }
+
+    // Conditional add-N (rare, scalar pass)
+    __m512i vmask = _mm512_or_si512(vcarry_add, vcarry_sub);
+    alignas(64) uint32_t need[16];
+    _mm512_store_si512((void*)need, _mm512_xor_si512(vmask, vones));
+    uint32_t carry[16] = {0};
+    for (uint32_t i = 0; i < limbs; ++i) {
+        uint32_t *rp = r + i * 16;
+        uint32_t ni = N[i];
         for (int j = 0; j < 16; ++j) {
-            uint64_t s = (uint64_t)sum_arr[j] + (carry_add & 1);
-            carry_add = (carry_add >> 1) | ((s >> 32) << 15);
-            uint64_t t = (uint64_t)tmp_arr[j] + (carry_sub & 1);
-            carry_sub = (carry_sub >> 1) | ((t >> 32) << 15);
-            tmp_arr[j] = (uint32_t)t;
-        }
-        uint32_t ca_out = (uint32_t)(carry_add & 1);
-        uint32_t cs_out = (uint32_t)(carry_sub & 1);
-        carry_add = (carry_add >> 16) | ((uint64_t)ca_out << 48);
-        carry_sub = (carry_sub >> 16) | ((uint64_t)cs_out << 48);
-
-        _mm512_storeu_si512((void*)(r + i), _mm512_load_si512((void*)tmp_arr));
-    }
-
-    for (; i < limbs; ++i) {
-        uint64_t s = (uint64_t)a[i] + (uint64_t)b[i] + (carry_add & 1);
-        carry_add = (carry_add >> 1) | ((s >> 32) << 63);
-        uint64_t t = (uint64_t)(uint32_t)s + (uint64_t)(~N[i]) + (carry_sub & 1);
-        carry_sub = (carry_sub >> 1) | ((t >> 32) << 63);
-        r[i] = (uint32_t)t;
-    }
-    carry_add &= 1; carry_sub &= 1;
-    if ((carry_add | carry_sub) == 0) {
-        uint64_t c = 0;
-        for (uint32_t j = 0; j < limbs; ++j) {
-            uint64_t s = (uint64_t)r[j] + (uint64_t)N[j] + c;
-            r[j] = (uint32_t)s;
-            c = s >> 32;
+            if (need[j]) {
+                uint64_t s = (uint64_t)rp[j] + (uint64_t)ni + (uint64_t)carry[j];
+                rp[j] = (uint32_t)s;
+                carry[j] = (uint32_t)(s >> 32);
+            }
         }
     }
 }
 
-inline int cpu_sub_fused_avx512_manual(uint32_t *r, const uint32_t *a, const uint32_t *b,
-                                        const uint32_t *N, uint32_t limbs) {
-    uint64_t borrow = 1;
-    uint32_t i = 0;
-    for (; i + 16 <= limbs; i += 16) {
-        __m512i va = _mm512_loadu_si512((const void*)(a + i));
-        __m512i vb = _mm512_loadu_si512((const void*)(b + i));
-        __m512i vnotB = _mm512_xor_si512(vb, _mm512_set1_epi32(0xFFFFFFFFu));
-        __m512i vtmp  = _mm512_add_epi32(va, vnotB);
+inline void cpu_sub_fused_avx512_soa(uint32_t *r, const uint32_t *a,
+                                      const uint32_t *b, const uint32_t *N,
+                                      uint32_t limbs) {
+    __m512i vones = _mm512_set1_epi32(0xFFFFFFFFu);
+    __m512i vborrow = vones;
 
-        alignas(64) uint32_t tmp_arr[16];
-        _mm512_store_si512((void*)tmp_arr, vtmp);
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m512i va = _mm512_loadu_si512((const void*)(a + i * 16));
+        __m512i vb = _mm512_loadu_si512((const void*)(b + i * 16));
+        __m512i vnotB = _mm512_xor_si512(vb, vones);
+
+        __m512i vsum0 = _mm512_add_epi32(va, vnotB);
+        __m512i vovf = _mm512_cmpgt_epu32_m512i(va, vsum0);
+        __m512i vsum = _mm512_sub_epi32(vsum0, vborrow);
+        __m512i vovf_b = _mm512_and_si512(vborrow, _mm512_cmpeq_epi32_m512i(vsum0, vones));
+        vborrow = _mm512_or_si512(vovf, vovf_b);
+
+        _mm512_storeu_si512((void*)(r + i * 16), vsum);
+    }
+
+    // Conditional sub-N
+    alignas(64) uint32_t need[16];
+    _mm512_store_si512((void*)need, _mm512_xor_si512(vborrow, vones));
+    uint32_t borrow[16] = {0};
+    for (uint32_t i = 0; i < limbs; ++i) {
+        uint32_t *rp = r + i * 16;
+        uint32_t ni = N[i];
         for (int j = 0; j < 16; ++j) {
-            uint64_t s = (uint64_t)tmp_arr[j] + (borrow & 1);
-            borrow = (borrow >> 1) | ((s >> 32) << 15);
-            tmp_arr[j] = (uint32_t)s;
+            if (need[j]) {
+                uint64_t d = (uint64_t)rp[j] - (uint64_t)ni - (uint64_t)borrow[j];
+                borrow[j] = ((int64_t)d < 0) ? 1u : 0u;
+                rp[j] = (uint32_t)d;
+            }
         }
-        uint32_t b_out = (uint32_t)(borrow & 1);
-        borrow = (borrow >> 16) | ((uint64_t)b_out << 48);
-        _mm512_storeu_si512((void*)(r + i), _mm512_load_si512((void*)tmp_arr));
     }
-    for (; i < limbs; ++i) {
-        uint64_t s = (uint64_t)a[i] + (uint64_t)(~b[i]) + (borrow & 1);
-        borrow = (borrow >> 1) | ((s >> 32) << 63);
-        r[i] = (uint32_t)s;
-    }
-    borrow &= 1;
-    if (borrow != 0) return 1;
-    borrow = 0;
-    for (uint32_t j = 0; j < limbs; ++j) {
-        uint64_t diff = (uint64_t)r[j] - (uint64_t)N[j] - borrow;
-        borrow = ((int64_t)diff < 0) ? 1 : 0;
-        r[j] = (uint32_t)diff;
-    }
-    return borrow != 0 ? 0 : 1;
 }
 
 #endif // CPU_ADDSUB_AVX512
 
 // ══════════════════════════════════════════════════════════════════════════
-//  Dispatchers
+//  Type-erased SoA dispatch (K = 8 or 16)
 // ══════════════════════════════════════════════════════════════════════════
 
-#if defined(CPU_ADDSUB_AVX512)
-#define cpu_add_fused_c cpu_add_fused_avx512_manual
-#define cpu_sub_fused_c cpu_sub_fused_avx512_manual
-#elif defined(CPU_ADDSUB_AVX2)
-#define cpu_add_fused_c cpu_add_fused_avx2_manual
-#define cpu_sub_fused_c cpu_sub_fused_avx2_manual
-#else
-#define cpu_add_fused_c cpu_add_fused_scalar
-#define cpu_sub_fused_c cpu_sub_fused_scalar
+inline void cpu_add_fused_k_soa(uint32_t *r, const uint32_t *a,
+                                 const uint32_t *b, const uint32_t *N,
+                                 uint32_t limbs, int K) {
+#ifdef CPU_ADDSUB_AVX512
+    if (K == 16) { cpu_add_fused_avx512_soa(r, a, b, N, limbs); return; }
 #endif
-
-inline void cpu_add_mod(uint32_t *r, const uint32_t *a, const uint32_t *b,
-                        const uint32_t *N, uint32_t limbs) {
-    cpu_add_fused_c(r, a, b, N, limbs);
+#ifdef CPU_ADDSUB_AVX2
+    if (K == 8)  { cpu_add_fused_avx2_soa(r, a, b, N, limbs); return; }
+#endif
+    // Fallback: scalar per instance (should not happen in normal use)
+    for (int inst = 0; inst < K; ++inst) {
+        cpu_add_fused_scalar(r + inst * limbs, a + inst * limbs, b + inst * limbs, N, limbs);
+    }
 }
 
-inline int cpu_sub_mod(uint32_t *r, const uint32_t *a, const uint32_t *b,
-                       const uint32_t *N, uint32_t limbs) {
-    return cpu_sub_fused_c(r, a, b, N, limbs);
+inline void cpu_sub_fused_k_soa(uint32_t *r, const uint32_t *a,
+                                 const uint32_t *b, const uint32_t *N,
+                                 uint32_t limbs, int K) {
+#ifdef CPU_ADDSUB_AVX512
+    if (K == 16) { cpu_sub_fused_avx512_soa(r, a, b, N, limbs); return; }
+#endif
+#ifdef CPU_ADDSUB_AVX2
+    if (K == 8)  { cpu_sub_fused_avx2_soa(r, a, b, N, limbs); return; }
+#endif
+    for (int inst = 0; inst < K; ++inst) {
+        cpu_sub_fused_scalar(r + inst * limbs, a + inst * limbs, b + inst * limbs, N, limbs);
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  Convenience aliases (AoS scalar)
+// ══════════════════════════════════════════════════════════════════════════
+
+inline void cpu_add_fused_c(uint32_t *r, const uint32_t *a, const uint32_t *b,
+                            const uint32_t *N, uint32_t limbs) {
+    cpu_add_fused_scalar(r, a, b, N, limbs);
+}
+
+inline int cpu_sub_fused_c(uint32_t *r, const uint32_t *a, const uint32_t *b,
+                           const uint32_t *N, uint32_t limbs) {
+    return cpu_sub_fused_scalar(r, a, b, N, limbs);
 }

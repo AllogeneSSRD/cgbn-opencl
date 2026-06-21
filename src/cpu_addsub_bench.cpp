@@ -22,6 +22,8 @@
 
 #include "opencl_ecm_runtime_config.h"
 
+#include "cpu_info.h"
+
 #include <gmp.h>
 
 #include <chrono>
@@ -63,13 +65,6 @@ void fill_from_gmp(const mpz_t v, uint32_t *out, size_t words) {
     mpz_clear(mod);
 }
 
-struct RunResult {
-    std::string label;
-    double ms;
-    int ipt;
-    int threads;
-};
-
 // ── Affinity helpers ──────────────────────────────────────────────────
 
 std::vector<int> parse_affinity(const std::string &s) {
@@ -95,61 +90,54 @@ bool pin_thread_to_core(int core) {
 #endif
 }
 
-// ── Function pointer types ───────────────────────────────────────────
+// ── CPU info query (verbose) ──────────────────────────────────────────
 
-typedef void (*add_fn_t)(uint32_t*, const uint32_t*, const uint32_t*, const uint32_t*, uint32_t);
-typedef int  (*sub_fn_t)(uint32_t*, const uint32_t*, const uint32_t*, const uint32_t*, uint32_t);
+static void print_cpu_info_wrapper(bool verbose) {
+    print_cpu_info(verbose,
+        "  Benchmark ISA requirements:\n"
+        "    scalar:     SSE2 (always)\n"
+        "    AVX2 SoA:   AVX2+FMA (8-lane SIMD)\n"
+        "    AVX512 SoA: AVX512F+AVX512DQ (16-lane SIMD)");
+}
 
-struct AddSubVariant {
-    const char *name;
-    add_fn_t add_fn;
-    sub_fn_t sub_fn;
-};
-
-// ── Multi-threaded benchmark runner ───────────────────────────────────
+// ── Multi-threaded scalar runner (inline, returns by ref) ──────────────
 
 struct ThreadRange {
-    int inst_start; // inclusive
-    int inst_end;   // exclusive
-    int core;       // -1 if no affinity
+    int inst_start;
+    int inst_end;
+    int core;
 };
 
 void thread_addsub_run(bool is_add,
-                       add_fn_t add_fn, sub_fn_t sub_fn,
                        uint32_t *r, const uint32_t *a, const uint32_t *b,
                        const uint32_t *N, int iters, int width_words,
                        ThreadRange range, double &thread_ms) {
     if (range.core >= 0) pin_thread_to_core(range.core);
-
     auto t0 = std::chrono::high_resolution_clock::now();
     for (int inst_idx = range.inst_start; inst_idx < range.inst_end; ++inst_idx) {
         uint32_t *r_i = r + inst_idx * width_words;
         const uint32_t *a_i = a + inst_idx * width_words;
         const uint32_t *b_i = b + inst_idx * width_words;
         for (int it = 0; it < iters; ++it) {
-            if (is_add) {
-                add_fn(r_i, (it == 0) ? a_i : r_i, b_i, N, (uint32_t)width_words);
-            } else {
-                sub_fn(r_i, (it == 0) ? a_i : r_i, b_i, N, (uint32_t)width_words);
-            }
+            if (is_add)
+                cpu_add_fused_scalar(r_i, (it == 0) ? a_i : r_i, b_i, N, (uint32_t)width_words);
+            else
+                cpu_sub_fused_scalar(r_i, (it == 0) ? a_i : r_i, b_i, N, (uint32_t)width_words);
         }
     }
     auto t1 = std::chrono::high_resolution_clock::now();
     thread_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 }
 
-double run_addsub_mt(const char *label, bool is_add,
-                     add_fn_t add_fn, sub_fn_t sub_fn,
-                     uint32_t *r_buf, const uint32_t *a_buf, const uint32_t *b_buf,
-                     const uint32_t *N, int iters, int ipt, int width_words,
-                     int repeats, int num_threads, const std::vector<int> &affinity,
-                     std::vector<RunResult> &results) {
+void run_addsub_mt_inline(bool is_add,
+                          uint32_t *r_buf, const uint32_t *a_buf, const uint32_t *b_buf,
+                          const uint32_t *N, int iters, int ipt, int width_words,
+                          int repeats, int num_threads, const std::vector<int> &affinity,
+                          double &best_ms) {
     int total_inst = ipt * num_threads;
-    double best_ms = 1e12;
+    best_ms = 1e12;
     for (int rep = 0; rep < repeats; ++rep) {
-        // Reset r to a for each repeat
         std::memcpy(r_buf, a_buf, (size_t)width_words * (size_t)total_inst * sizeof(uint32_t));
-
         std::vector<ThreadRange> ranges(num_threads);
         int base = 0;
         for (int t = 0; t < num_threads; ++t) {
@@ -159,31 +147,123 @@ double run_addsub_mt(const char *label, bool is_add,
             ranges[t].core       = (t < (int)affinity.size()) ? affinity[t] : -1;
             base += share;
         }
-
         std::vector<std::thread> threads;
         std::vector<double> thread_times(num_threads, 0.0);
-        auto t0 = std::chrono::high_resolution_clock::now();
-        for (int t = 0; t < num_threads; ++t) {
-            threads.emplace_back(thread_addsub_run, is_add,
-                                 add_fn, sub_fn,
-                                 r_buf, a_buf, b_buf, N, iters, width_words,
-                                 ranges[t], std::ref(thread_times[t]));
-        }
+        for (int t = 1; t < num_threads; ++t)
+            threads.emplace_back(thread_addsub_run, is_add, r_buf, a_buf, b_buf, N,
+                                 iters, width_words, ranges[t], std::ref(thread_times[t]));
+        thread_addsub_run(is_add, r_buf, a_buf, b_buf, N,
+                          iters, width_words, ranges[0], thread_times[0]);
         for (auto &th : threads) th.join();
-        auto t1 = std::chrono::high_resolution_clock::now();
-        double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-        if (ms < best_ms) best_ms = ms;
+        double max_ms = 0;
+        for (int t = 0; t < num_threads; ++t)
+            if (thread_times[t] > max_ms) max_ms = thread_times[t];
+        if (max_ms < best_ms) best_ms = max_ms;
     }
-    results.push_back({label, best_ms, ipt, num_threads});
-    return best_ms;
+}
+
+// ── Multi-threaded SoA runner (inline) ─────────────────────────────────
+
+void run_soa_mt_immediate(bool is_add, int K,
+                          uint32_t *r_buf, uint32_t *a_buf, uint32_t *b_buf,
+                          const uint32_t *n_buf,
+                          int iters, int ipt, int width_words,
+                          int repeats, int num_threads, const std::vector<int> &affinity,
+                          double &best_ms) {
+    int total_inst = ipt * num_threads;
+    int n_batches = total_inst / K;
+    best_ms = 1e12;
+    for (int rep = 0; rep < repeats; ++rep) {
+        std::memcpy(r_buf, a_buf, (size_t)width_words * total_inst * sizeof(uint32_t));
+        std::vector<int> thread_nbatches(num_threads);
+        std::vector<int> thread_cores(num_threads);
+        int batch_base = 0;
+        for (int t = 0; t < num_threads; ++t) {
+            int share = (n_batches - batch_base + num_threads - t - 1) / (num_threads - t);
+            thread_nbatches[t] = share;
+            thread_cores[t] = (t < (int)affinity.size()) ? affinity[t] : -1;
+            batch_base += share;
+        }
+
+        auto thread_soa_run = [&](int t, double &t_ms) {
+            if (thread_cores[t] >= 0) pin_thread_to_core(thread_cores[t]);
+            int my_start = 0;
+            for (int pt = 0; pt < t; ++pt) my_start += thread_nbatches[pt];
+            int my_n = thread_nbatches[t];
+            if (my_n == 0) { t_ms = 0; return; }
+
+            size_t per_batch = (size_t)width_words * K;
+            uint32_t *al = new uint32_t[per_batch * my_n];
+            uint32_t *bl = new uint32_t[per_batch * my_n];
+            uint32_t *rl = new uint32_t[per_batch * my_n];
+
+            for (int b = 0; b < my_n; ++b) {
+                int gb = my_start + b, base = gb * K;
+                uint32_t *ap = al + b * width_words * K;
+                uint32_t *bp = bl + b * width_words * K;
+                for (uint32_t limb = 0; limb < (uint32_t)width_words; ++limb) {
+                    for (int inst = 0; inst < K; ++inst)
+                        ap[limb * K + inst] = a_buf[(base + inst) * width_words + limb];
+                    for (int inst = 0; inst < K; ++inst)
+                        bp[limb * K + inst] = b_buf[(base + inst) * width_words + limb];
+                }
+            }
+            std::memcpy(rl, al, per_batch * my_n * sizeof(uint32_t));
+
+            auto t0 = std::chrono::high_resolution_clock::now();
+            for (int it = 0; it < iters; ++it) {
+                for (int b = 0; b < my_n; ++b) {
+                    uint32_t *rp = rl + b * width_words * K;
+                    const uint32_t *ap = al + b * width_words * K;
+                    const uint32_t *bp = bl + b * width_words * K;
+                    if (K == 8) {
+                        if (is_add)
+                            cpu_add_fused_avx2_soa(rp, (it == 0) ? ap : rp, bp, n_buf, (uint32_t)width_words);
+                        else
+                            cpu_sub_fused_avx2_soa(rp, (it == 0) ? ap : rp, bp, n_buf, (uint32_t)width_words);
+                    }
+#ifdef CPU_ADDSUB_AVX512
+                    else {
+                        if (is_add)
+                            cpu_add_fused_avx512_soa(rp, (it == 0) ? ap : rp, bp, n_buf, (uint32_t)width_words);
+                        else
+                            cpu_sub_fused_avx512_soa(rp, (it == 0) ? ap : rp, bp, n_buf, (uint32_t)width_words);
+                    }
+#endif
+                }
+            }
+            auto t1 = std::chrono::high_resolution_clock::now();
+            t_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+            for (int b = 0; b < my_n; ++b) {
+                int gb = my_start + b, base = gb * K;
+                uint32_t *rp = rl + b * width_words * K;
+                for (uint32_t limb = 0; limb < (uint32_t)width_words; ++limb)
+                    for (int inst = 0; inst < K; ++inst)
+                        r_buf[(base + inst) * width_words + limb] = rp[limb * K + inst];
+            }
+            delete[] al; delete[] bl; delete[] rl;
+        };
+
+        std::vector<std::thread> threads;
+        std::vector<double> thread_ms(num_threads, 0.0);
+        for (int t = 1; t < num_threads; ++t)
+            threads.emplace_back(thread_soa_run, t, std::ref(thread_ms[t]));
+        thread_soa_run(0, thread_ms[0]);
+        for (auto &th : threads) th.join();
+
+        double max_ms = 0;
+        for (int t = 0; t < num_threads; ++t)
+            if (thread_ms[t] > max_ms) max_ms = thread_ms[t];
+        if (max_ms < best_ms) best_ms = max_ms;
+    }
 }
 
 } // namespace
 
 bool runCpuAddSubBenchmark(int bits, int kernel_iterations, int ipt, int launch_repeats,
-                           bool bench_unroll_only,
                            int num_threads, const std::vector<int> &affinity,
-                           bool no_overflow = false) {
+                           bool no_overflow = false, bool verbose = false) {
     if (bits <= 0 || (bits % 32) != 0 || (uint32_t)bits > MAX_BENCH_BITS) {
         std::cerr << "bits must be a positive multiple of 32 and <= " << MAX_BENCH_BITS << std::endl;
         return false;
@@ -204,7 +284,13 @@ bool runCpuAddSubBenchmark(int bits, int kernel_iterations, int ipt, int launch_
             std::cout << affinity[i];
         }
     }
-    std::cout << "\n\n";
+    std::cout << "\n";
+
+    print_cpu_info_wrapper(verbose);
+
+    // SoA batch sizes (always available for display; ISA guards inside runner)
+    const int K_AVX512 = 16;
+    const int K_AVX2 = 8;
 
     // Two test cases per bit-width (same seed scheme as OpenCL):
     //   0 = a+b >= N (overflow — fused speculative subtract triggers)
@@ -251,94 +337,118 @@ bool runCpuAddSubBenchmark(int bits, int kernel_iterations, int ipt, int launch_
     uint32_t *n_buf = new uint32_t[WORDS];
     uint32_t *r_buf = new uint32_t[buf_words];
     fill_from_gmp(n_gmp, n_buf, WORDS);
+    // AoS fill: [inst * WORDS + limb]
+    uint32_t *aos_template = new uint32_t[WORDS];
+    uint32_t *bos_template = new uint32_t[WORDS];
+    fill_from_gmp(a_gmp, aos_template, WORDS);
+    fill_from_gmp(b_gmp, bos_template, WORDS);
     for (int i = 0; i < total_inst; ++i) {
-        fill_from_gmp(a_gmp, a_buf + i * WORDS, WORDS);
-        fill_from_gmp(b_gmp, b_buf + i * WORDS, WORDS);
-        std::memcpy(r_buf + i * WORDS, a_buf + i * WORDS, WORDS * sizeof(uint32_t));
+        std::memcpy(a_buf + i * WORDS, aos_template, WORDS * sizeof(uint32_t));
+        std::memcpy(b_buf + i * WORDS, bos_template, WORDS * sizeof(uint32_t));
+        std::memcpy(r_buf + i * WORDS, aos_template, WORDS * sizeof(uint32_t));
+    }
+    delete[] aos_template;
+    delete[] bos_template;
+
+    const double op_count = (double)kernel_iterations * (double)total_inst * (double)launch_repeats;
+
+    auto print_line = [&](const std::string &label, double ms) {
+        if (ms <= 0.0) {
+            std::cout << "  " << label << ": N/A (no ISA)\n";
+        } else {
+            double ops_s = op_count / (ms / 1000.0);
+            std::cout << "  " << label << ": " << ms << " ms, " << ops_s << " ops/s";
+            if (effective_threads > 1) std::cout << " (" << effective_threads << "t)";
+            std::cout << "\n";
+        }
+    };
+
+    auto print_skip = [&](const std::string &label, int req_k) {
+        std::cout << "  " << label << ": skipped (need multiple of " << req_k
+                  << " instances, got " << total_inst << ")\n";
+    };
+
+    std::cout << "\n";
+
+    // ── Scalar fused (always runs) ───────────────────────────────────
+
+    {
+        double t_add = 0, t_sub = 0;
+        run_addsub_mt_inline(true, r_buf, a_buf, b_buf, n_buf,
+                             kernel_iterations, ipt, (int)WORDS,
+                             launch_repeats, effective_threads, affinity, t_add);
+        run_addsub_mt_inline(false, r_buf, a_buf, b_buf, n_buf,
+                             kernel_iterations, ipt, (int)WORDS,
+                             launch_repeats, effective_threads, affinity, t_sub);
+        std::cout << "  [scalar]\n";
+        print_line("cpu_add_fused",       t_add);
+        print_line("cpu_sub_fused",       t_sub);
     }
 
-    std::vector<RunResult> results;
+    // ── AVX2 SoA (requires 8 | total_inst) ──────────────────────────
 
-    // ── Build variant registry ───────────────────────────────────────
-    std::vector<AddSubVariant> variants;
-    variants.push_back({"scalar", cpu_add_fused_scalar, cpu_sub_fused_scalar});
+    {
+        std::cout << "  [AVX2 SoA]\n";
+        bool can_avx2 = (total_inst % K_AVX2 == 0);
 #ifdef CPU_ADDSUB_AVX2
-    variants.push_back({"avx2_manual", cpu_add_fused_avx2_manual, cpu_sub_fused_avx2_manual});
-    variants.push_back({"avx2_lookahead", cpu_add_fused_avx2_lookahead, cpu_sub_fused_avx2_lookahead});
+        if (can_avx2) {
+            double t_add8 = 0, t_sub8 = 0;
+            run_soa_mt_immediate(true, K_AVX2, r_buf, a_buf, b_buf, n_buf,
+                                kernel_iterations, ipt, (int)WORDS,
+                                launch_repeats, effective_threads, affinity, t_add8);
+            run_soa_mt_immediate(false, K_AVX2, r_buf, a_buf, b_buf, n_buf,
+                                kernel_iterations, ipt, (int)WORDS,
+                                launch_repeats, effective_threads, affinity, t_sub8);
+            print_line("cpu_add_avx2_soa",   t_add8);
+            print_line("cpu_sub_avx2_soa",   t_sub8);
+        } else
 #endif
-#ifdef CPU_ADDSUB_AVX512
-    variants.push_back({"avx512_manual", cpu_add_fused_avx512_manual, cpu_sub_fused_avx512_manual});
-#endif
-
-    // ── Fused variants ───────────────────────────────────────────────
-    if (!bench_unroll_only) {
-        for (const auto &v : variants) {
-            std::string add_label = std::string("cpu_add_") + v.name;
-            std::string sub_label = std::string("cpu_sub_") + v.name;
-            run_addsub_mt(add_label.c_str(), true,  v.add_fn, v.sub_fn,
-                          r_buf, a_buf, b_buf, n_buf,
-                          kernel_iterations, ipt, (int)WORDS,
-                          launch_repeats, effective_threads, affinity, results);
-            run_addsub_mt(sub_label.c_str(), false, v.add_fn, v.sub_fn,
-                          r_buf, a_buf, b_buf, n_buf,
-                          kernel_iterations, ipt, (int)WORDS,
-                          launch_repeats, effective_threads, affinity, results);
+        {
+            if (!can_avx2) {
+                print_skip("cpu_add_avx2_soa", K_AVX2);
+                print_skip("cpu_sub_avx2_soa", K_AVX2);
+            } else {
+                print_line("cpu_add_avx2_soa (no ISA)", 0.0);
+                print_line("cpu_sub_avx2_soa (no ISA)", 0.0);
+            }
         }
     }
 
-    // ── Width-specific unroll ───────────────────────────────────────
-    static const int kWidths[] = {
-        192,256,384,512,768,1024,1536,2048,2560,3072,3584,4096
-    };
-    bool width_matched = false;
-    for (int w : kWidths) { if (bits == w) { width_matched = true; break; } }
+    // ── AVX512 SoA (requires 16 | total_inst) ───────────────────────
 
-    if (width_matched) {
-        char buf[128];
-        snprintf(buf, sizeof(buf), "cpu_add_unroll_%db", bits);
-        run_addsub_mt(buf, true, cpu_add_fused_scalar, cpu_sub_fused_scalar,
-                      r_buf, a_buf, b_buf, n_buf,
-                      kernel_iterations, ipt, (int)WORDS,
-                      launch_repeats, effective_threads, affinity, results);
-        snprintf(buf, sizeof(buf), "cpu_sub_unroll_%db", bits);
-        run_addsub_mt(buf, false, cpu_add_fused_scalar, cpu_sub_fused_scalar,
-                      r_buf, a_buf, b_buf, n_buf,
-                      kernel_iterations, ipt, (int)WORDS,
-                      launch_repeats, effective_threads, affinity, results);
-    }
-
-    // ── Output ───────────────────────────────────────────────────────
-    const double op_count = (double)kernel_iterations * (double)total_inst * (double)launch_repeats;
-
-    std::cout << "\n  ["
+    {
+        std::cout << "  [AVX512 SoA]\n";
+        bool can_avx512 = (total_inst % K_AVX512 == 0);
 #ifdef CPU_ADDSUB_AVX512
-              << "AVX512"
-#elif defined(CPU_ADDSUB_AVX2)
-              << "AVX2"
-#else
-              << "scalar"
+        if (can_avx512) {
+            double t_add16 = 0, t_sub16 = 0;
+            run_soa_mt_immediate(true, K_AVX512, r_buf, a_buf, b_buf, n_buf,
+                                kernel_iterations, ipt, (int)WORDS,
+                                launch_repeats, effective_threads, affinity, t_add16);
+            run_soa_mt_immediate(false, K_AVX512, r_buf, a_buf, b_buf, n_buf,
+                                kernel_iterations, ipt, (int)WORDS,
+                                launch_repeats, effective_threads, affinity, t_sub16);
+            print_line("cpu_add_avx512_soa", t_add16);
+            print_line("cpu_sub_avx512_soa", t_sub16);
+        } else
 #endif
-              << "]\n";
-
-    for (const auto &r : results) {
-        double ops_s = op_count / (r.ms / 1000.0);
-        std::cout << "  " << r.label << ": " << r.ms << " ms, " << ops_s << " ops/s";
-        if (r.threads > 1) std::cout << " (" << r.threads << "t)";
-        std::cout << "\n";
+        {
+            if (!can_avx512) {
+                print_skip("cpu_add_avx512_soa", K_AVX512);
+                print_skip("cpu_sub_avx512_soa", K_AVX512);
+            } else {
+                print_line("cpu_add_avx512_soa (no ISA)", 0.0);
+                print_line("cpu_sub_avx512_soa (no ISA)", 0.0);
+            }
+        }
     }
 
     // ── Optional CSV ─────────────────────────────────────────────────
     const std::string &csv_path = ecm_runtime_config().bench_csv;
     if (!csv_path.empty()) {
         std::ofstream csv(csv_path, std::ios::app);
-        if (csv.is_open()) {
-            for (const auto &r : results) {
-                double ops_s = op_count / (r.ms / 1000.0);
-                csv << bits << "," << r.label << "," << r.ms << "," << ops_s << ","
-                    << kernel_iterations << "," << r.ipt << "," << launch_repeats
-                    << "," << r.threads << "\n";
-            }
-        }
+        // CSV disabled for immediate-output mode (restore when needed)
+        (void)csv;
     }
 
     delete[] a_buf;
@@ -387,8 +497,8 @@ int main(int argc, char **argv) {
     int kernel_iterations = 1000;
     int ipt = DEFAULT_IPT;
     int launch_repeats = 10;
-    bool bench_unroll_only = false;
     bool no_overflow = false;
+    bool verbose = false;
     int num_threads = 0; // 0 = auto (1 if no affinity, else aff.size())
     std::string affinity_str;
 
@@ -407,8 +517,8 @@ int main(int argc, char **argv) {
             << "  -t, --threads <N>        Number of threads (default: 1, or affinity count)\n"
             << "  -r, --repeats <N>        Alias for 4th positional\n"
             << "  -a, --affinity c1,c2,... Pin thread t to core c_t\n"
-            << "  --unroll                 Only benchmark unroll_*b width-specific paths\n"
             << "  --no-overflow            Use a+b < N test data (default: a+b >= N)\n"
+            << "  -v, --verbose            Print CPU info and ISA details\n"
             << "  --csv <file>             Append results CSV\n"
             << "  -h, --help               Show this help\n"
             << "\nExamples:\n"
@@ -452,8 +562,8 @@ int main(int argc, char **argv) {
             affinity_str = argv[++i];
             continue;
         }
-        if (a == "--unroll") { bench_unroll_only = true; continue; }
         if (a == "--no-overflow") { no_overflow = true; continue; }
+        if (a == "-v" || a == "--verbose") { verbose = true; continue; }
         if (a == "--csv") { if (i + 1 < argc) ecm_runtime_config().bench_csv = argv[++i]; continue; }
         if (!a.empty() && a[0] == '-') { std::cerr << "Unknown option: " << a << " (use --help)\n"; return EXIT_FAILURE; }
         pos.push_back(a);
@@ -472,8 +582,8 @@ int main(int argc, char **argv) {
     if (num_threads <= 0) num_threads = affinity_cores.empty() ? 1 : (int)affinity_cores.size();
 
     bool ok = runCpuAddSubBenchmark(bits, kernel_iterations, ipt, launch_repeats,
-                                    bench_unroll_only, num_threads, affinity_cores,
-                                    no_overflow);
+                                    num_threads, affinity_cores,
+                                    no_overflow, verbose);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 #endif // BUILD_CPU_ADDSUB_MAIN

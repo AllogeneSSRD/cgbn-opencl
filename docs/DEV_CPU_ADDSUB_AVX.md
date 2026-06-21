@@ -38,7 +38,6 @@
 | `--threads <N>` | `-t` | 线程数 | 1 |
 | `--affinity c1,c2` | `-a` | Pin 线程 t 到核心 c_t | auto |
 | `--no-overflow` | — | 使用 a+b < N 测试数据（默认 a+b >= N） | false |
-| `--unroll` | — | 仅测试固定位宽 unroll 路径 | false |
 | `--csv <file>` | — | 写结果 CSV | — |
 
 ### 测试数据生成
@@ -53,25 +52,18 @@
 
 ### Fused（通用，任何位宽）
 
-`cpu_add_fused_c` / `cpu_sub_fused_c`：纯 C 融合模加/模减，add + 条件减 N 单 pass 完成。
+`cpu_add_fused_scalar` / `cpu_sub_fused_scalar`：纯 C 融合模加/模减，add + 条件减 N 单 pass 完成。
 是 ECM stage1 中 `add_mod_fused` 的 CPU 等价实现。
 
-### Unroll（固定位宽）
-
-`cpu_add_mod_unroll_<W>b` / `cpu_sub_mod_unroll_<W>b`：仅当 `limbs == W/32` 时执行
-（guard 检查）。12 个注册宽度：
-
-192b(6)、256b(8)、384b(12)、512b(16)、768b(24)、1024b(32)、
-1536b(48)、2048b(64)、2560b(80)、3072b(96)、3584b(112)、4096b(128)
+受限于 fused add/sub 的双串行进位链特性，**当前仅标量实现有实际价值**。
 
 ## 实现架构
 
 ```
 cpu_addsub_bench.cpp           (main + benchmark loop)
-  ├── cpu_addsub_impl.h        (C+AVX2+AVX512 implementations)
-  │     ├── cpu_add_fused_c    (scalar fallback)
-  │     ├── cpu_sub_fused_c    (scalar fallback)
-  │     └── cpu_add_mod_unroll_*b()  (width-guarded wrappers)
+  ├── cpu_addsub_impl.h        (标量融合 add/sub)
+  │     ├── cpu_add_fused_scalar
+  │     └── cpu_sub_fused_scalar
   └── GMP                       (random operand generation)
 ```
 
@@ -79,71 +71,63 @@ cpu_addsub_bench.cpp           (main + benchmark loop)
 
 | CPU | OpenCL | 说明 |
 |-----|--------|------|
-| `cpu_add_fused_c` | `add_mod_fused_body` | 通用融合 add-sub，任何 limbs |
-| `cpu_sub_fused_c` | `sub_mod_fused` | 融合 sub，borrow 链 |
-| `cpu_add_mod_unroll_512b` | `add_mod_unroll_512b` | 512b 固定位宽 guard |
-| `cpu_sub_mod_unroll_1024b` | `sub_mod_asm_1024b_body` | 1024b guard（asm 路径在 CPU 上等价 unroll） |
+| `cpu_add_fused_scalar` | `add_mod_fused_body` | 通用融合 add-sub，任何 limbs |
+| `cpu_sub_fused_scalar` | `sub_mod_fused` | 融合 sub，borrow 链 |
 
-### AVX2/AVX512 编译门控
+## 扩展记录: AVX2/AVX512 纵向 SIMD（已放弃）
 
-CMakeLists.txt 自动检测并设置：
+### 尝试的方案
 
-- MSVC: `/arch:AVX2`（启用 AVX2+FMA）
-- GCC/Clang: `-mavx2 -mfma`
-- AVX512 可选：`-mavx512f -mavx512dq`（当前未默认启用，需手动添加）
+| 变体 | 策略 | 状态 |
+|------|------|------|
+| `avx2_manual` | 纵向：每 8 limbs SIMD load/add/store，carry 链在标量端传播 | **已删除** |
+| `avx2_lookahead` | 纵向 + overflow/propagation mask 进位预测 | **已删除** |
+| `avx512_manual` | AVX512 纵向：每 16 limbs SIMD load/add | **已删除** |
+| `unroll_*b` | 固定位宽 guard wrapper（标量调用），与标量等价 | **已删除** |
 
-`cpu_addsub_impl.h` 通过 `#if defined(__AVX512F__)` / `#if defined(__AVX2__)` 条件
-编译 SIMD 路径。当编译器标志生效时，`cpu_add_fused_c` 被相应的向量化版本替换。
-
-## 延迟 vs 吞吐量设计
-
-```powershell
-# 延迟：1 thread × 16 ipt（最小并行）
-cpu_addsub_bench -b 512 -k 1e6 -i 16
-
-# 吞吐量：12 threads × 16 ipt = 192 total instances
-cpu_addsub_bench -b 512 -k 5e4 -i 16 -t 12 -a 1,3,...,23
-```
-
-## 扩展 AVX2 / AVX512（已完成）
-
-### 实现的算法变体
-
-`include/cpu_addsub_impl.h` 现提供以下实现，benchmark 自动运行所有可用变体并对比：
-
-| 变体 | 说明 | 位宽选择 |
-|------|------|----------|
-| `cpu_add_fused_scalar` | 纯 C 融合 add/sub，一条 lane 一条 carry | 任意 |
-| `cpu_add_fused_avx2_manual` | AVX2 纵向 SIMD：批 8 limbs 做 load/add/store，carry 链标量传播 | 任意 |
-| `cpu_add_fused_avx2_lookahead` | AVX2 纵向 SIMD + 进位预测（overflow/propagation mask） | 任意 |
-| `cpu_sub_fused_*` | 对应 sub 变体 | 任意 |
-
-AVX2 编译门控：MSVC 已默认启用 `/arch:AVX2`，`cpu_addsub_bench` Debug 构建即可使用 AVX2 变体。
-
-### 性能结论 (512-bit, Zen5)
+### 性能测量 (512-bit, Zen5 AVX2)
 
 ```
-cpu_add_scalar:        6.1 ms, 26 M ops/s   (baseline)
-cpu_add_avx2_manual:  12.8 ms, 12.5 M ops/s (0.48×)
-cpu_add_avx2_lookahead: 31 ms, 5 M ops/s    (0.20×)
+scalar:           6.1 ms, 26.3 M ops/s   (baseline)
+avx2_manual:     12.8 ms, 12.5 M ops/s   (0.48×, 衰退 2.1×)
+avx2_lookahead:  31.1 ms,  5.1 M ops/s   (0.20×, 衰退 5.1×)
 ```
 
-**垂直 SIMD 对 fused add/sub 无益**。原因：
-1. Fused add/sub 有**两条串行进位链**（add-carry + sub-borrow），无法 SIMD 化
-2. SIMD 仅加速 bulk load/add（工作量 <10%），但引入 store→scalar-ripple→load 往返开销（~40% overhead）
-3. 进位预测（lookahead）在 8-lane 内仍需串行扫描，无算力优势
+4096-bit 测试结论一致——垂直 SIMD 在位宽增大后无改善。
 
-### 横向 SoA 批处理（后续）
+### 放弃理由
 
-`cpu_mont_bench` 的 SoA 批处理模式对 addsub 同样适用：
-- 16 个 instance 的同一 limb 打包成 `__m512i`，各 lane 独立进位
-- 无跨 lane 进位依赖，可充分利用 SIMD 算力
-- 适用于多 instance 批量 benchmark 场景
+Fused modular add/sub 算法有 **两条串行进位链**（add-carry + sub-borrow），这与 SIMD 的"无数据依赖并行"模型根本冲突：
+
+1. **核心瓶颈不可向量化**：72% 的周期消耗在两条 carry/borrow 链的标量传播上，SIMD 无法触及
+2. **SIMD 引入负摊还**：bulk load/add 仅占 ~8% 工作量，但 store→scalar riple→reload 往返消耗额外的 15-35% 周期
+3. **lookahead 无优势**：8-lane 内 overflow/propagation mask 仍需串行扫描（退化为 O(8) scalar），加上 SIMD ↔ mask 格式转换开销
+4. **固定位宽 unroll 等价于标量**：limb guard 检查 + 直接调用标量循环，无任何加速路径
+
+### 正确的向量化方向：横向 SoA 批处理（已实现）
+
+`cpu_mont_bench` 的 **Structure-of-Arrays 批处理** 已在 `cpu_addsub_impl.h` 中实现、
+在 `cpu_addsub_bench` 中与标量路径并行测试。ipt 强制对齐 K (8 或 16)，默认保持 16。
+
+**SoA 性能 (Zen5 AVX2, Release /O2)**：
+
+| 算子 | 512-bit | 1024-bit | 4096-bit |
+|------|---------|----------|----------|
+| cpu_add_fused (scalar) | 209 ms | 390 ms | 1959 ms |
+| cpu_add_avx2_soa | 147 ms (**1.42×**) | 377 ms (1.04×) | 1147 ms (**1.71×**) |
+| cpu_sub_fused (scalar) | 156 ms | 493 ms | 1589 ms |
+| cpu_sub_avx2_soa | 87.5 ms (**1.79×**) | 231 ms (**2.14×**) | 652 ms (**2.44×**) |
+
+**多线程 (96 ipt × 4t, 512-bit)**：
+| add scalar: 1418 ms | add SoA: 1016 ms (**1.39×**) |
+| sub scalar: 1054 ms | sub SoA: 646 ms (**1.63×**) |
+
+位宽越大 SoA 加速越显著。**必须用 Release 编译测试**——Debug 下不内联 intrinsic、寄存器分配退化。
 
 ## 与其他性能基准的关系
 
 | 基准 | 依赖 | 测试对象 | 对标 |
 |------|------|----------|------|
-| `cpu_addsub_bench.exe` | GMP | CPU fused/unroll | `opencl_ecm_addsub.exe` |
+| `cpu_addsub_bench.exe` | GMP | CPU fused add/sub (scalar + SoA) | `opencl_ecm_addsub.exe` |
 | `opencl_ecm_addsub.exe` | OpenCL + GMP | GPU asm/unroll/fused | `ecm_stage1.cl` |
 | `cpu_mont_bench.exe` | GMP | CPU mont mul/sqr | `opencl_ecm_montsqr.exe` |

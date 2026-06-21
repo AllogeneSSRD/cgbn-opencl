@@ -179,11 +179,9 @@ ecm_target_link_gmp(cpu_addsub_bench)
 
 # Enable AVX2/AVX512 if the compiler host supports them
 if(MSVC)
-    target_compile_options(cpu_addsub_bench PRIVATE /arch:AVX2)
+    target_compile_options(cpu_addsub_bench PRIVATE /arch:AVX512)
 else()
-    target_compile_options(cpu_addsub_bench PRIVATE -mavx2 -mfma)
-    # AVX512 optional: GCC/Clang need -mavx512f -mavx512dq
-    # add if needed: target_compile_options(cpu_addsub_bench PRIVATE -mavx512f -mavx512dq)
+    target_compile_options(cpu_addsub_bench PRIVATE -mavx2 -mfma -mavx512f -mavx512dq)
 endif()
 
 add_executable(opencl_ecm_montsqr
