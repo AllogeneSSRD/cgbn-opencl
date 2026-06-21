@@ -86,7 +86,28 @@ target_link_libraries(cpu_mont_bench ${GMP_LIBRARY})
 # set_source_files_properties(src/cpu_mont_avx.cpp PROPERTIES COMPILE_FLAGS "/arch:AVX512")
 ```
 
-## 后续 TODO 路径
+## 最后更新
+
+2026-06-21: 已完成 `cpu_addsub_bench` 的 AVX2/AVX512 扩展实现和基准测试。
+
+### 结论
+
+**垂直 SIMD（纵向向量化）对 fused add/sub 无益**，因为该算法有两条串行进位链，SIMD 无法加速核心瓶颈。
+
+`cpu_mont_bench` 的横向 SoA 批处理策略是 CPU 向量化的正确方向——每个 SIMD lane 处理独立 instance，无跨 lane 进位依赖。
+
+### 当前架构
+
+```
+cpu_addsub_bench.cpp           (main + multi-variant benchmark loop)
+  └── cpu_addsub_impl.h        (scalar + avx2_manual + avx2_lookahead)
+        ├── cpu_add_fused_scalar       (标量基线)
+        ├── cpu_add_fused_avx2_manual  (SIMD bulk + 标量 carry)
+        ├── cpu_add_fused_avx2_lookahead (overflow+propagation mask)
+        └── cpu_sub_fused_*    (对应 sub 变体)
+```
+
+Benchmark 自动注册并运行所有可用变体（基于编译时 ISA 检测），输出对比结果。
 
 下列方案已讨论但未在当前阶段实施，记录供后续评估：
 
