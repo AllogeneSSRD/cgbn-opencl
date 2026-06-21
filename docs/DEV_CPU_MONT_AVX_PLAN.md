@@ -33,8 +33,42 @@
 ## CLI 接口
 
 ```
-cpu_mont_bench --bits <512|1024> --iterations <n> [--instances <n>] [--launch-repeats <n>] [--avx2]
+# 位置参数: [bits] [iterations] [ipt] [repeats]
+
+# 延迟测试
+cpu_mont_bench 512 1e6 16 1
+
+# 延迟测试 (no-overflow 用例)
+cpu_mont_bench 512 1e6 16 1 --no-overflow
+
+# 吞吐量测试
+cpu_mont_bench 512 1e6 16 5 -t 12 -a 1,3,5,7,9,11,13,15,17,19,21,23
+
+# 命名参数形式
+cpu_mont_bench -b 512 -k 1e6 -i 16 -r 1 --no-verify
 ```
+
+### 参数
+
+| 参数 | 短形式 | 说明 | 默认值 |
+|------|--------|------|--------|
+| `[bits]` | `-b` / `--bits` | 位宽 | 512 |
+| `[iterations]` | `-k` / `--kernel-iters` | 每线程 Montgomery 乘法次数，支持科学计数法 | 1000 |
+| `[ipt]` | `-i` / `--ipt` | 每线程 instance 数（auto=16 AVX512 / 8 AVX2） | auto |
+| `[repeats]` | `-r` / `--repeats` | Launch repeats | 1 |
+| `--threads <N>` | `-t` | 线程数 | 1 |
+| `--affinity MODE` | `-a` | auto / none / 逗号分隔逻辑 CPU | auto |
+| `--no-overflow` | — | 使用小输入数据 | false |
+| `--avx2` | — | 强制 AVX2（即使在 AVX512 CPU 上） | false |
+| `--no-verify` | — | 跳过 self-test | false |
+
+### 测试数据生成
+
+使用 GMP 确定性随机数（与 addsub/montsqr 统一的 seed 方案）：
+- 两个用例：`large-inputs` (a,b ∈ [N/2, N)) 和 `small-inputs` (a,b < N/4)
+- 确定性 seed: `bits × 31337 + case_index × 0x9e3779b9`
+- `--no-overflow` 选择 small-inputs
+- LCG 保留用于 self-test 内部验证
 
 ## CMakeLists.txt 集成
 

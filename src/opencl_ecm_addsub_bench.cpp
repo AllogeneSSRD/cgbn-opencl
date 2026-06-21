@@ -68,7 +68,7 @@ void query_kernel_resources(cl_kernel k, cl_device_id dev, size_t &private_bytes
 } // namespace
 
 bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances, int launch_repeats,
-                                 bool bench_unroll_only, bool verbose) {
+                                 bool bench_unroll_only, bool verbose, bool no_overflow) {
     if (bits <= 0 || (bits % 32) != 0 || (uint32_t)bits > MAX_BENCH_BITS) {
         std::cerr << "bits must be a positive multiple of 32 and <= " << MAX_BENCH_BITS
                   << std::endl;
@@ -83,35 +83,66 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
               << ", launch_repeats=" << launch_repeats
               << ", unroll_only=" << (bench_unroll_only ? "1" : "0") << std::endl;
 
-    mpz_t n_gmp, a_gmp, b_gmp;
-    mpz_init(n_gmp);
-    mpz_init(a_gmp);
-    mpz_init(b_gmp);
-    mpz_ui_pow_ui(n_gmp, 2, BITS-1);
-    mpz_sub_ui(n_gmp, n_gmp, 109u);
-    mpz_ui_pow_ui(a_gmp, 2, BITS-1);
-    mpz_sub_ui(a_gmp, a_gmp, 991u);
-    mpz_ui_pow_ui(b_gmp, 2, BITS-1);
-    mpz_sub_ui(b_gmp, b_gmp, 8218291649u);
-    mpz_mod(a_gmp, a_gmp, n_gmp);
-    mpz_mod(b_gmp, b_gmp, n_gmp);
+    // Two test cases per bit-width:
+    //   0 = a+b >= N (overflow — fused speculative subtract triggers)
+    //   1 = a+b <  N (no-overflow — sum stays below N)
+    // Random data seeded by bits for reproducibility.
+    struct BenchCase {
+        const char *label;
+        std::vector<uint32_t> a_words, b_words, n_words;
+        mpz_t a_gmp, b_gmp, n_gmp;  // GMP references for verification
+    };
+    BenchCase cases[2] = {};
+    {
+        gmp_randstate_t rng;
+        gmp_randinit_default(rng);
+        for (int ic = 0; ic < 2; ++ic) {
+            gmp_randseed_ui(rng, (unsigned long)(BITS * 31337u + (unsigned)ic * 0x9e3779b9u));
+            cases[ic].label = (ic == 0) ? "overflow (a+b>=N)" : "no-overflow (a+b<N)";
+            mpz_init(cases[ic].a_gmp); mpz_init(cases[ic].b_gmp); mpz_init(cases[ic].n_gmp);
+            mpz_t &N = cases[ic].n_gmp, &a = cases[ic].a_gmp, &b = cases[ic].b_gmp;
+            mpz_urandomb(N, rng, BITS); mpz_setbit(N, BITS-1); mpz_setbit(N, 0);
+            if (ic == 0) {  // overflow: a in [N/2, N), force a+b >= N
+                mpz_t half; mpz_init(half); mpz_tdiv_q_ui(half, N, 2u);
+                mpz_urandomm(a, rng, half); mpz_add(a, a, half);
+                mpz_urandomm(b, rng, N);
+                mpz_t sum; mpz_init(sum); mpz_add(sum, a, b);
+                if (mpz_cmp(sum, N) < 0) { mpz_sub(b, N, a); mpz_sub_ui(b, b, 1u); }
+                mpz_clear(sum); mpz_clear(half);
+            } else {  // no-overflow: both < N/4
+                mpz_t quar; mpz_init(quar); mpz_tdiv_q_ui(quar, N, 4u);
+                mpz_urandomm(a, rng, quar); mpz_urandomm(b, rng, quar);
+                mpz_clear(quar);
+            }
+            cases[ic].a_words.resize(WORDS); cases[ic].b_words.resize(WORDS); cases[ic].n_words.resize(WORDS);
+            fill_from_gmp(a, cases[ic].a_words.data(), WORDS);
+            fill_from_gmp(b, cases[ic].b_words.data(), WORDS);
+            fill_from_gmp(N, cases[ic].n_words.data(), WORDS);
+        }
+        gmp_randclear(rng);
+    }
 
+    // Host buffers (reused across both cases)
     std::vector<uint32_t> host_a((size_t)instances * WORDS);
     std::vector<uint32_t> host_b((size_t)instances * WORDS);
     std::vector<uint32_t> host_n((size_t)instances * WORDS);
     std::vector<uint32_t> host_out((size_t)instances * WORDS);
-    std::vector<uint32_t> a_words(WORDS), b_words(WORDS), n_words(WORDS);
 
-    fill_from_gmp(a_gmp, a_words.data(), WORDS);
-    fill_from_gmp(b_gmp, b_words.data(), WORDS);
-    fill_from_gmp(n_gmp, n_words.data(), WORDS);
-    for (int i = 0; i < instances; ++i) {
-        for (uint32_t j = 0; j < WORDS; ++j) {
-            host_a[(size_t)i * WORDS + j] = a_words[j];
-            host_b[(size_t)i * WORDS + j] = b_words[j];
-            host_n[(size_t)i * WORDS + j] = n_words[j];
+    // Helper: load one case into host buffers
+    auto upload_case = [&](int ic) {
+        for (int i = 0; i < instances; ++i) {
+            uint32_t base = (uint32_t)i * WORDS;
+            for (uint32_t j = 0; j < WORDS; ++j) {
+                host_a[base + j] = cases[ic].a_words[j];
+                host_b[base + j] = cases[ic].b_words[j];
+                host_n[base + j] = cases[ic].n_words[j];
+            }
         }
-    }
+    };
+
+    const int case_idx = no_overflow ? 1 : 0;
+    upload_case(case_idx);
+    std::cout << "  [" << cases[case_idx].label << "]\n" << std::endl;
 
     cgbn::opencl::context_t ctx;
     cl_int err = cgbn::opencl::create_context(ctx);
@@ -147,6 +178,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         }
         src += "\n" + part;
     }
+    // ── Hot-loop wrappers for manifest / asm bench kernels ──────────
     cl_int buildErr = CL_SUCCESS;
     int fused_unroll = 2;
     {
@@ -222,7 +254,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         }
     }
 
-    auto run_pure = [&](const char *kname, bool needsN, double &ms_out) -> bool {
+    auto run_pure = [&](const char *kname, bool needsN, bool hot, double &ms_out) -> bool {
         cl_int kerr = CL_SUCCESS;
         cl_kernel k = clCreateKernel(program, kname, &kerr);
         if (kerr != CL_SUCCESS) {
@@ -245,8 +277,11 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             clSetKernelArg(k, 3, sizeof(cl_uint), &limbs);
         }
         cl_uint inner_iters = (cl_uint)kernel_iterations;
-        clSetKernelArg(k, needsN ? 5 : 4, sizeof(cl_uint), &inner_iters);
-        const int total_enqueues = launch_repeats;  // iterations now inside kernel
+        const int total_enqueues = hot ? launch_repeats : (launch_repeats * kernel_iterations);
+        if (hot) {
+            // hot-loop kernels: inner loop inside kernel, extra arg 5
+            clSetKernelArg(k, needsN ? 5 : 4, sizeof(cl_uint), &inner_iters);
+        }
         bool ok = run_kernel(ctx.queue, k, global, total_enqueues, ms_out);
         if (verbose) {
             size_t priv_b = 0, loc_b = 0, pref = 0, wg = 0;
@@ -266,7 +301,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         return ok;
     };
 
-    auto run_pure_wg = [&](const char *kname, bool needsN, size_t local_size, double &ms_out) -> bool {
+    auto run_pure_wg = [&](const char *kname, bool needsN, bool hot, size_t local_size, double &ms_out) -> bool {
         cl_int kerr = CL_SUCCESS;
         cl_kernel k = clCreateKernel(program, kname, &kerr);
         if (kerr != CL_SUCCESS) {
@@ -278,12 +313,14 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         clSetKernelArg(k, 2, sizeof(cl_mem), &bufN);
         clSetKernelArg(k, 3, sizeof(cl_mem), &bufOut);
         clSetKernelArg(k, 4, sizeof(cl_uint), &limbs);
-        cl_uint wg_iters = (cl_uint)kernel_iterations;
-        clSetKernelArg(k, 5, sizeof(cl_uint), &wg_iters);
-        const int total_enqueues = launch_repeats;
+        const int total_enqueues_wg = hot ? launch_repeats : (launch_repeats * kernel_iterations);
+        if (hot) {
+            cl_uint wg_iters = (cl_uint)kernel_iterations;
+            clSetKernelArg(k, 5, sizeof(cl_uint), &wg_iters);
+        }
         size_t global_wg = (size_t)instances * local_size;
         auto t0 = std::chrono::high_resolution_clock::now();
-        for (int i = 0; i < total_enqueues; ++i) {
+        for (int i = 0; i < total_enqueues_wg; ++i) {
             cl_int err2 =
                 clEnqueueNDRangeKernel(ctx.queue, k, 1, nullptr, &global_wg, &local_size, 0, nullptr, nullptr);
             if (err2 != CL_SUCCESS) {
@@ -297,7 +334,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         ms_out = std::chrono::duration<double, std::milli>(t1 - t0).count();
         size_t priv_b = 0, loc_b = 0, pref = 0, wg = 0;
         query_kernel_resources(k, ctx.device, priv_b, loc_b, pref, wg);
-        double op_count_wg = (double)instances * (double)total_enqueues;
+        double op_count_wg = (double)instances * (double)total_enqueues_wg;
         double ops_s = op_count_wg / (ms_out / 1000.0);
         std::cout << "  [" << kname << "] wg=" << local_size << " private_mem=" << priv_b
                   << "B local_mem=" << loc_b << "B pref_wg=" << pref << " max_wg=" << wg << std::endl;
@@ -400,8 +437,8 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             mpz_init(got_legacy);
             mpz_init(got_mask);
         }
-        mpz_add(expect, a_gmp, b_gmp);
-        mpz_mod(expect, expect, n_gmp);
+        mpz_add(expect, cases[case_idx].a_gmp, cases[case_idx].b_gmp);
+        mpz_mod(expect, expect, cases[case_idx].n_gmp);
 
         auto verify_wg = [&](const char *kname, size_t local) -> bool {
             cl_int kerr = CL_SUCCESS;
@@ -640,8 +677,8 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         mpz_init(got_base);
         mpz_init(got_unroll);
         mpz_init(got_unroll_stage1);
-        mpz_sub(expect, a_gmp, b_gmp);
-        mpz_mod(expect, expect, n_gmp);
+        mpz_sub(expect, cases[case_idx].a_gmp, cases[case_idx].b_gmp);
+        mpz_mod(expect, expect, cases[case_idx].n_gmp);
 
         fill_to_gmp(out_base.data(), WORDS, got_base);
         bool ok_base = (mpz_cmp(expect, got_base) == 0);
@@ -735,29 +772,29 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
            t_sub_mod_unroll_asm_b32 = 0.0, t_sub_mod_unroll_asm_b64 = 0.0;
     std::map<int, double> t_lpt_ms;
     if (!bench_unroll_only) {
-        if (!run_pure("ecm_mp_add_n", false, t_add_n)) return false;
-        if (!run_pure("ecm_mp_sub_n", false, t_sub_n)) return false;
+        if (!run_pure("ecm_mp_add_n", false, true, t_add_n)) return false;
+        if (!run_pure("ecm_mp_sub_n", false, true, t_sub_n)) return false;
     }
     if (!verify_add_mod_kernels()) return false;
     if (!verify_sub_mod_kernels()) return false;
     if (!bench_unroll_only) {
-        if (!run_pure("ecm_mp_add_mod_legacy", true, t_add_mod_legacy)) return false;
-        if (!run_pure("ecm_mp_add_mod_mask", true, t_add_mod_mask)) return false;
+        if (!run_pure("ecm_mp_add_mod_legacy", true, true, t_add_mod_legacy)) return false;
+        if (!run_pure("ecm_mp_add_mod_mask", true, true, t_add_mod_mask)) return false;
     }
-    if (!run_pure("ecm_mp_add_mod_fused", true, t_add_mod)) return false;
+    if (!run_pure("ecm_mp_add_mod_fused", true, true, t_add_mod)) return false;
     {
         cl_int kerr = CL_SUCCESS;
         cl_kernel ku = clCreateKernel(program, "ecm_mp_add_mod_fused_unroll", &kerr);
         if (kerr == CL_SUCCESS) {
             clReleaseKernel(ku);
-            if (!run_pure("ecm_mp_add_mod_fused_unroll", true, t_add_mod_unroll)) return false;
+            if (!run_pure("ecm_mp_add_mod_fused_unroll", true, false, t_add_mod_unroll)) return false;
         } else {
             std::cout << "mp_add_mod_fused_unroll: (no kernel for MAX_LIMBS=" << WORDS << ")" << std::endl;
         }
         cl_kernel kp = clCreateKernel(program, "ecm_mp_add_mod_fused_unroll_priv", &kerr);
         if (kerr == CL_SUCCESS) {
             clReleaseKernel(kp);
-            if (!run_pure("ecm_mp_add_mod_fused_unroll_priv", true, t_add_mod_unroll_priv)) return false;
+            if (!run_pure("ecm_mp_add_mod_fused_unroll_priv", true, false, t_add_mod_unroll_priv)) return false;
         }
         {
             auto try_bench_stage1 = [&](const char *kname, double &t_out) {
@@ -765,7 +802,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 cl_kernel ka = clCreateKernel(program, kname, &kerr2);
                 if (kerr2 != CL_SUCCESS) return;
                 clReleaseKernel(ka);
-                (void)run_pure(kname, true, t_out);
+                (void)run_pure(kname, true, false, t_out);
             };
             try_bench_stage1("ecm_mp_add_mod_fused_unroll_auto", t_add_mod_unroll_auto);
         }
@@ -775,7 +812,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 cl_kernel ka = clCreateKernel(program, kname, &kerr);
                 if (kerr != CL_SUCCESS) return;
                 clReleaseKernel(ka);
-                (void)run_pure(kname, true, t_out);
+                (void)run_pure(kname, true, false, t_out);
             };
             try_bench_asm("ecm_mp_add_mod_fused_unroll_asm", t_add_mod_unroll_asm);
             try_bench_asm("ecm_mp_add_mod_fused_unroll_asm_b16", t_add_mod_unroll_asm_b16);
@@ -807,17 +844,17 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
             if (kerr != CL_SUCCESS) continue;
             clReleaseKernel(kl);
             double t_lpt = 0.0;
-            if (!run_pure_wg(kname, true, (size_t)threads, t_lpt)) return false;
+            if (!run_pure_wg(kname, true, false, (size_t)threads, t_lpt)) return false;
             t_lpt_ms[chunk] = t_lpt;
         }
     }
-    if (!run_pure("ecm_mp_sub_mod", true, t_sub_mod)) return false;
+    if (!run_pure("ecm_mp_sub_mod", true, true, t_sub_mod)) return false;
     {
         cl_int kerr = CL_SUCCESS;
         cl_kernel ku = clCreateKernel(program, "ecm_mp_sub_mod_fused_unroll", &kerr);
         if (kerr == CL_SUCCESS) {
             clReleaseKernel(ku);
-            if (!run_pure("ecm_mp_sub_mod_fused_unroll", true, t_sub_mod_unroll)) return false;
+            if (!run_pure("ecm_mp_sub_mod_fused_unroll", true, false, t_sub_mod_unroll)) return false;
         } else {
             std::cout << "mp_sub_mod_fused_unroll: (no kernel for MAX_LIMBS=" << WORDS << ")"
                       << std::endl;
@@ -825,7 +862,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
         cl_kernel kp = clCreateKernel(program, "ecm_mp_sub_mod_fused_unroll_priv", &kerr);
         if (kerr == CL_SUCCESS) {
             clReleaseKernel(kp);
-            if (!run_pure("ecm_mp_sub_mod_fused_unroll_priv", true, t_sub_mod_unroll_priv))
+            if (!run_pure("ecm_mp_sub_mod_fused_unroll_priv", true, false, t_sub_mod_unroll_priv))
                 return false;
         }
         {
@@ -834,7 +871,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 cl_kernel ka = clCreateKernel(program, kname, &kerr2);
                 if (kerr2 != CL_SUCCESS) return;
                 clReleaseKernel(ka);
-                (void)run_pure(kname, true, t_out);
+                (void)run_pure(kname, true, false, t_out);
             };
             try_bench_sub_stage1("ecm_mp_sub_mod_fused_unroll_auto", t_sub_mod_unroll_auto);
         }
@@ -844,7 +881,7 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
                 cl_kernel ka = clCreateKernel(program, kname, &kerr2);
                 if (kerr2 != CL_SUCCESS) return;
                 clReleaseKernel(ka);
-                (void)run_pure(kname, true, t_out);
+                (void)run_pure(kname, true, false, t_out);
             };
             try_bench_sub_asm("ecm_mp_sub_mod_fused_unroll_asm_b32", t_sub_mod_unroll_asm_b32);
             if (asm_b64_enabled) {
@@ -1119,16 +1156,18 @@ bool runOpenClEcmAddSubBenchmark(int bits, int kernel_iterations, int instances,
     clReleaseProgram(program);
     if (csv_enabled && csv.is_open()) csv.close();
     cgbn::opencl::destroy_context(ctx);
-    mpz_clear(n_gmp);
-    mpz_clear(a_gmp);
-    mpz_clear(b_gmp);
+    for (int ic = 0; ic < 2; ++ic) {
+        mpz_clear(cases[ic].a_gmp);
+        mpz_clear(cases[ic].b_gmp);
+        mpz_clear(cases[ic].n_gmp);
+    }
     return true;
 }
 
 // ── Width-specific Stage-1 operator bench ────────────────────────────
 static bool run_width_specific_addsub_bench(int bits, int kernel_iterations,
                                             int instances, int launch_repeats,
-                                            bool verbose) {
+                                            bool verbose, bool no_overflow) {
     if (bits <= 0 || bits % 32 != 0) return false;
 
     static const int kWidths[] = {128,192,256,384,512,768,1024,1536,2048,2560,3072,3584,4096};
@@ -1224,6 +1263,43 @@ static bool run_width_specific_addsub_bench(int bits, int kernel_iterations,
 
     size_t totalWords = (size_t)instances * WORDS;
     std::vector<uint32_t> host_a(totalWords), host_b(totalWords), host_n(WORDS);
+
+    // Fill with random GMP data (same seed scheme as main bench, case-sensitive)
+    {
+        gmp_randstate_t rng;
+        gmp_randinit_default(rng);
+        gmp_randseed_ui(rng, (unsigned long)((uint32_t)bench_width * 31337u + (no_overflow ? 1u : 0u) * 0x9e3779b9u));
+        mpz_t N, a, b;
+        mpz_init(N); mpz_init(a); mpz_init(b);
+        mpz_urandomb(N, rng, bench_width); mpz_setbit(N, bench_width-1); mpz_setbit(N, 0);
+        if (no_overflow) {
+            mpz_t quar; mpz_init(quar); mpz_tdiv_q_ui(quar, N, 4u);
+            mpz_urandomm(a, rng, quar); mpz_urandomm(b, rng, quar);
+            mpz_clear(quar);
+        } else {
+            mpz_t half; mpz_init(half); mpz_tdiv_q_ui(half, N, 2u);
+            mpz_urandomm(a, rng, half); mpz_add(a, a, half);
+            mpz_urandomm(b, rng, N);
+            mpz_t sum; mpz_init(sum); mpz_add(sum, a, b);
+            if (mpz_cmp(sum, N) < 0) { mpz_sub(b, N, a); mpz_sub_ui(b, b, 1u); }
+            mpz_clear(sum); mpz_clear(half);
+        }
+        std::vector<uint32_t> aw(WORDS), bw(WORDS), nw(WORDS);
+        fill_from_gmp(a, aw.data(), WORDS);
+        fill_from_gmp(b, bw.data(), WORDS);
+        fill_from_gmp(N, nw.data(), WORDS);
+        for (size_t i = 0; i < (size_t)instances; ++i) {
+            uint32_t base = (uint32_t)i * WORDS;
+            for (uint32_t j = 0; j < WORDS; ++j) {
+                host_a[base + j] = aw[j];
+                host_b[base + j] = bw[j];
+                host_n[j] = nw[j];
+            }
+        }
+        mpz_clear(a); mpz_clear(b); mpz_clear(N);
+        gmp_randclear(rng);
+    }
+
     cl_int cerr;
     cl_mem bufA = clCreateBuffer(ctx.ctx, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,sizeof(uint32_t)*totalWords,host_a.data(),&cerr);
     cl_mem bufB = clCreateBuffer(ctx.ctx, CL_MEM_READ_ONLY|CL_MEM_COPY_HOST_PTR,sizeof(uint32_t)*totalWords,host_b.data(),&cerr);
@@ -1292,21 +1368,31 @@ int main(int argc, char **argv) {
     bool bench_unroll_only = false;
     bool verbose = false;
     bool fixed_width_only = false;
+    bool no_overflow = false;
     int device_index = -1;
     auto print_usage = [&]() {
         std::cout
-            << "Usage: opencl_ecm_addsub [--bits <bits>] [-d|--device <index>] "
-               "[--unroll] [kernel_iterations] [instances] [launch_repeats]\n"
-            << "  --bits <bits>            Benchmark bit width (multiple of 32, <= 8192)\n"
+            << "Usage: opencl_ecm_addsub [options] [bits] [kernel_iterations] [instances] [launch_repeats]\n"
+            << "  Positional args:\n"
+            << "    bits                    Benchmark bit width (multiple of 32, <= 8192, default: 1024)\n"
+            << "    kernel_iterations       Kernel inner-loop count; supports 1e6 notation (default: 1000)\n"
+            << "    instances               Batched instances (default: 128)\n"
+            << "    launch_repeats          Measurement repeats (default: 10)\n"
+            << "  Options:\n"
+            << "  --bits <bits>            Alias for 1st positional (multiple of 32, <= 8192)\n"
             << "  --unroll                 Only benchmark fused_unroll / asm unroll / lpt paths\n"
             << "  --fixed                  Only benchmark Stage-1 fixed-width operators\n"
+            << "  --no-overflow            Use a+b < N test data (default: a+b >= N)\n"
             << "  -v, --verbose            Verbose: print kernel resource details\n"
             << "  -d, --device <index>     OpenCL device index\n"
             << "  --no-asm                 Skip AMD asm kernels (was ECM_ADDSUB_ASM_DISABLE)\n"
             << "  --asm-b64                Enable b64 asm kernels (was ECM_ADDSUB_ASM_B64)\n"
             << "  --addsub-fused-unroll <1|2>  add/sub fused-unroll mode\n"
             << "  --csv <file>             Write results CSV (was ECM_BENCH_CSV)\n"
-            << "  -h, --help               Show this help message\n";
+            << "  -h, --help               Show this help message\n"
+            << "\nExamples:\n"
+            << "  opencl_ecm_addsub -d 1 512 1e4 16 1 --fixed\n"
+            << "  opencl_ecm_addsub -d 1 512 5000 6144 1\n";
     };
     std::vector<std::string> pos;
     for (int i = 1; i < argc; ++i) {
@@ -1331,6 +1417,10 @@ int main(int argc, char **argv) {
             fixed_width_only = true;
             continue;
         }
+        if (a == "--no-overflow") {
+            no_overflow = true;
+            continue;
+        }
         if ((a == "-d" || a == "--device") && i + 1 < argc) {
             device_index = std::stoi(std::string(argv[++i]));
             continue;
@@ -1342,25 +1432,23 @@ int main(int argc, char **argv) {
         pos.push_back(a);
     }
     if (device_index >= 0) { ecm_runtime_config().device_index = device_index; }
-    if (pos.size() >= 1) kernel_iterations = std::stoi(pos[0]);
-    if (pos.size() >= 2) instances = std::stoi(pos[1]);
-    if (pos.size() >= 3) launch_repeats = std::stoi(pos[2]);
-    if (device_index >= 0) {
-        const std::string dev = std::to_string(device_index);
-#ifdef _WIN32
-        _putenv_s("CGBN_OPENCL_DEVICE_INDEX", dev.c_str());
-#else
-        setenv("CGBN_OPENCL_DEVICE_INDEX", dev.c_str(), 1);
-#endif
-        std::cout << "OpenCL device override: CGBN_OPENCL_DEVICE_INDEX=" << dev << std::endl;
-    }
+    auto parse_count = [&](const std::string &s, const char *label, int &out) {
+        try { double d = std::stod(s); out = (int)(d + 0.5); } catch (...) {
+            std::cerr << "Invalid " << label << ": " << s << std::endl; return false; }
+        return true;
+    };
+    if (pos.size() >= 1 && !parse_count(pos[0], "bits", bits)) return EXIT_FAILURE;
+    if (pos.size() >= 2 && !parse_count(pos[1], "kernel_iterations", kernel_iterations)) return EXIT_FAILURE;
+    if (pos.size() >= 3 && !parse_count(pos[2], "instances", instances)) return EXIT_FAILURE;
+    if (pos.size() >= 4 && !parse_count(pos[3], "launch_repeats", launch_repeats)) return EXIT_FAILURE;
+
     bool ok = true;
     if (!fixed_width_only) {
         ok = runOpenClEcmAddSubBenchmark(bits, kernel_iterations, instances, launch_repeats,
-                                         bench_unroll_only, verbose);
+                                         bench_unroll_only, verbose, no_overflow);
     }
     if (ok || fixed_width_only) {
-        run_width_specific_addsub_bench(bits, kernel_iterations, instances, launch_repeats, verbose);
+        run_width_specific_addsub_bench(bits, kernel_iterations, instances, launch_repeats, verbose, no_overflow);
     }
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }

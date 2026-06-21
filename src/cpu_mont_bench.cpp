@@ -20,6 +20,8 @@
 #include <mutex>
 #include <atomic>
 
+#include <gmp.h>
+
 #include "cpu_mont_avx.h"
 #include "cpu_mont_scalar.h"
 
@@ -33,58 +35,58 @@
 #endif
 
 /* ══════════════════════════════════════════════════════════════════════════
- *  Basic CLI helpers
+ *  CLI helpers
  * ════════════════════════════════════════════════════════════════════════ */
 
-struct BenchConfig {
-    uint32_t bits         = 512;
-    uint32_t iterations   = 1000;
-    uint32_t instances    = 0;          /* 0 = auto (16 AVX512, 8 AVX2) */
-    uint32_t repeats      = 1;
-    bool     force_avx2   = false;
-    bool     verify       = true;
-    bool     verbose      = false;
-    bool     sync_barrier = false;      /* barrier-sync every iteration */
-    std::string affinity = "auto";      /* "auto" | "none" | "0,2,4,6" */
-};
+#include <cmath>
+#include <sstream>
 
-static void print_usage()
-{
-    std::printf(
-        "Usage: cpu_mont_bench --bits <512|1024> [options]\n"
-        "Options:\n"
-        "  --iterations N       Montgomery multiplications per thread (default: 1000)\n"
-        "  --instances N        Batched curves (auto=16 AVX512 / 8 AVX2; rounds up to K multiple)\n"
-        "  --repeats N          Launch repeats per timing sample (default: 1)\n"
-        "  --affinity MODE      CPU affinity: auto (default), none, or comma-sep logical CPUs\n"
-        "  --sync-barrier       Barrier-sync every iteration across threads\n"
-        "  --avx2               Force AVX2 code path (even on AVX512-capable CPU)\n"
-        "  --no-verify          Skip correctness self-test\n"
-        "  -v, --verbose\n");
+static constexpr int DEFAULT_IPT_AVX512 = 16;
+static constexpr int DEFAULT_IPT_AVX2   = 8;
+
+/// Parse a CLI value that may be in scientific notation (e.g. 1e6, 5e5).
+static bool parse_cli_count(const char *s, const char *label, int &out) {
+    if (s == nullptr || *s == '\0') return true;
+    try {
+        double d = std::stod(s);
+        if (!std::isfinite(d) || d < 0.0) {
+            std::fprintf(stderr, "Invalid %s: %s\n", label, s);
+            return false;
+        }
+        out = (int)(d + 0.5);
+        return true;
+    } catch (...) {
+        std::fprintf(stderr, "Invalid %s: %s\n", label, s);
+        return false;
+    }
 }
 
-static bool parse_cli(int argc, char *argv[], BenchConfig &cfg)
+static void print_usage(const char *prog)
 {
-    for (int i = 1; i < argc; ++i) {
-        std::string a = argv[i];
-        if (a == "--bits" && i + 1 < argc) { cfg.bits = (uint32_t)std::atoi(argv[++i]); }
-        else if (a == "--iterations" && i + 1 < argc) { cfg.iterations = (uint32_t)std::atoi(argv[++i]); }
-        else if (a == "--instances" && i + 1 < argc) { cfg.instances = (uint32_t)std::atoi(argv[++i]); }
-        else if (a == "--repeats" && i + 1 < argc) { cfg.repeats = (uint32_t)std::atoi(argv[++i]); }
-        else if (a == "--affinity" && i + 1 < argc) { cfg.affinity = argv[++i]; }
-        else if (a == "--avx2") { cfg.force_avx2 = true; }
-        else if (a == "--sync-barrier") { cfg.sync_barrier = true; }
-        else if (a == "--no-verify") { cfg.verify = false; }
-        else if (a == "-v" || a == "--verbose") { cfg.verbose = true; }
-        else if (a == "-h" || a == "--help") { print_usage(); return false; }
-        else { std::printf("Unknown option: %s\n", a.c_str()); print_usage(); return false; }
-    }
-    // if (cfg.bits != 512 && cfg.bits != 1024) {
-    //     std::printf("Error: --bits must be 512 or 1024 (got %u)\n", cfg.bits);
-    //     print_usage();
-    //     return false;
-    // }
-    return true;
+    std::printf(
+        "Usage: %s [options] [bits] [iterations] [ipt] [repeats]\n"
+        "  Positional args:\n"
+        "    bits                    Bit-width (default: 512)\n"
+        "    iterations              Montgomery multiplications per thread; supports 1e6 (default: 1000)\n"
+        "    ipt                     Instances per thread, auto=16 AVX512 / 8 AVX2 (default: auto)\n"
+        "    repeats                 Launch repeats per timing sample (default: 1)\n"
+        "  Options:\n"
+        "  -b, --bits <N>           Alias for 1st positional\n"
+        "  -k, --kernel-iters <N>   Alias for 2nd positional; supports 1e6\n"
+        "  -i, --ipt <N>            Alias for 3rd positional\n"
+        "  -t, --threads <N>        Number of threads (default: 1)\n"
+        "  -r, --repeats <N>        Alias for 4th positional\n"
+        "  -a, --affinity MODE      CPU affinity: auto (default), none, or comma-sep logical CPUs\n"
+        "  --no-overflow            Use small inputs (less conditional sub triggers)\n"
+        "  --avx2                   Force AVX2 code path (even on AVX512-capable CPU)\n"
+        "  --sync-barrier           Barrier-sync every iteration across threads\n"
+        "  --no-verify              Skip correctness self-test\n"
+        "  -v, --verbose\n"
+        "\nExamples:\n"
+        "  %s 512 1e6 16                                    # latency: 1 thread\n"
+        "  %s 512 1e6 16 5 -t 12 -a 1,3,5,7,9,11,13,15,17,19,21,23\n"
+        "                                                    # throughput: 12 threads\n",
+        prog, prog, prog);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -243,7 +245,25 @@ static std::vector<uint32_t> parse_affinity_list(const std::string &s)
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
- *  Seeded LCG for reproducible random fill
+ *  GMP ↔ uint32_t[] conversion for benchmark data
+ * ════════════════════════════════════════════════════════════════════════ */
+
+static void fill_from_gmp(const mpz_t v, uint32_t *out, uint32_t words)
+{
+    mpz_t tmp, mod;
+    mpz_init(tmp);
+    mpz_init(mod);
+    mpz_ui_pow_ui(mod, 2ul, (unsigned long)(words * 32));
+    mpz_mod(tmp, v, mod);
+    size_t count = 0;
+    mpz_export(out, &count, -1, sizeof(uint32_t), 0, 0, tmp);
+    for (size_t i = count; i < words; ++i) out[i] = 0u;
+    mpz_clear(tmp);
+    mpz_clear(mod);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ *  Seeded LCG for reproducible random fill  (used by self-test only)
  * ════════════════════════════════════════════════════════════════════════ */
 
 static uint32_t lcg_state[4] = { 0x12345678u, 0x9abcdef0u, 0xdeadbeefu, 0xcafebabeu };
@@ -473,16 +493,73 @@ static void thread_benchmark(ThreadCtx &ctx)
 
 int main(int argc, char *argv[])
 {
-    BenchConfig cfg;
-    if (!parse_cli(argc, argv, cfg)) return 1;
+    /* Default values */
+    uint32_t bits       = 512;
+    uint32_t iterations = 1000;
+    uint32_t ipt        = 0;           // 0 = auto (16 AVX512, 8 AVX2)
+    uint32_t repeats    = 1;
+    bool     force_avx2 = false;
+    bool     do_verify  = true;
+    bool     verbose    = false;
+    bool     sync_barrier = false;
+    bool     no_overflow  = false;
+    std::string affinity = "auto";
+    uint32_t num_threads = 1;
+
+    /* Parse CLI */
+    const char *prog = argv[0];
+    std::vector<std::string> pos;
+    for (int i = 1; i < argc; ++i) {
+        std::string a = argv[i];
+        if (a == "-h" || a == "--help") { print_usage(prog); return 0; }
+        if ((a == "-b" || a == "--bits") && i + 1 < argc) {
+            if (!parse_cli_count(argv[++i], "--bits", (int&)bits)) return 1;
+            continue;
+        }
+        if ((a == "-k" || a == "--kernel-iters" || a == "--iterations") && i + 1 < argc) {
+            if (!parse_cli_count(argv[++i], a.c_str(), (int&)iterations)) return 1;
+            continue;
+        }
+        if ((a == "-i" || a == "--ipt" || a == "--instances") && i + 1 < argc) {
+            if (!parse_cli_count(argv[++i], a.c_str(), (int&)ipt)) return 1;
+            continue;
+        }
+        if ((a == "-t" || a == "--threads") && i + 1 < argc) {
+            if (!parse_cli_count(argv[++i], "--threads", (int&)num_threads)) return 1;
+            continue;
+        }
+        if ((a == "-r" || a == "--repeats") && i + 1 < argc) {
+            if (!parse_cli_count(argv[++i], "--repeats", (int&)repeats)) return 1;
+            continue;
+        }
+        if ((a == "-a" || a == "--affinity" || a == "--aff") && i + 1 < argc) {
+            affinity = argv[++i];
+            continue;
+        }
+        if (a == "--avx2") { force_avx2 = true; continue; }
+        if (a == "--no-overflow") { no_overflow = true; continue; }
+        if (a == "--sync-barrier") { sync_barrier = true; continue; }
+        if (a == "--no-verify") { do_verify = false; continue; }
+        if (a == "-v" || a == "--verbose") { verbose = true; continue; }
+        if (!a.empty() && a[0] == '-') {
+            std::printf("Unknown option: %s\n", a.c_str());
+            print_usage(prog);
+            return 1;
+        }
+        pos.push_back(a);
+    }
+    if (pos.size() >= 1 && !parse_cli_count(pos[0].c_str(), "bits", (int&)bits)) return 1;
+    if (pos.size() >= 2 && !parse_cli_count(pos[1].c_str(), "iterations", (int&)iterations)) return 1;
+    if (pos.size() >= 3 && !parse_cli_count(pos[2].c_str(), "ipt", (int&)ipt)) return 1;
+    if (pos.size() >= 4 && !parse_cli_count(pos[3].c_str(), "repeats", (int&)repeats)) return 1;
 
     /* CPU feature detection */
     bool have_avx512 = cpu_has_avx512f();
     bool have_avx2   = cpu_has_avx2();
-    bool use_avx512  = have_avx512 && !cfg.force_avx2;
+    bool use_avx512  = have_avx512 && !force_avx2;
     bool use_avx2    = have_avx2;
 
-    if (cfg.verbose) {
+    if (verbose) {
         std::printf("CPU features: AVX512F=%d  AVX2=%d\n", (int)have_avx512, (int)have_avx2);
         std::printf("Physical cores: %u  Logical CPUs: %u\n",
                     get_physical_core_count(), get_logical_cpu_count());
@@ -493,46 +570,31 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    const uint32_t LIM = cfg.bits / 32;
+    const uint32_t LIM = bits / 32;
     if (LIM > CPU_MONT_MAX_LIMBS) {
         std::printf("Error: bits=%u exceeds CPU_MONT_MAX_LIMBS=%u (max %u bits)\n",
-                    cfg.bits, CPU_MONT_MAX_LIMBS, CPU_MONT_MAX_LIMBS * 32);
+                    bits, CPU_MONT_MAX_LIMBS, CPU_MONT_MAX_LIMBS * 32);
         return 1;
     }
 
-    /* Determine instances per thread and total threads */
-    const uint32_t K_PER_THREAD = use_avx512 ? 16u : 8u;
-    uint32_t total_instances;
-    uint32_t num_threads;
-
-    if (cfg.instances == 0) {
-        total_instances = K_PER_THREAD;
-        num_threads = 1;
-    } else {
-        total_instances = cfg.instances;
-        /* round up to K_PER_THREAD multiple */
-        if (total_instances % K_PER_THREAD != 0) {
-            uint32_t rounded = ((total_instances + K_PER_THREAD - 1) / K_PER_THREAD) * K_PER_THREAD;
-            std::printf("  Warning: --instances %u not a multiple of %u, rounding up to %u\n",
-                        total_instances, K_PER_THREAD, rounded);
-            total_instances = rounded;
-        }
-        num_threads = total_instances / K_PER_THREAD;
-    }
+    /* Determine instances per thread and total instances */
+    const uint32_t DEFAULT_K = use_avx512 ? (uint32_t)DEFAULT_IPT_AVX512 : (uint32_t)DEFAULT_IPT_AVX2;
+    if (ipt == 0) ipt = DEFAULT_K;
+    uint32_t total_instances = ipt * num_threads;
 
     /* Validate thread count against physical cores */
     uint32_t phys_cores = get_physical_core_count();
-    if (num_threads > phys_cores && cfg.affinity == "auto") {
+    if (num_threads > phys_cores && affinity == "auto") {
         std::printf("  Warning: %u threads requested but only %u physical cores detected. "
                     "Performance may degrade.\n", num_threads, phys_cores);
     }
 
     /* Parse affinity */
     std::vector<uint32_t> affinity_cpus;
-    bool affinity_auto = (cfg.affinity == "auto");
-    bool affinity_none = (cfg.affinity == "none");
+    bool affinity_auto = (affinity == "auto");
+    bool affinity_none = (affinity == "none");
     if (!affinity_auto && !affinity_none) {
-        affinity_cpus = parse_affinity_list(cfg.affinity);
+        affinity_cpus = parse_affinity_list(affinity);
         if (affinity_cpus.size() < num_threads) {
             std::printf("Error: --affinity specified %zu CPUs but %u threads needed\n",
                         affinity_cpus.size(), num_threads);
@@ -540,33 +602,9 @@ int main(int argc, char *argv[])
         }
     }
 
-    /* Generate shared modulus */
-    lcg_state[0] = 0xaaaaaaaa;
-    lcg_state[1] = 0xbbbbbbbb;
-    lcg_state[2] = 0xcccccccc;
-    lcg_state[3] = 0xdddddddd;
-
+    /* Shared data and thread contexts */
     std::vector<uint32_t> shared_N(LIM);
     uint32_t np0;
-    generate_modulus(shared_N.data(), &np0, LIM);
-
-    /* Print header */
-    const char *isa_name = use_avx512 ? "AVX512F" : "AVX2";
-    std::printf("=== CPU Montgomery Mul Benchmark ===\n");
-    std::printf("  ISA:          %s\n", isa_name);
-    std::printf("  Bit-width:    %u\n", cfg.bits);
-    std::printf("  Limbs:        %u\n", LIM);
-    std::printf("  Instances:    %u\n", total_instances);
-    std::printf("  Threads:      %u\n", num_threads);
-    std::printf("  K/thread:     %u\n", K_PER_THREAD);
-    std::printf("  Iterations:   %u\n", cfg.iterations);
-    std::printf("  Repeats:      %u\n", cfg.repeats);
-    std::printf("  Total batches: %u\n", cfg.iterations * cfg.repeats);
-    std::printf("  Affinity:     %s\n", cfg.affinity.c_str());
-    if (cfg.sync_barrier) std::printf("  Barrier sync: enabled\n");
-    std::printf("\n");
-
-    /* Shared barrier state */
     std::atomic<int> barrier_count(0);
     std::mutex barrier_mtx;
 #ifdef _WIN32
@@ -575,50 +613,95 @@ int main(int argc, char *argv[])
     pthread_cond_t barrier_cv = PTHREAD_COND_INITIALIZER;
     pthread_mutex_t barrier_pmtx = PTHREAD_MUTEX_INITIALIZER;
 #endif
-
-    /* Prepare thread contexts */
     std::vector<ThreadCtx> thread_ctxs(num_threads);
     std::vector<std::thread> threads;
 
-    for (uint32_t t = 0; t < num_threads; ++t) {
-        ThreadCtx &ctx = thread_ctxs[t];
-        ctx.thread_idx = t;
-        ctx.K = K_PER_THREAD;
-        ctx.LIM = LIM;
-        ctx.stride = LIM;
-        ctx.iterations = cfg.iterations;
-        ctx.repeats = cfg.repeats;
-        ctx.use_avx512 = use_avx512;
-        ctx.verify = cfg.verify;
-        ctx.sync_barrier = cfg.sync_barrier;
-        ctx.shared_N = shared_N.data();
-        ctx.np0 = np0;
-        ctx.num_threads = (int)num_threads;
-        ctx.barrier_count = &barrier_count;
-        ctx.barrier_mtx = &barrier_mtx;
+    /* Two test cases (same seed scheme as other benches):
+     *   0 = large inputs (a,b large) — more likely to trigger conditional sub
+     *   1 = small inputs (a,b small) — less likely to trigger conditional sub
+     */
+    {
+        gmp_randstate_t rng;
+        gmp_randinit_default(rng);
+        const int case_idx = no_overflow ? 1 : 0;
+        gmp_randseed_ui(rng, (unsigned long)(bits * 31337u + (unsigned)case_idx * 0x9e3779b9u));
+
+        mpz_t gN, ga, gb;
+        mpz_init(gN); mpz_init(ga); mpz_init(gb);
+
+        mpz_urandomb(gN, rng, (unsigned long)bits);
+        mpz_setbit(gN, (unsigned long)(bits - 1));
+        mpz_setbit(gN, 0ul);
+
+        if (case_idx == 0) {  // large-inputs: a,b in [N/2, N)
+            mpz_t half; mpz_init(half); mpz_tdiv_q_ui(half, gN, 2u);
+            mpz_urandomm(ga, rng, half); mpz_add(ga, ga, half);
+            mpz_urandomm(gb, rng, half); mpz_add(gb, gb, half);
+            mpz_clear(half);
+        } else {  // small-inputs: both < N/4
+            mpz_t quar; mpz_init(quar); mpz_tdiv_q_ui(quar, gN, 4u);
+            mpz_urandomm(ga, rng, quar); mpz_urandomm(gb, rng, quar);
+            mpz_clear(quar);
+        }
+        gmp_randclear(rng);
+
+        /* Convert to word arrays */
+        std::vector<uint32_t> a_words(LIM), b_words(LIM);
+        fill_from_gmp(gN, shared_N.data(), LIM);
+        fill_from_gmp(ga, a_words.data(), LIM);
+        fill_from_gmp(gb, b_words.data(), LIM);
+        mpz_clear(gN); mpz_clear(ga); mpz_clear(gb);
+
+        /* Compute np0 from N */
+        cpu_mont_np0_compute(&np0, shared_N.data(), LIM);
+
+        /* Print header */
+        const char *isa_name = use_avx512 ? "AVX512F" : "AVX2";
+        std::printf("=== CPU Montgomery Mul Benchmark ===\n");
+        std::printf("  Case:         %s\n", case_idx == 0 ? "large-inputs" : "small-inputs");
+        std::printf("  ISA:          %s\n", isa_name);
+        std::printf("  Bit-width:    %u\n", bits);
+        std::printf("  Limbs:        %u\n", LIM);
+        std::printf("  Instances:    %u\n", total_instances);
+        std::printf("  Threads:      %u\n", num_threads);
+        std::printf("  K/thread:     %u (ipt)\n", ipt);
+        std::printf("  Iterations:   %u\n", iterations);
+        std::printf("  Repeats:      %u\n", repeats);
+        std::printf("  Total batches: %u\n", iterations * repeats);
+        std::printf("  Affinity:     %s\n", affinity.c_str());
+        if (sync_barrier) std::printf("  Barrier sync: enabled\n");
+        std::printf("\n");
+
+        /* Prepare thread contexts and fill per-thread buffers with broadcast a,b */
+        for (uint32_t t = 0; t < num_threads; ++t) {
+            ThreadCtx &ctx = thread_ctxs[t];
+            ctx.thread_idx = t;
+            ctx.K = ipt;
+            ctx.LIM = LIM;
+            ctx.stride = LIM;
+            ctx.iterations = iterations;
+            ctx.repeats = repeats;
+            ctx.use_avx512 = use_avx512;
+            ctx.verify = do_verify;
+            ctx.sync_barrier = sync_barrier;
+            ctx.shared_N = shared_N.data();
+            ctx.np0 = np0;
+            ctx.num_threads = (int)num_threads;
+            ctx.barrier_count = &barrier_count;
+            ctx.barrier_mtx = &barrier_mtx;
 #ifdef _WIN32
-        ctx.barrier_cv = &barrier_cv;
+            ctx.barrier_cv = &barrier_cv;
 #else
-        ctx.barrier_cv = &barrier_cv;
-        ctx.barrier_pmtx = &barrier_pmtx;
+            ctx.barrier_cv = &barrier_cv;
+            ctx.barrier_pmtx = &barrier_pmtx;
 #endif
 
-        /* allocate per-thread buffers */
-        ctx.a.resize(K_PER_THREAD * LIM);
-        ctx.b.resize(K_PER_THREAD * LIM);
-        ctx.out.resize(K_PER_THREAD * LIM);
-
-        /* fill with thread-specific random data */
-        lcg_state[0] = 0xaaaaaaaa + t;
-        lcg_state[1] = 0xbbbbbbbb;
-        lcg_state[2] = 0xcccccccc;
-        lcg_state[3] = 0xdddddddd;
-        for (uint32_t k = 0; k < K_PER_THREAD; ++k) {
-            fill_random_limbs(&ctx.a[k * LIM], LIM);
-            fill_random_limbs(&ctx.b[k * LIM], LIM);
-            for (uint32_t j = 0; j < LIM; ++j) {
-                ctx.a[k * LIM + j] &= shared_N[j];
-                ctx.b[k * LIM + j] &= shared_N[j];
+            ctx.a.resize((size_t)ipt * LIM);
+            ctx.b.resize((size_t)ipt * LIM);
+            ctx.out.resize((size_t)ipt * LIM);
+            for (uint32_t k = 0; k < ipt; ++k) {
+                std::memcpy(&ctx.a[k * LIM], a_words.data(), LIM * sizeof(uint32_t));
+                std::memcpy(&ctx.b[k * LIM], b_words.data(), LIM * sizeof(uint32_t));
             }
         }
     }
@@ -626,7 +709,7 @@ int main(int argc, char *argv[])
     /* Apply main thread affinity */
     if (affinity_auto) {
         if (apply_affinity_core(0)) {
-            if (cfg.verbose) std::printf("  Main thread affinity: core 0\n");
+            if (verbose) std::printf("  Main thread affinity: core 0\n");
         }
     } else if (affinity_none) {
         apply_affinity_any();
@@ -635,19 +718,17 @@ int main(int argc, char *argv[])
     }
 
     /* self-test (single-threaded, then multi-threaded) */
-    if (cfg.verify) {
-        /* Single-threaded self-test: one test to verify basic correctness */
-        if (!run_selftest(LIM, K_PER_THREAD, LIM, shared_N.data(), np0, use_avx512, -1, 10))
+    if (do_verify) {
+        if (!run_selftest(LIM, ipt, LIM, shared_N.data(), np0, use_avx512, -1, 10))
             return 1;
         std::printf("\n");
     }
 
-    /* Launch worker threads (thread 0 is main thread; threads 1..N-1 are spawned) */
+    /* Launch worker threads */
     double t_wall_start = now_sec();
 
     for (uint32_t t = 1; t < num_threads; ++t) {
-        threads.emplace_back([&thread_ctxs, &cfg, affinity_auto, affinity_none, &affinity_cpus](uint32_t idx) {
-            /* Apply affinity */
+        threads.emplace_back([&thread_ctxs, affinity_auto, affinity_none, &affinity_cpus](uint32_t idx) {
             if (affinity_auto) {
                 apply_affinity_core(idx);
             } else if (affinity_none) {
@@ -655,7 +736,6 @@ int main(int argc, char *argv[])
             } else {
                 apply_affinity_list(affinity_cpus, idx);
             }
-            /* Priority boost */
 #ifdef _WIN32
             SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
 #endif
@@ -672,10 +752,7 @@ int main(int argc, char *argv[])
         thread_benchmark(ctx);
     }
 
-    /* Join all threads */
-    for (auto &th : threads) {
-        th.join();
-    }
+    for (auto &th : threads) th.join();
 
     double t_wall_end = now_sec();
     double wall_elapsed = t_wall_end - t_wall_start;
@@ -693,7 +770,7 @@ int main(int argc, char *argv[])
             total_thread_elapsed = res.elapsed_sec;
     }
 
-    if (cfg.verify && !all_passed) {
+    if (do_verify && !all_passed) {
         std::printf("  Self-test FAILED in one or more threads.\n");
         return 1;
     }
@@ -713,19 +790,9 @@ int main(int argc, char *argv[])
             double thr_mops = (double)res.ops / res.elapsed_sec / 1e6;
             std::printf("    Thread %2u: %7.3f s, %7.3f M/s, %6llu ops",
                         t, res.elapsed_sec, thr_mops, (unsigned long long)res.ops);
-            if (cfg.verify) std::printf(" [%s]", res.selftest_passed ? "PASS" : "FAIL");
+            if (do_verify) std::printf(" [%s]", res.selftest_passed ? "PASS" : "FAIL");
             std::printf("\n");
         }
-    }
-
-    /* Scaling efficiency */
-    if (num_threads > 1 && cfg.instances > 0) {
-        double efficiency = (total_thread_elapsed > 0)
-            ? (double)total_ops / total_thread_elapsed / 1e6 / (num_threads * (double)K_PER_THREAD) * 100.0
-            : 0.0;
-        /* Actually compute efficiency as: actual / (single_thread_rate * num_threads) */
-        /* For simplicity, just show relative scaling info */
-        (void)efficiency;
     }
 
     std::printf("\n");

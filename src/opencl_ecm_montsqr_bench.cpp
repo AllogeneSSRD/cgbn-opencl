@@ -132,7 +132,7 @@ int resolve_impl4_unroll(cl_device_id dev) {
 } // namespace
 
 bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances, int launch_repeats,
-                                  bool use_wg, int tpi) {
+                                  bool use_wg, int tpi, bool no_overflow) {
     if (bits <= 0 || (bits % 32) != 0 || (uint32_t)bits > MAX_BENCH_BITS) {
         std::cerr << "bits must be a positive multiple of 32 and <= " << MAX_BENCH_BITS
                   << std::endl;
@@ -150,35 +150,64 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
               << ", mode=" << (bench_wg ? "wg" : "priv")
               << ", tpi=" << tpi << std::endl;
 
-    mpz_t n_gmp, a_gmp, b_gmp;
-    mpz_init(n_gmp);
-    mpz_init(a_gmp);
-    mpz_init(b_gmp);
-    mpz_ui_pow_ui(n_gmp, 2, BITS-1);
-    mpz_sub_ui(n_gmp, n_gmp, 109u);
-    mpz_ui_pow_ui(a_gmp, 2, BITS-1);
-    mpz_sub_ui(a_gmp, a_gmp, 991u);
-    mpz_ui_pow_ui(b_gmp, 2, BITS-1);
-    mpz_sub_ui(b_gmp, b_gmp, 8218291649u);
-    mpz_mod(a_gmp, a_gmp, n_gmp);
-    mpz_mod(b_gmp, b_gmp, n_gmp);
+    // Two test cases per bit-width:
+    //   0 = large inputs (a,b large) — more likely to trigger conditional sub
+    //   1 = small inputs (a,b small) — less likely to trigger conditional sub
+    // Random data seeded by bits for reproducibility.
+    struct BenchCase {
+        const char *label;
+        std::vector<uint32_t> a_words, b_words, n_words;
+        mpz_t a_gmp, b_gmp, n_gmp;
+    };
+    BenchCase cases[2] = {};
+    {
+        gmp_randstate_t rng;
+        gmp_randinit_default(rng);
+        for (int ic = 0; ic < 2; ++ic) {
+            gmp_randseed_ui(rng, (unsigned long)(BITS * 31337u + (unsigned)ic * 0x9e3779b9u));
+            cases[ic].label = (ic == 0) ? "large-inputs" : "small-inputs";
+            mpz_init(cases[ic].a_gmp); mpz_init(cases[ic].b_gmp); mpz_init(cases[ic].n_gmp);
+            mpz_t &N = cases[ic].n_gmp, &a = cases[ic].a_gmp, &b = cases[ic].b_gmp;
+            mpz_urandomb(N, rng, BITS); mpz_setbit(N, BITS-1); mpz_setbit(N, 0);
+            if (ic == 0) {  // large-inputs: a,b in [N/2, N)
+                mpz_t half; mpz_init(half); mpz_tdiv_q_ui(half, N, 2u);
+                mpz_urandomm(a, rng, half); mpz_add(a, a, half);
+                mpz_urandomm(b, rng, half); mpz_add(b, b, half);
+                mpz_clear(half);
+            } else {  // small-inputs: both < N/4
+                mpz_t quar; mpz_init(quar); mpz_tdiv_q_ui(quar, N, 4u);
+                mpz_urandomm(a, rng, quar); mpz_urandomm(b, rng, quar);
+                mpz_clear(quar);
+            }
+            cases[ic].a_words.resize(WORDS); cases[ic].b_words.resize(WORDS); cases[ic].n_words.resize(WORDS);
+            fill_from_gmp(a, cases[ic].a_words.data(), WORDS);
+            fill_from_gmp(b, cases[ic].b_words.data(), WORDS);
+            fill_from_gmp(N, cases[ic].n_words.data(), WORDS);
+        }
+        gmp_randclear(rng);
+    }
 
+    // Host buffers (reused across both cases)
     std::vector<uint32_t> host_a((size_t)instances * WORDS);
     std::vector<uint32_t> host_b((size_t)instances * WORDS);
     std::vector<uint32_t> host_n((size_t)instances * WORDS);
     std::vector<uint32_t> host_out((size_t)instances * WORDS);
-    std::vector<uint32_t> a_words(WORDS), b_words(WORDS), n_words(WORDS);
 
-    fill_from_gmp(a_gmp, a_words.data(), WORDS);
-    fill_from_gmp(b_gmp, b_words.data(), WORDS);
-    fill_from_gmp(n_gmp, n_words.data(), WORDS);
-    for (int i = 0; i < instances; ++i) {
-        for (uint32_t j = 0; j < WORDS; ++j) {
-            host_a[(size_t)i * WORDS + j] = a_words[j];
-            host_b[(size_t)i * WORDS + j] = b_words[j];
-            host_n[(size_t)i * WORDS + j] = n_words[j];
+    // Helper: load one case into host buffers
+    auto upload_case = [&](int ic) {
+        for (int i = 0; i < instances; ++i) {
+            uint32_t base = (uint32_t)i * WORDS;
+            for (uint32_t j = 0; j < WORDS; ++j) {
+                host_a[base + j] = cases[ic].a_words[j];
+                host_b[base + j] = cases[ic].b_words[j];
+                host_n[base + j] = cases[ic].n_words[j];
+            }
         }
-    }
+    };
+
+    const int case_idx = no_overflow ? 1 : 0;
+    upload_case(case_idx);
+    std::cout << "  [" << cases[case_idx].label << "]\n" << std::endl;
 
     cgbn::opencl::context_t ctx;
     cl_int err = cgbn::opencl::create_context(ctx);
@@ -350,6 +379,8 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
                                  sizeof(uint32_t) * totalWords, host_n.data(), &err);
     cl_mem bufOut = clCreateBuffer(ctx.ctx, CL_MEM_READ_WRITE,
                                    sizeof(uint32_t) * totalWords, nullptr, &err);
+
+    auto &n_words = cases[case_idx].n_words;
 
     uint32_t inv = inv32_odd(n_words[0]);
     cl_uint np0 = 0u - inv;
@@ -1770,23 +1801,23 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
             mpz_init(got);
             mpz_init(tmp);
             mpz_ui_pow_ui(r, 2u, (unsigned long)(WORDS * 32u));
-            if (mpz_invert(rinv, r, n_gmp) == 0) {
+            if (mpz_invert(rinv, r, cases[case_idx].n_gmp) == 0) {
                 std::cerr << "GMP invert failed for R^-1 mod N" << std::endl;
                 mpz_clears(r, rinv, expect, got, tmp, nullptr);
                 return false;
             }
             if (is_mul) {
                 if (square_via_mul) {
-                    mpz_mul(tmp, a_gmp, a_gmp);
+                    mpz_mul(tmp, cases[case_idx].a_gmp, cases[case_idx].a_gmp);
                 } else {
-                    mpz_mul(tmp, a_gmp, b_gmp);
+                    mpz_mul(tmp, cases[case_idx].a_gmp, cases[case_idx].b_gmp);
                 }
             } else {
-                mpz_mul(tmp, a_gmp, a_gmp);
+                mpz_mul(tmp, cases[case_idx].a_gmp, cases[case_idx].a_gmp);
             }
-            mpz_mod(tmp, tmp, n_gmp);
+            mpz_mod(tmp, tmp, cases[case_idx].n_gmp);
             mpz_mul(expect, tmp, rinv);
-            mpz_mod(expect, expect, n_gmp);
+            mpz_mod(expect, expect, cases[case_idx].n_gmp);
             fill_to_gmp(out_words.data(), WORDS, got);
 
             bool ok = (mpz_cmp(expect, got) == 0);
@@ -1833,9 +1864,11 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
     clReleaseProgram(program);
     if (csv_enabled && csv.is_open()) csv.close();
     cgbn::opencl::destroy_context(ctx);
-    mpz_clear(n_gmp);
-    mpz_clear(a_gmp);
-    mpz_clear(b_gmp);
+    for (int ic = 0; ic < 2; ++ic) {
+        mpz_clear(cases[ic].a_gmp);
+        mpz_clear(cases[ic].b_gmp);
+        mpz_clear(cases[ic].n_gmp);
+    }
     return true;
 }
 
@@ -1845,24 +1878,28 @@ bool runOpenClEcmMontSqrBenchmark(int bits, int kernel_iterations, int instances
 
 namespace {
 
-bool parse_cli_int(const char *s, const char *label, int &out) {
+/// Parse a CLI value that may be in scientific notation (e.g. 1e6, 5e5).
+bool parse_cli_count(const char *s, const char *label, int &out) {
     if (s == nullptr || *s == '\0') {
         std::cerr << "Invalid " << label << ": (empty)" << std::endl;
         return false;
     }
     try {
-        size_t consumed = 0;
-        long v = std::stol(s, &consumed);
-        if (consumed == 0 || s[consumed] != '\0') {
-            std::cerr << "Invalid " << label << ": \"" << s << "\"" << std::endl;
+        double d = std::stod(s);
+        if (!std::isfinite(d) || d < 0.0) {
+            std::cerr << "Invalid " << label << ": " << s << std::endl;
             return false;
         }
-        out = (int)v;
+        out = (int)(d + 0.5);
         return true;
     } catch (const std::exception &) {
         std::cerr << "Invalid " << label << ": \"" << s << "\"" << std::endl;
         return false;
     }
+}
+
+bool parse_cli_int(const char *s, const char *label, int &out) {
+    return parse_cli_count(s, label, out);
 }
 
 } // namespace
@@ -1875,19 +1912,31 @@ int main(int argc, char **argv) {
     bool use_wg = true;
     int tpi = 4;
     int device_index = -1;
+    bool no_overflow = false;
     auto print_usage = [&]() {
         std::cout
-            << "Usage: opencl_ecm_montsqr [--bits <bits>] [--iterations <n>] [--use-wg|--no-wg] [--tpi <tpi>] [-d|--device <index>] [kernel_iterations] [instances] [launch_repeats]\n"
-            << "  --bits <bits>            Benchmark bit width (multiple of 32, <= 8192)\n"
-            << "  --iterations <n>         Kernel loop count (alias for 1st positional arg)\n"
-            << "  --use-wg / --no-wg       Select WG or private benchmark mode\n"
-            << "  --tpi <tpi>              Threads per instance for WG mode\n"
+            << "Usage: opencl_ecm_montsqr [options] [bits] [kernel_iterations] [instances] [launch_repeats]\n"
+            << "  Positional args:\n"
+            << "    bits                    Benchmark bit width (multiple of 32, <= 8192, default: 1024)\n"
+            << "    kernel_iterations       Kernel inner-loop count; supports 1e6 notation (default: 1000)\n"
+            << "    instances               Batched instances (default: 256)\n"
+            << "    launch_repeats          Measurement repeats (default: 50)\n"
+            << "  Options:\n"
+            << "  --bits <bits>            Alias for 1st positional\n"
+            << "  --iterations <n>         Alias for 2nd positional; supports 1e6\n"
+            << "  --use-wg / --no-wg       Select WG or private benchmark mode (default: --use-wg)\n"
+            << "  --tpi <tpi>              Threads per instance for WG mode (default: 4)\n"
+            << "  --no-overflow            Use small inputs (less conditional sub triggers)\n"
             << "  -d, --device <index>     OpenCL device index\n"
             << "  --wg-impl <0|1|4>        WG kernel impl (was ECM_MONT_WG_IMPL)\n"
             << "  --wg-impl4-unroll <1|2>  impl4 unroll factor (was ECM_MONT_WG_IMPL4_UNROLL)\n"
             << "  --csv <file>             Write results CSV (was ECM_BENCH_CSV)\n"
             << "  --kernel-root <dir>      Kernel source root (was CGBN_KERNEL_ROOT)\n"
-            << "  -h, --help               Show this help message\n";
+            << "  -h, --help               Show this help message\n"
+            << "\nExamples:\n"
+            << "  opencl_ecm_montsqr -d 1 512 1e4 16 1\n"
+            << "  opencl_ecm_montsqr -d 1 --bits 512 5000 6144 1\n"
+            << "  opencl_ecm_montsqr -d 1 --no-overflow 512 5000 128 2\n";
     };
     std::vector<std::string> pos;
     for (int i = 1; i < argc; ++i) {
@@ -1903,7 +1952,7 @@ int main(int argc, char **argv) {
             continue;
         }
         if ((a == "--iterations" || a == "--iters") && i + 1 < argc) {
-            if (!parse_cli_int(argv[++i], a.c_str(), kernel_iterations)) {
+            if (!parse_cli_count(argv[++i], a.c_str(), kernel_iterations)) {
                 return EXIT_FAILURE;
             }
             continue;
@@ -1920,6 +1969,10 @@ int main(int argc, char **argv) {
             if (!parse_cli_int(argv[++i], "--tpi", tpi)) {
                 return EXIT_FAILURE;
             }
+            continue;
+        }
+        if (a == "--no-overflow") {
+            no_overflow = true;
             continue;
         }
         if ((a == "-d" || a == "--device") && i + 1 < argc) {
@@ -1944,21 +1997,16 @@ int main(int argc, char **argv) {
         }
         pos.push_back(a);
     }
-    if (pos.size() >= 1 && !parse_cli_int(pos[0].c_str(), "kernel_iterations", kernel_iterations)) {
-        return EXIT_FAILURE;
-    }
-    if (pos.size() >= 2 && !parse_cli_int(pos[1].c_str(), "instances", instances)) {
-        return EXIT_FAILURE;
-    }
-    if (pos.size() >= 3 && !parse_cli_int(pos[2].c_str(), "launch_repeats", launch_repeats)) {
-        return EXIT_FAILURE;
-    }
+    if (pos.size() >= 1 && !parse_cli_count(pos[0].c_str(), "bits", bits)) return EXIT_FAILURE;
+    if (pos.size() >= 2 && !parse_cli_count(pos[1].c_str(), "kernel_iterations", kernel_iterations)) return EXIT_FAILURE;
+    if (pos.size() >= 3 && !parse_cli_count(pos[2].c_str(), "instances", instances)) return EXIT_FAILURE;
+    if (pos.size() >= 4 && !parse_cli_count(pos[3].c_str(), "launch_repeats", launch_repeats)) return EXIT_FAILURE;
     if (device_index >= 0) {
         ecm_runtime_config().device_index = device_index;
         std::cout << "OpenCL device override: device=" << device_index << std::endl;
     }
     bool ok = runOpenClEcmMontSqrBenchmark(bits, kernel_iterations, instances, launch_repeats,
-                                          use_wg, tpi);
+                                          use_wg, tpi, no_overflow);
     return ok ? EXIT_SUCCESS : EXIT_FAILURE;
 }
 #endif
