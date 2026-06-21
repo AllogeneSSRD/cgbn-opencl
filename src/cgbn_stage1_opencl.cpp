@@ -41,6 +41,7 @@ static bool g_ctx_ready = false;
 static cl_program g_ecm_program = nullptr;
 static cl_kernel g_ecm_kernel = nullptr;
 static cl_kernel g_ecm_kernel_sliced = nullptr;
+static cl_kernel g_ecm_kernel_sliced_t16 = nullptr;
 static uint32_t g_kernel_limbs = 0;
 static uint32_t g_kernel_tpi = 0;
 static int g_kernel_coop_wg = 1;
@@ -614,6 +615,10 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
         clReleaseKernel(g_ecm_kernel_sliced);
         g_ecm_kernel_sliced = nullptr;
     }
+    if (g_ecm_kernel_sliced_t16) {
+        clReleaseKernel(g_ecm_kernel_sliced_t16);
+        g_ecm_kernel_sliced_t16 = nullptr;
+    }
     if (g_ecm_program) {
         clReleaseProgram(g_ecm_program);
         g_ecm_program = nullptr;
@@ -673,10 +678,14 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
         ecm_ts_fprintf(stderr, "OpenCL: kernel_double_add not found (%d)\n", err);
         return -1;
     }
-    // Always build the sliced kernel too (ignored if --sliced not set)
+    // Always build the sliced kernels too (ignored if --sliced not set)
     g_ecm_kernel_sliced = clCreateKernel(g_ecm_program, "kernel_double_add_sliced", &err);
     if (err != CL_SUCCESS) {
         if (g_ecm_kernel_sliced) { clReleaseKernel(g_ecm_kernel_sliced); g_ecm_kernel_sliced = nullptr; }
+    }
+    g_ecm_kernel_sliced_t16 = clCreateKernel(g_ecm_program, "kernel_double_add_sliced_t16x2", &err);
+    if (err != CL_SUCCESS) {
+        if (g_ecm_kernel_sliced_t16) { clReleaseKernel(g_ecm_kernel_sliced_t16); g_ecm_kernel_sliced_t16 = nullptr; }
     }
     g_kernel_limbs = limbs;
     g_kernel_tpi = tpi;
@@ -1027,8 +1036,12 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         cl_uint np0_arg = np0;
         cl_uint limbs_arg = limbs;
 
-        bool use_sliced = ecm_runtime_config().gpu_sliced && (g_ecm_kernel_sliced != nullptr);
-        cl_kernel active_kernel = use_sliced ? g_ecm_kernel_sliced : g_ecm_kernel;
+        bool use_sliced     = ecm_runtime_config().gpu_sliced && (g_ecm_kernel_sliced != nullptr);
+        bool use_sliced_t16 = ecm_runtime_config().gpu_sliced_t16 && (g_ecm_kernel_sliced_t16 != nullptr);
+        uint32_t sliced_wg  = use_sliced_t16 ? 16u : 32u;
+        cl_kernel active_kernel = use_sliced_t16 ? g_ecm_kernel_sliced_t16
+                                : use_sliced     ? g_ecm_kernel_sliced
+                                : g_ecm_kernel;
         err = clSetKernelArg(active_kernel, 0, sizeof(cl_mem), &gpu_s_bits);
         err |= clSetKernelArg(active_kernel, 1, sizeof(cl_ulong), &s_num_bits_arg);
         err |= clSetKernelArg(active_kernel, 2, sizeof(cl_ulong), &s_start_arg);
@@ -1043,9 +1056,10 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             break;
         }
 
-        size_t global = use_sliced ? (size_t)curves * 32u : (g_kernel_use_coop_wg ? (size_t)curves * (size_t)g_kernel_coop_wg : (size_t)curves);
-        size_t local_wg = use_sliced ? 32u : (size_t)g_kernel_coop_wg;
-        const size_t *local_ptr = (use_sliced || g_kernel_use_coop_wg) ? &local_wg : nullptr;
+        bool is_sliced = use_sliced || use_sliced_t16;
+        size_t global = is_sliced ? (size_t)curves * (size_t)sliced_wg : (g_kernel_use_coop_wg ? (size_t)curves * (size_t)g_kernel_coop_wg : (size_t)curves);
+        size_t local_wg = is_sliced ? (size_t)sliced_wg : (size_t)g_kernel_coop_wg;
+        const size_t *local_ptr = (is_sliced || g_kernel_use_coop_wg) ? &local_wg : nullptr;
         auto t0 = std::chrono::high_resolution_clock::now();
         err = clEnqueueNDRangeKernel(g_ctx.queue, active_kernel, 1, nullptr, &global, local_ptr, 0,
                                      nullptr, nullptr);

@@ -1,20 +1,21 @@
-// LDS-gather-based sliced: no ds_bpermute, all standard operators, lane 0 only
+// Fully working LDS-gather sliced baseline + v2 PoC.
+// This file restored to known-working state.  CIOS product-scan PoC
+// continues in ecm_stage1_sliced_t16x2.cl.
+
 __kernel __attribute__((reqd_work_group_size(32u,1u,1u)))
 void kernel_double_add_sliced(__global const uint*sb,ulong sn,ulong st,ulong si,__global uint*d,uint cnt,uint sig,uint NP0,uint lim){
-    if(lim!=32)return;uint lid=get_local_id(0),ins=get_group_id(0);if(ins>=cnt)return;
+    if(lim!=32u)return;uint lid=get_local_id(0),ins=get_group_id(0);if(ins>=cnt)return;
     uint bs=ins*160u;
-    __local uint Ld[160]; // LDS for gather
+    __local uint Ld[160];
     uint N_my=d[bs+lid],aX_my=d[bs+32+lid],aZ_my=d[bs+64+lid],bX_my=d[bs+96+lid],bZ_my=d[bs+128+lid];
-    // Gather via LDS
-    Ld[lid]=N_my; Ld[32+lid]=aX_my; Ld[64+lid]=aZ_my; Ld[96+lid]=bX_my; Ld[128+lid]=bZ_my;
+    Ld[lid]=N_my;Ld[32+lid]=aX_my;Ld[64+lid]=aZ_my;Ld[96+lid]=bX_my;Ld[128+lid]=bZ_my;
     barrier(CLK_LOCAL_MEM_FENCE);
     if(lid!=0u)return;
     uint N_full[32],aX_full[32],aZ_full[32],bX_full[32],bZ_full[32];
     for(uint i=0;i<32;i++){N_full[i]=Ld[i];aX_full[i]=Ld[32+i];aZ_full[i]=Ld[64+i];bX_full[i]=Ld[96+i];bZ_full[i]=Ld[128+i];}
-
     uint dv=sig+ins;int sw=0;ulong se=st+si;if(se>sn)se=sn;
     for(ulong b=st;b<se;b++){
-        ulong nth=sn-1-b;uint li=(uint)(nth>>5),bi=(uint)(nth&31);int bit=(int)((sb[li]>>bi)&1u);
+        ulong nth=sn-1u-b;uint li=(uint)(nth>>5),bi=(uint)(nth&31);int bit=(int)((sb[li]>>bi)&1u);
         if(bit!=sw){sw=!sw;for(uint i=0;i<32;i++){uint t=aX_full[i];aX_full[i]=bX_full[i];bX_full[i]=t;t=aZ_full[i];aZ_full[i]=bZ_full[i];bZ_full[i]=t;}}
         uint t[32],CB[32],DA[32],AA[32],BB[32],K[32],dK[32],qq[32],uu[32],ww[32],vv[32];
         for(uint i=0;i<32;i++){qq[i]=aX_full[i];uu[i]=aZ_full[i];ww[i]=bX_full[i];vv[i]=bZ_full[i];}

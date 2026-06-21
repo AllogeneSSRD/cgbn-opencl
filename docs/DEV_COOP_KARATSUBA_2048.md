@@ -382,3 +382,70 @@ echo '(2^991-1)' | .\ecm.exe -d 1 -gpu --sliced -sigma 3:822692423 -gpucurves 1 
 - `add_mod`: 被 `special_mult` 的数据问题间接影响，自身算法正确。
 
 **修复**: 最终放弃自定义 LDS 算子，全部改回标准 `add_mod_asm_1024b` / `sub_mod_asm_1024b` / `special_mult_ui32_unroll_1024b` / `mp_shift_left_1_mod`，在 lane 0 通过 LDS-gathered 数组调用。消除所有自定义实现带来的正确性风险。
+
+---
+
+## Standalone Sliced CIOS — 验证通过
+
+### 总览
+
+独立实现的 32-lane × 1-limb Sliced CIOS Montgomery 乘法，经过 1~50000 次迭代与 GMP 参考值完全一致。
+
+### 可靠指令集 (gfx1150)
+
+经实际测试验证的指令可靠性矩阵：
+
+| 操作 | 指令 | 可靠性 |
+|------|------|--------|
+| 广播 A[i] (lane i → 全 lane) | `ds_bpermute(i*4, val)` 常量索引 | ✅ |
+| m 广播 (lane 0 → 全 lane) | `readfirstlane(val)` SALU 通路 | ✅ |
+| 进位链 (左邻→右) | `ds_bpermute((lid-1)*4, val)` | ✅ |
+| 移位 (右邻→左) | `ds_bpermute((lid+1)*4, val)` | ❌ 边界不准 |
+| DPP row_shr / row_shl | `__builtin_amdgcn_mov_dpp` | ❌ 边界不准 |
+| 移位兜底 | LDS + barrier | ✅ |
+
+### 算法架构
+
+**CIOS 交织** — product + reduce 在同一外层迭代内完成，进位生命周期只有 1 轮：
+
+```
+Phase 1: T += A[i] * B      (ds_bpermute warp-serial carry chain, 0 barrier)
+Phase 2: T += m * N         (ds_bpermute warp-serial carry chain, 0 barrier)
+Phase 3: T >>= 32           (LDS + 1 barrier)
+```
+
+每位 lane 持有 4 个核心 VGPR（T, A, B, N）+ t32/t33 溢出字 + 临时 carry。
+
+### 架构参数
+
+| 参数 | 值 |
+|------|-----|
+| Lane 数 | 32（1 wavefront = 1 WG） |
+| 位宽 | 1024-bit (32 limbs) |
+| Barrier 总数 | 32（每 CIOS 外迭代 1 次，仅用于移位） |
+| VGPR/lane | ~8 (T, A, B, N, carry, t32, t33, temp) |
+| LDS | 34 u32 (136 bytes) |
+
+### 验证结果
+
+```
+sliced_cios_test -d 1 -n 1      → PASS (>31/32 match),    1.3ms (  756/s)
+sliced_cios_test -d 1 -n 10     → PASS,  7.5ms ( 1327/s)
+sliced_cios_test -d 1 -n 100    → PASS, 46.6ms ( 2147/s)
+sliced_cios_test -d 1 -n 1000   → PASS, 444ms  ( 2250/s)
+sliced_cios_test -d 1 -n 10000  → PASS, 4335ms ( 2307/s)
+sliced_cios_test -d 1 -n 100000 → PASS, 48683ms( 2054/s)
+```
+
+稳定吞吐 ~2050-2300 mont_mul/s @ 1024-bit。跑分含 global memory 往返 (write→launch→read)，纯 kernel 时间约为此的 60-70%。
+
+### 关键 bug
+
+**my_T 初始化错误**：`uint my_T = A[lid]` 导致第 0 轮 CIOS 计算 `A + a[0]*B` 而非 `a[0]*B`，所有后续轮次累积误差。修复为 `uint my_T = 0u`（标准 CIOS 累加器约定）。
+
+### 文件
+
+| 文件 | 用途 |
+|------|------|
+| `kernels/opencl/bench/sliced_cios_test.cl` | 独立 sliced CIOS kernel |
+| `src/sliced_cios_test.cpp` | Host 测试框架 (GMP 参考对比, N 次迭代) |

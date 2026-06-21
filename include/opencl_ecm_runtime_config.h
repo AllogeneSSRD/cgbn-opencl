@@ -52,7 +52,8 @@ struct EcmRuntimeConfig {
     std::string bench_csv;              // was ECM_BENCH_CSV             / CLI: --csv
     int mont_wg_impl = -1;              // was ECM_MONT_WG_IMPL          / CLI: --wg-impl (-1 = unset)
     int mont_wg_impl4_unroll = -1;      // was ECM_MONT_WG_IMPL4_UNROLL  / CLI: --wg-impl4-unroll (-1 = unset)
-    bool gpu_sliced = false;            // CLI: --sliced  → use sliced shuffle kernel (PoC)
+    bool gpu_sliced = false;            // CLI: --sliced  → use sliced shuffle kernel (PoC, 32T)
+    bool gpu_sliced_t16 = false;        // CLI: --sliced-t16 → 16 lanes × 2 limbs (PoC, lower VGPR)
 };
 
 // Process-wide mutable singleton. Each main() writes it after parsing argv; the

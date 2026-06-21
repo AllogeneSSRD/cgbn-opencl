@@ -274,7 +274,7 @@ static constexpr const char *kEcmStage1OperatorIface = "common/operator_iface.h.
 static constexpr const char *kEcmStage1Coop = "ecm_stage1_coop.cl";
 static constexpr const char *kEcmStage1Entry = "ecm_stage1.cl";
 static constexpr const char *kEcmStage1Sliced = "ecm_stage1_sliced.cl";
-static constexpr const char *kEcmStage1SlicedRef = nullptr; // removed
+static constexpr const char *kEcmStage1SlicedT16x2 = "ecm_stage1_sliced_t16x2.cl";
 static constexpr const char *kMontFips4096Kernel = "mont_mul/mont_mul_fips_4096b.cl";
 
 bool mont_kernel_path_needs_fips4096(const char *kernel_path) {
@@ -675,6 +675,7 @@ std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(
     }
     append_unique_kernel_path(paths, kEcmStage1Entry);
     append_unique_kernel_path(paths, kEcmStage1Sliced);
+    append_unique_kernel_path(paths, kEcmStage1SlicedT16x2);
     return paths;
 }
 

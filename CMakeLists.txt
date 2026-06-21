@@ -207,6 +207,18 @@ if(MSVC)
     target_link_options(opencl_ecm_montsqr PRIVATE "/STACK:16777216")
 endif()
 
+# ── Sliced CIOS standalone verification target ────────────────────
+add_executable(sliced_cios_test
+    src/sliced_cios_test.cpp
+)
+target_include_directories(sliced_cios_test PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+)
+target_link_libraries(sliced_cios_test
+    OpenCL::OpenCL
+)
+ecm_target_link_gmp(sliced_cios_test)
+
 add_executable(opencl_asm_selftest
     src/cl_probe.cpp
     src/opencl_asm_selftest.cpp
