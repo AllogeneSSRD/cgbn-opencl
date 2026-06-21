@@ -20,6 +20,9 @@ ADD_MOD = ROOT / "kernels/opencl/add_mod"
 SUB_MOD = ROOT / "kernels/opencl/sub_mod"
 COMMON = ROOT / "kernels/opencl/common"
 
+# ── Threshold: limbs >= this value use loop-of-block16 instead of monolithic ASM
+ASM_LOOP_THRESHOLD = 48  # 1536-bit and above
+
 WIDTHS = (
     (128, 4, 128),
     (192, 6, 192),
@@ -97,22 +100,53 @@ def emit_sub_unroll(limbs: int, bits: int) -> str:
 
 
 def emit_add_asm_body(limbs: int, bits: int) -> str:
-    return (
-        f"static inline void add_mod_asm_{bits}b_body(uint *r, const uint *a, const uint *b, const uint *N) {{\n"
-        f"    uint ca = 0u, cs = 1u;\n"
-        f"    asm_fused_block{limbs}_priv(a, b, N, r, ca, cs, &ca, &cs);\n"
-        f"}}\n\n"
-    )
+    if limbs < ASM_LOOP_THRESHOLD:
+        return (
+            f"static inline void add_mod_asm_{bits}b_body(uint *r, const uint *a, const uint *b, const uint *N) {{\n"
+            f"    uint ca = 0u, cs = 1u;\n"
+            f"    asm_fused_block{limbs}_priv(a, b, N, r, ca, cs, &ca, &cs);\n"
+            f"}}\n\n"
+        )
+    # Loop-of-block32 for ≥threshold, with optional trailing block16
+    blk32 = limbs // 32
+    rem16 = (limbs % 32) // 16  # 0 or 1 (all widths divisible by 2)
+    lines = [
+        f"static inline void add_mod_asm_{bits}b_body(uint *r, const uint *a, const uint *b, const uint *N) {{\n",
+        f"    uint ca = 0u, cs = 1u;\n",
+    ]
+    for k in range(blk32):
+        off = k * 32
+        lines.append(f"    asm_fused_block32_priv(a + {off}, b + {off}, N + {off}, r + {off}, ca, cs, &ca, &cs);\n")
+    if rem16:
+        off = blk32 * 32
+        lines.append(f"    asm_fused_block16_priv(a + {off}, b + {off}, N + {off}, r + {off}, ca, cs, &ca, &cs);\n")
+    lines.append("}\n\n")
+    return "".join(lines)
 
 
 def emit_sub_asm_body(limbs: int, bits: int) -> str:
-    return (
-        f"static inline int sub_mod_asm_{bits}b_body(uint *r, const uint *a, const uint *b, const uint *N) {{\n"
-        f"    uint br = 0u;\n"
-        f"    asm_sub_fused_block{limbs}_priv(a, b, N, r, br, &br);\n"
-        f"    return br != 0u ? 1 : 0;\n"
-        f"}}\n\n"
-    )
+    if limbs < ASM_LOOP_THRESHOLD:
+        return (
+            f"static inline int sub_mod_asm_{bits}b_body(uint *r, const uint *a, const uint *b, const uint *N) {{\n"
+            f"    uint br = 0u;\n"
+            f"    asm_sub_fused_block{limbs}_priv(a, b, N, r, br, &br);\n"
+            f"    return br != 0u ? 1 : 0;\n"
+            f"}}\n\n"
+        )
+    blk32 = limbs // 32
+    rem16 = (limbs % 32) // 16
+    lines = [
+        f"static inline int sub_mod_asm_{bits}b_body(uint *r, const uint *a, const uint *b, const uint *N) {{\n",
+        f"    uint br = 0u;\n",
+    ]
+    for k in range(blk32):
+        off = k * 32
+        lines.append(f"    asm_sub_fused_block32_priv(a + {off}, b + {off}, N + {off}, r + {off}, br, &br);\n")
+    if rem16:
+        off = blk32 * 32
+        lines.append(f"    asm_sub_fused_block16_priv(a + {off}, b + {off}, N + {off}, r + {off}, br, &br);\n")
+    lines.append("    return br != 0u ? 1 : 0;\n}\n\n")
+    return "".join(lines)
 
 
 def emit_add_asm_wrapper(bits: int, limbs: int) -> str:
@@ -162,13 +196,17 @@ def write_asm_common() -> None:
         guard = f"ASM_COMMON_C_FIX_ADD_N{limbs}_DEFINED"
         body = _collapse_blanks(emit_c_fix_add(limbs))
         lines.append(f"#ifndef {guard}\n#define {guard}\n{body}#endif\n")
-    # add blocks
+    # add blocks (only generate monolithic for < threshold; loop-body uses block16)
     for _bits, limbs, _max_n in WIDTHS:
+        if limbs >= ASM_LOOP_THRESHOLD:
+            continue  # replaced by loop-of-block16 in per-bit file
         guard = f"ASM_COMMON_FUSED_BLOCK{limbs}_PRIV_DEFINED"
         body = _collapse_blanks(emit_add_block(limbs, global_addr=False, fix_in_block=True))
         lines.append(f"#ifndef {guard}\n#define {guard}\n{body}#endif\n")
     # sub blocks
     for _bits, limbs, _max_n in WIDTHS:
+        if limbs >= ASM_LOOP_THRESHOLD:
+            continue
         guard = f"ASM_COMMON_SUB_FUSED_BLOCK{limbs}_PRIV_DEFINED"
         body = _collapse_blanks(emit_sub_block(limbs, global_addr=False, fix_in_block=True))
         lines.append(f"#ifndef {guard}\n#define {guard}\n{body}#endif\n")

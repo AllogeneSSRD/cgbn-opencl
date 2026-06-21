@@ -193,17 +193,17 @@ static const char *const kSubAliases_fused_unroll[] = {"fused_unroll", "sub_mod_
     X(unroll_768b,    19,   0,  24,  24, OS_ANY, GPU_ANY, 0) \
     X(asm_1024b,      20,   0,  32,  32, OS_ANY, GPU_AMD, 0) \
     X(unroll_1024b,   21,   0,  32,  32, OS_ANY, GPU_ANY, 0) \
-    X(asm_1536b,      -1,   0,  48,  48, OS_ANY, GPU_AMD, 0) \
+    X(asm_1536b,      22,   0,  48,  48, OS_ANY, GPU_AMD, 0) \
     X(unroll_1536b,   23,   0,  48,  48, OS_ANY, GPU_ANY, 0) \
-    X(asm_2048b,      -1,   0,  64,  64, OS_ANY, GPU_AMD, 0) \
+    X(asm_2048b,      24,   0,  64,  64, OS_ANY, GPU_AMD, 0) \
     X(unroll_2048b,   25,   0,  64,  64, OS_ANY, GPU_ANY, 0) \
-    X(asm_2560b,      -1,   0,  80,  80, OS_ANY, GPU_AMD, 0) \
+    X(asm_2560b,      26,   0,  80,  80, OS_ANY, GPU_AMD, 0) \
     X(unroll_2560b,   27,   0,  80,  80, OS_ANY, GPU_ANY, 0) \
-    X(asm_3072b,      -1,   0,  96,  96, OS_ANY, GPU_AMD, 0) \
+    X(asm_3072b,      28,   0,  96,  96, OS_ANY, GPU_AMD, 0) \
     X(unroll_3072b,   29,   0,  96,  96, OS_ANY, GPU_ANY, 0) \
-    X(asm_3584b,      -1,   0, 112, 112, OS_ANY, GPU_AMD, 0) \
+    X(asm_3584b,      30,   0, 112, 112, OS_ANY, GPU_AMD, 0) \
     X(unroll_3584b,   31,   0, 112, 112, OS_ANY, GPU_ANY, 0) \
-    X(asm_4096b,      -1, 128, 128, 128, OS_ANY, GPU_AMD, 0) \
+    X(asm_4096b,      32, 128, 128, 128, OS_ANY, GPU_AMD, 0) \
     X(unroll_4096b,   33, 128, 128, 128, OS_ANY, GPU_ANY, 0) \
     X(fused,         126,   0,   0,   0, OS_ANY, GPU_ANY, 0) \
     X(fused_unroll,  127,   0,   0,   0, OS_ANY, GPU_ANY, 0)

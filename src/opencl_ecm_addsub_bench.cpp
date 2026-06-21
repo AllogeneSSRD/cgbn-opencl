@@ -1199,9 +1199,10 @@ static bool run_width_specific_addsub_bench(int bits, int kernel_iterations,
     const bool is_amd = (std::strstr(vendor_str, "AMD") != nullptr ||
                          std::strstr(vendor_str, "Advanced Micro Devices") != nullptr);
 
-    // ASM program: include asm_common.h.cl + asm wrappers, AMD only
+    // ASM program: include asm_common.h.cl + asm wrappers, AMD only, honour --no-asm
+    bool asm_disabled = ecm_runtime_config().addsub_asm_disable;
     cl_program prog_asm = nullptr;
-    if (have_asm && is_amd) {
+    if (have_asm && is_amd && !asm_disabled) {
         const std::string kiters = std::to_string(kernel_iterations);
         std::string src_asm = asm_common_src + "\n" + add_asm_src + "\n" + sub_asm_src;
         src_asm +=
