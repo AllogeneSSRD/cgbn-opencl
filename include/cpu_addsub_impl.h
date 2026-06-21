@@ -168,6 +168,62 @@ inline void cpu_add_fused_avx2_soa(uint32_t *r, const uint32_t *a,
     _add_n_predicated_256(r, N, limbs, vmask);
 }
 
+// ── AVX2 SoA add + SIMD blend ───────────────────────────────────────
+// Stores both vsum (a+b) and vtmp (a+b-N) to temp buffers during the
+// fused loop, then uses _mm256_blendv_epi8 to select the correct result.
+// Eliminates the scalar add-N correction pass (perf benefit at large limbs).
+
+inline void cpu_add_fused_avx2_soa_blend(uint32_t *r, const uint32_t *a,
+                                          const uint32_t *b, const uint32_t *N,
+                                          uint32_t limbs) {
+    __m256i vones = _mm256_set1_epi32(0xFFFFFFFFu);
+    __m256i vzero = _mm256_setzero_si256();
+    __m256i vcarry_add = vzero;
+    __m256i vcarry_sub = vones;
+
+    size_t n = (size_t)limbs * 8;
+    uint32_t *tmp_sum = new uint32_t[n];
+    uint32_t *tmp_tmp = new uint32_t[n];
+
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m256i va = _mm256_loadu_si256((const __m256i*)(a + i * 8));
+        __m256i vb = _mm256_loadu_si256((const __m256i*)(b + i * 8));
+        __m256i vN = _mm256_set1_epi32(N[i]);
+        __m256i vnotN = _mm256_xor_si256(vN, vones);
+
+        __m256i vsum0 = _mm256_add_epi32(va, vb);
+        __m256i vovf_ab = _mm256_cmpgt_epu32_impl(va, vsum0);
+        __m256i vsum = _mm256_sub_epi32(vsum0, vcarry_add);
+        __m256i vovf_carry = _mm256_and_si256(vcarry_add, _mm256_cmpeq_epi32(vsum0, vones));
+        vcarry_add = _mm256_or_si256(vovf_ab, vovf_carry);
+
+        __m256i vtmp0 = _mm256_add_epi32(vsum, vnotN);
+        __m256i vovf_sub0 = _mm256_cmpgt_epu32_impl(vsum, vtmp0);
+        __m256i vtmp = _mm256_sub_epi32(vtmp0, vcarry_sub);
+        __m256i vovf_carry_sub = _mm256_and_si256(vcarry_sub, _mm256_cmpeq_epi32(vtmp0, vones));
+        vcarry_sub = _mm256_or_si256(vovf_sub0, vovf_carry_sub);
+
+        _mm256_storeu_si256((__m256i*)(tmp_sum + i * 8), vsum);
+        _mm256_storeu_si256((__m256i*)(tmp_tmp + i * 8), vtmp);
+    }
+
+    // need_add_N: lanes where (carry_add|carry_sub)==0 → select vsum (a+b),
+    //                   otherwise                      → select vtmp (a+b-N)
+    // _mm256_blendv_epi8 reads sign bit of each byte: 0xFF→selects vs, 0x00→selects vt
+    // So vneed = ~(carry_add|carry_sub) → 0xFF where needed, 0x00 otherwise
+    __m256i vmask = _mm256_or_si256(vcarry_add, vcarry_sub);
+    __m256i vneed = _mm256_xor_si256(vmask, vones);
+
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m256i vs = _mm256_loadu_si256((const __m256i*)(tmp_sum + i * 8));
+        __m256i vt = _mm256_loadu_si256((const __m256i*)(tmp_tmp + i * 8));
+        _mm256_storeu_si256((__m256i*)(r + i * 8),
+            _mm256_blendv_epi8(vt, vs, vneed));
+    }
+
+    delete[] tmp_sum; delete[] tmp_tmp;
+}
+
 // ── AVX2 SoA fused sub (8 instances) ────────────────────────────────
 
 inline void cpu_sub_fused_avx2_soa(uint32_t *r, const uint32_t *a,
@@ -218,7 +274,7 @@ inline void cpu_sub_fused_avx2_soa(uint32_t *r, const uint32_t *a,
 
 #ifdef CPU_ADDSUB_AVX512
 
-// unsigned gt, returns __m512i (-1 or 0 per lane) via single vpmovm2d
+// unsigned gt, returns __m512i via vpmovm2d (kept for original soa variant)
 static inline __m512i _mm512_cmpgt_epu32_m512i(__m512i a, __m512i b) {
     __m512i flip = _mm512_set1_epi32(0x80000000u);
     return _mm512_movm_epi32(
@@ -279,6 +335,51 @@ inline void cpu_add_fused_avx512_soa(uint32_t *r, const uint32_t *a,
     }
 }
 
+// mask-register variant: carries tracked in __mmask16 (no movm_epi32)
+
+inline void cpu_add_fused_avx512_soa_mask(uint32_t *r, const uint32_t *a,
+                                           const uint32_t *b, const uint32_t *N,
+                                           uint32_t limbs) {
+    __m512i vones = _mm512_set1_epi32(0xFFFFFFFFu);
+    __mmask16 k_ca = 0x0000;
+    __mmask16 k_cs = 0xFFFF;
+
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m512i va = _mm512_loadu_si512((const void*)(a + i * 16));
+        __m512i vb = _mm512_loadu_si512((const void*)(b + i * 16));
+        __m512i vN = _mm512_set1_epi32(N[i]);
+        __m512i vnotN = _mm512_xor_si512(vN, vones);
+
+        __m512i vsum0   = _mm512_add_epi32(va, vb);
+        __mmask16 k_ovf = _mm512_cmpgt_epu32_mask(va, vsum0);
+        __m512i vsum = _mm512_mask_add_epi32(vsum0, k_ca, vsum0, vones);
+        __mmask16 k_allones = _mm512_cmpeq_epi32_mask(vsum0, vones);
+        k_ca = k_ovf | (k_ca & k_allones);
+
+        __m512i vtmp0   = _mm512_add_epi32(vsum, vnotN);
+        __mmask16 k_ovf_s = _mm512_cmpgt_epu32_mask(vsum, vtmp0);
+        __m512i vtmp = _mm512_mask_add_epi32(vtmp0, k_cs, vtmp0, vones);
+        __mmask16 k_tmp_max = _mm512_cmpeq_epi32_mask(vtmp0, vones);
+        k_cs = k_ovf_s | (k_cs & k_tmp_max);
+
+        _mm512_storeu_si512((void*)(r + i * 16), vtmp);
+    }
+
+    __mmask16 k_need = ~(k_ca | k_cs) & 0xFFFF;
+    uint32_t carry[16] = {0};
+    for (uint32_t i = 0; i < limbs; ++i) {
+        uint32_t *rp = r + i * 16;
+        uint32_t ni = N[i];
+        for (int j = 0; j < 16; ++j) {
+            if (k_need & (1u << j)) {
+                uint64_t s = (uint64_t)rp[j] + (uint64_t)ni + (uint64_t)carry[j];
+                rp[j] = (uint32_t)s;
+                carry[j] = (uint32_t)(s >> 32);
+            }
+        }
+    }
+}
+
 inline void cpu_sub_fused_avx512_soa(uint32_t *r, const uint32_t *a,
                                       const uint32_t *b, const uint32_t *N,
                                       uint32_t limbs) {
@@ -314,6 +415,142 @@ inline void cpu_sub_fused_avx512_soa(uint32_t *r, const uint32_t *a,
             }
         }
     }
+}
+
+inline void cpu_sub_fused_avx512_soa_mask(uint32_t *r, const uint32_t *a,
+                                           const uint32_t *b, const uint32_t *N,
+                                           uint32_t limbs) {
+    __m512i vones = _mm512_set1_epi32(0xFFFFFFFFu);
+    __mmask16 k_br = 0xFFFF;
+
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m512i va = _mm512_loadu_si512((const void*)(a + i * 16));
+        __m512i vb = _mm512_loadu_si512((const void*)(b + i * 16));
+        __m512i vnotB = _mm512_xor_si512(vb, vones);
+
+        __m512i vsum0   = _mm512_add_epi32(va, vnotB);
+        __mmask16 k_ovf = _mm512_cmpgt_epu32_mask(va, vsum0);
+        __m512i vsum = _mm512_mask_add_epi32(vsum0, k_br, vsum0, vones);
+        __mmask16 k_allones = _mm512_cmpeq_epi32_mask(vsum0, vones);
+        k_br = k_ovf | (k_br & k_allones);
+
+        _mm512_storeu_si512((void*)(r + i * 16), vsum);
+    }
+
+    __mmask16 k_need = ~k_br;
+    uint32_t borrow[16] = {0};
+    for (uint32_t i = 0; i < limbs; ++i) {
+        uint32_t *rp = r + i * 16;
+        uint32_t ni = N[i];
+        for (int j = 0; j < 16; ++j) {
+            if (k_need & (1u << j)) {
+                uint64_t d = (uint64_t)rp[j] - (uint64_t)ni - (uint64_t)borrow[j];
+                borrow[j] = ((int64_t)d < 0) ? 1u : 0u;
+                rp[j] = (uint32_t)d;
+            }
+        }
+    }
+}
+
+// ── AVX512 soa + SIMD blend (add only): stores both vsum/vtmp,
+// blend-selects at end.  Eliminates scalar add-N correction pass.
+// Effective at large bit-widths where O(limbs×16) scalar correction
+// dominates.  Sub correction inherently sequential → no blend variant.
+
+inline void cpu_add_fused_avx512_soa_blend(uint32_t *r, const uint32_t *a,
+                                            const uint32_t *b, const uint32_t *N,
+                                            uint32_t limbs) {
+    __m512i vones = _mm512_set1_epi32(0xFFFFFFFFu);
+    __m512i vcarry_add = _mm512_setzero_si512();
+    __m512i vcarry_sub = vones;
+
+    size_t n = (size_t)limbs * 16;
+    uint32_t *tmp_sum = new uint32_t[n];
+    uint32_t *tmp_tmp = new uint32_t[n];
+
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m512i va = _mm512_loadu_si512((const void*)(a + i * 16));
+        __m512i vb = _mm512_loadu_si512((const void*)(b + i * 16));
+        __m512i vN = _mm512_set1_epi32(N[i]);
+        __m512i vnotN = _mm512_xor_si512(vN, vones);
+
+        __m512i vsum0 = _mm512_add_epi32(va, vb);
+        __m512i vovf_ab = _mm512_cmpgt_epu32_m512i(va, vsum0);
+        __m512i vsum = _mm512_sub_epi32(vsum0, vcarry_add);
+        __m512i vovf_carry = _mm512_and_si512(vcarry_add, _mm512_cmpeq_epi32_m512i(vsum0, vones));
+        vcarry_add = _mm512_or_si512(vovf_ab, vovf_carry);
+
+        __m512i vtmp0 = _mm512_add_epi32(vsum, vnotN);
+        __m512i vovf_sub0 = _mm512_cmpgt_epu32_m512i(vsum, vtmp0);
+        __m512i vtmp = _mm512_sub_epi32(vtmp0, vcarry_sub);
+        __m512i vovf_carry_sub = _mm512_and_si512(vcarry_sub, _mm512_cmpeq_epi32_m512i(vtmp0, vones));
+        vcarry_sub = _mm512_or_si512(vovf_sub0, vovf_carry_sub);
+
+        _mm512_storeu_si512((void*)(tmp_sum + i * 16), vsum);
+        _mm512_storeu_si512((void*)(tmp_tmp + i * 16), vtmp);
+    }
+
+    __m512i vmask = _mm512_or_si512(vcarry_add, vcarry_sub);
+    alignas(64) uint32_t need[16];
+    _mm512_store_si512((void*)need, _mm512_xor_si512(vmask, vones));
+    __mmask16 k_need = 0;
+    for (int j = 0; j < 16; ++j)
+        if (need[j]) k_need |= (1u << j);
+
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m512i vs = _mm512_loadu_si512((const void*)(tmp_sum + i * 16));
+        __m512i vt = _mm512_loadu_si512((const void*)(tmp_tmp + i * 16));
+        __m512i res = _mm512_mask_blend_epi32(k_need, vt, vs);
+        _mm512_storeu_si512((void*)(r + i * 16), res);
+    }
+
+    delete[] tmp_sum; delete[] tmp_tmp;
+}
+
+// ── AVX512 mask + blend (add only) ──────────────────────────────────
+
+inline void cpu_add_fused_avx512_soa_mask_blend(uint32_t *r, const uint32_t *a,
+                                                 const uint32_t *b, const uint32_t *N,
+                                                 uint32_t limbs) {
+    __m512i vones = _mm512_set1_epi32(0xFFFFFFFFu);
+    __mmask16 k_ca = 0x0000;
+    __mmask16 k_cs = 0xFFFF;
+
+    size_t n = (size_t)limbs * 16;
+    uint32_t *tmp_sum = new uint32_t[n];
+    uint32_t *tmp_tmp = new uint32_t[n];
+
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m512i va = _mm512_loadu_si512((const void*)(a + i * 16));
+        __m512i vb = _mm512_loadu_si512((const void*)(b + i * 16));
+        __m512i vN = _mm512_set1_epi32(N[i]);
+        __m512i vnotN = _mm512_xor_si512(vN, vones);
+
+        __m512i vsum0   = _mm512_add_epi32(va, vb);
+        __mmask16 k_ovf = _mm512_cmpgt_epu32_mask(va, vsum0);
+        __m512i vsum = _mm512_mask_add_epi32(vsum0, k_ca, vsum0, vones);
+        __mmask16 k_allones = _mm512_cmpeq_epi32_mask(vsum0, vones);
+        k_ca = k_ovf | (k_ca & k_allones);
+
+        __m512i vtmp0   = _mm512_add_epi32(vsum, vnotN);
+        __mmask16 k_ovf_s = _mm512_cmpgt_epu32_mask(vsum, vtmp0);
+        __m512i vtmp = _mm512_mask_add_epi32(vtmp0, k_cs, vtmp0, vones);
+        __mmask16 k_tmp_max = _mm512_cmpeq_epi32_mask(vtmp0, vones);
+        k_cs = k_ovf_s | (k_cs & k_tmp_max);
+
+        _mm512_storeu_si512((void*)(tmp_sum + i * 16), vsum);
+        _mm512_storeu_si512((void*)(tmp_tmp + i * 16), vtmp);
+    }
+
+    __mmask16 k_need = ~(k_ca | k_cs);
+    for (uint32_t i = 0; i < limbs; ++i) {
+        __m512i vs = _mm512_loadu_si512((const void*)(tmp_sum + i * 16));
+        __m512i vt = _mm512_loadu_si512((const void*)(tmp_tmp + i * 16));
+        __m512i res = _mm512_mask_blend_epi32(k_need, vt, vs);
+        _mm512_storeu_si512((void*)(r + i * 16), res);
+    }
+
+    delete[] tmp_sum; delete[] tmp_tmp;
 }
 
 #endif // CPU_ADDSUB_AVX512

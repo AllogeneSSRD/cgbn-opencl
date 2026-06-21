@@ -212,23 +212,32 @@ def write_asm_common() -> None:
         guard = f"ASM_COMMON_C_FIX_ADD_N{limbs}_DEFINED"
         body = _collapse_blanks(emit_c_fix_add(limbs))
         lines.append(f"#ifndef {guard}\n#define {guard}\n{body}#endif\n")
-    # add blocks (generate monolithic for < threshold; nofix variants for loop use)
+    # add blocks — fix/nofix only for sizes actually used:
+    #   limbs <  ASM_LOOP_THRESHOLD: fix variant  (direct use in per-bit wrapper)
+    #   limbs in {16,32}:           nofix variant  (loop-body use by >=threshold wrappers)
+    #   limbs >= ASM_LOOP_THRESHOLD: skip entirely (wrappers use loop of block16/block32)
+    NOFIX_SIZES = {16, 32}
     for _bits, limbs, _max_n in WIDTHS:
+        if limbs >= ASM_LOOP_THRESHOLD:
+            continue  # not directly used; loop-body wrappers use block16/block32
         guard = f"ASM_COMMON_FUSED_BLOCK{limbs}_PRIV_DEFINED"
         body = _collapse_blanks(emit_add_block(limbs, global_addr=False, fix_in_block=True))
         lines.append(f"#ifndef {guard}\n#define {guard}\n{body}#endif\n")
-        # Also generate nofix variant for loop-body use at larger widths
-        guard_nf = f"ASM_COMMON_FUSED_BLOCK{limbs}_PRIV_NOFIX_DEFINED"
-        body_nf = _collapse_blanks(emit_add_block(limbs, global_addr=False, fix_in_block=False))
-        lines.append(f"#ifndef {guard_nf}\n#define {guard_nf}\n{body_nf}#endif\n")
+        if limbs in NOFIX_SIZES:
+            guard_nf = f"ASM_COMMON_FUSED_BLOCK{limbs}_PRIV_NOFIX_DEFINED"
+            body_nf = _collapse_blanks(emit_add_block(limbs, global_addr=False, fix_in_block=False))
+            lines.append(f"#ifndef {guard_nf}\n#define {guard_nf}\n{body_nf}#endif\n")
     # sub blocks
     for _bits, limbs, _max_n in WIDTHS:
+        if limbs >= ASM_LOOP_THRESHOLD:
+            continue
         guard = f"ASM_COMMON_SUB_FUSED_BLOCK{limbs}_PRIV_DEFINED"
         body = _collapse_blanks(emit_sub_block(limbs, global_addr=False, fix_in_block=True))
         lines.append(f"#ifndef {guard}\n#define {guard}\n{body}#endif\n")
-        guard_nf = f"ASM_COMMON_SUB_FUSED_BLOCK{limbs}_PRIV_NOFIX_DEFINED"
-        body_nf = _collapse_blanks(emit_sub_block(limbs, global_addr=False, fix_in_block=False))
-        lines.append(f"#ifndef {guard_nf}\n#define {guard_nf}\n{body_nf}#endif\n")
+        if limbs in NOFIX_SIZES:
+            guard_nf = f"ASM_COMMON_SUB_FUSED_BLOCK{limbs}_PRIV_NOFIX_DEFINED"
+            body_nf = _collapse_blanks(emit_sub_block(limbs, global_addr=False, fix_in_block=False))
+            lines.append(f"#ifndef {guard_nf}\n#define {guard_nf}\n{body_nf}#endif\n")
     lines.append("#endif // __AMDGCN__\n")
     path = COMMON / "asm_common.h.cl"
     path.parent.mkdir(parents=True, exist_ok=True)

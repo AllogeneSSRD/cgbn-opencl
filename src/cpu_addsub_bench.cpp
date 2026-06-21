@@ -162,6 +162,86 @@ void run_addsub_mt_inline(bool is_add,
     }
 }
 
+// ── AVX2 blend runner (add only, 8 wide) ─────────────────────────────
+
+#ifdef CPU_ADDSUB_AVX2
+void run_soa_avx2_blend(bool is_add,
+                        uint32_t *r_buf, uint32_t *a_buf, uint32_t *b_buf,
+                        const uint32_t *n_buf,
+                        int iters, int ipt, int width_words,
+                        int repeats, int num_threads, const std::vector<int> &affinity,
+                        double &best_ms) {
+    const int K = 8;
+    int total_inst = ipt * num_threads;
+    int n_batches = total_inst / K;
+    best_ms = 1e12;
+    for (int rep = 0; rep < repeats; ++rep) {
+        std::memcpy(r_buf, a_buf, (size_t)width_words * total_inst * sizeof(uint32_t));
+        std::vector<int> thread_nbatches(num_threads);
+        std::vector<int> thread_cores(num_threads);
+        int batch_base = 0;
+        for (int t = 0; t < num_threads; ++t) {
+            int share = (n_batches - batch_base + num_threads - t - 1) / (num_threads - t);
+            thread_nbatches[t] = share;
+            thread_cores[t] = (t < (int)affinity.size()) ? affinity[t] : -1;
+            batch_base += share;
+        }
+        auto thread_soa_run = [&](int t, double &t_ms) {
+            if (thread_cores[t] >= 0) pin_thread_to_core(thread_cores[t]);
+            int my_start = 0;
+            for (int pt = 0; pt < t; ++pt) my_start += thread_nbatches[pt];
+            int my_n = thread_nbatches[t];
+            if (my_n == 0) { t_ms = 0; return; }
+            size_t per_batch = (size_t)width_words * K;
+            uint32_t *al = new uint32_t[per_batch * my_n];
+            uint32_t *bl = new uint32_t[per_batch * my_n];
+            uint32_t *rl = new uint32_t[per_batch * my_n];
+            for (int b = 0; b < my_n; ++b) {
+                int gb = my_start + b, base = gb * K;
+                uint32_t *ap = al + b * width_words * K;
+                uint32_t *bp = bl + b * width_words * K;
+                for (uint32_t limb = 0; limb < (uint32_t)width_words; ++limb) {
+                    for (int inst = 0; inst < K; ++inst)
+                        ap[limb * K + inst] = a_buf[(base + inst) * width_words + limb];
+                    for (int inst = 0; inst < K; ++inst)
+                        bp[limb * K + inst] = b_buf[(base + inst) * width_words + limb];
+                }
+            }
+            std::memcpy(rl, al, per_batch * my_n * sizeof(uint32_t));
+            auto t0 = std::chrono::high_resolution_clock::now();
+            for (int it = 0; it < iters; ++it) {
+                for (int b = 0; b < my_n; ++b) {
+                    uint32_t *rp = rl + b * width_words * K;
+                    const uint32_t *ap = al + b * width_words * K;
+                    const uint32_t *bp = bl + b * width_words * K;
+                    cpu_add_fused_avx2_soa_blend(rp, (it == 0) ? ap : rp, bp, n_buf, (uint32_t)width_words);
+                }
+            }
+            auto t1 = std::chrono::high_resolution_clock::now();
+            t_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            for (int b = 0; b < my_n; ++b) {
+                int gb = my_start + b, base = gb * K;
+                uint32_t *rp = rl + b * width_words * K;
+                for (uint32_t limb = 0; limb < (uint32_t)width_words; ++limb)
+                    for (int inst = 0; inst < K; ++inst)
+                        r_buf[(base + inst) * width_words + limb] = rp[limb * K + inst];
+            }
+            delete[] al; delete[] bl; delete[] rl;
+        };
+        std::vector<std::thread> threads;
+        std::vector<double> thread_ms(num_threads, 0.0);
+        for (int t = 1; t < num_threads; ++t)
+            threads.emplace_back(thread_soa_run, t, std::ref(thread_ms[t]));
+        thread_soa_run(0, thread_ms[0]);
+        for (auto &th : threads) th.join();
+        double max_ms = 0;
+        for (int t = 0; t < num_threads; ++t)
+            if (thread_ms[t] > max_ms) max_ms = thread_ms[t];
+        if (max_ms < best_ms) best_ms = max_ms;
+    }
+}
+#endif
+
 // ── Multi-threaded SoA runner (inline) ─────────────────────────────────
 
 void run_soa_mt_immediate(bool is_add, int K,
@@ -259,6 +339,187 @@ void run_soa_mt_immediate(bool is_add, int K,
     }
 }
 
+// ── AVX512 mask-register variant (identical harness, different kernel) ─
+
+#ifdef CPU_ADDSUB_AVX512
+void run_soa_mt_immediate_mask(bool is_add, int K,
+                          uint32_t *r_buf, uint32_t *a_buf, uint32_t *b_buf,
+                          const uint32_t *n_buf,
+                          int iters, int ipt, int width_words,
+                          int repeats, int num_threads, const std::vector<int> &affinity,
+                          double &best_ms) {
+    int total_inst = ipt * num_threads;
+    int n_batches = total_inst / K;
+    best_ms = 1e12;
+    for (int rep = 0; rep < repeats; ++rep) {
+        std::memcpy(r_buf, a_buf, (size_t)width_words * total_inst * sizeof(uint32_t));
+        std::vector<int> thread_nbatches(num_threads);
+        std::vector<int> thread_cores(num_threads);
+        int batch_base = 0;
+        for (int t = 0; t < num_threads; ++t) {
+            int share = (n_batches - batch_base + num_threads - t - 1) / (num_threads - t);
+            thread_nbatches[t] = share;
+            thread_cores[t] = (t < (int)affinity.size()) ? affinity[t] : -1;
+            batch_base += share;
+        }
+
+        auto thread_soa_run = [&](int t, double &t_ms) {
+            if (thread_cores[t] >= 0) pin_thread_to_core(thread_cores[t]);
+            int my_start = 0;
+            for (int pt = 0; pt < t; ++pt) my_start += thread_nbatches[pt];
+            int my_n = thread_nbatches[t];
+            if (my_n == 0) { t_ms = 0; return; }
+
+            size_t per_batch = (size_t)width_words * K;
+            uint32_t *al = new uint32_t[per_batch * my_n];
+            uint32_t *bl = new uint32_t[per_batch * my_n];
+            uint32_t *rl = new uint32_t[per_batch * my_n];
+
+            for (int b = 0; b < my_n; ++b) {
+                int gb = my_start + b, base = gb * K;
+                uint32_t *ap = al + b * width_words * K;
+                uint32_t *bp = bl + b * width_words * K;
+                for (uint32_t limb = 0; limb < (uint32_t)width_words; ++limb) {
+                    for (int inst = 0; inst < K; ++inst)
+                        ap[limb * K + inst] = a_buf[(base + inst) * width_words + limb];
+                    for (int inst = 0; inst < K; ++inst)
+                        bp[limb * K + inst] = b_buf[(base + inst) * width_words + limb];
+                }
+            }
+            std::memcpy(rl, al, per_batch * my_n * sizeof(uint32_t));
+
+            auto t0 = std::chrono::high_resolution_clock::now();
+            for (int it = 0; it < iters; ++it) {
+                for (int b = 0; b < my_n; ++b) {
+                    uint32_t *rp = rl + b * width_words * K;
+                    const uint32_t *ap = al + b * width_words * K;
+                    const uint32_t *bp = bl + b * width_words * K;
+                    if (is_add)
+                        cpu_add_fused_avx512_soa_mask(rp, (it == 0) ? ap : rp, bp, n_buf, (uint32_t)width_words);
+                    else
+                        cpu_sub_fused_avx512_soa_mask(rp, (it == 0) ? ap : rp, bp, n_buf, (uint32_t)width_words);
+                }
+            }
+            auto t1 = std::chrono::high_resolution_clock::now();
+            t_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+            for (int b = 0; b < my_n; ++b) {
+                int gb = my_start + b, base = gb * K;
+                uint32_t *rp = rl + b * width_words * K;
+                for (uint32_t limb = 0; limb < (uint32_t)width_words; ++limb)
+                    for (int inst = 0; inst < K; ++inst)
+                        r_buf[(base + inst) * width_words + limb] = rp[limb * K + inst];
+            }
+            delete[] al; delete[] bl; delete[] rl;
+        };
+
+        std::vector<std::thread> threads;
+        std::vector<double> thread_ms(num_threads, 0.0);
+        for (int t = 1; t < num_threads; ++t)
+            threads.emplace_back(thread_soa_run, t, std::ref(thread_ms[t]));
+        thread_soa_run(0, thread_ms[0]);
+        for (auto &th : threads) th.join();
+
+        double max_ms = 0;
+        for (int t = 0; t < num_threads; ++t)
+            if (thread_ms[t] > max_ms) max_ms = thread_ms[t];
+        if (max_ms < best_ms) best_ms = max_ms;
+    }
+}
+
+// ── AVX512 blend variant: same harness, calls _blend kernels ─────
+
+void run_soa_mt_immediate_blend(bool is_add, int K,
+                          uint32_t *r_buf, uint32_t *a_buf, uint32_t *b_buf,
+                          const uint32_t *n_buf,
+                          int iters, int ipt, int width_words,
+                          int repeats, int num_threads, const std::vector<int> &affinity,
+                          double &best_ms, bool is_mask_variant) {
+    int total_inst = ipt * num_threads;
+    int n_batches = total_inst / K;
+    best_ms = 1e12;
+    for (int rep = 0; rep < repeats; ++rep) {
+        std::memcpy(r_buf, a_buf, (size_t)width_words * total_inst * sizeof(uint32_t));
+        std::vector<int> thread_nbatches(num_threads);
+        std::vector<int> thread_cores(num_threads);
+        int batch_base = 0;
+        for (int t = 0; t < num_threads; ++t) {
+            int share = (n_batches - batch_base + num_threads - t - 1) / (num_threads - t);
+            thread_nbatches[t] = share;
+            thread_cores[t] = (t < (int)affinity.size()) ? affinity[t] : -1;
+            batch_base += share;
+        }
+
+        auto thread_soa_run = [&](int t, double &t_ms) {
+            if (thread_cores[t] >= 0) pin_thread_to_core(thread_cores[t]);
+            int my_start = 0;
+            for (int pt = 0; pt < t; ++pt) my_start += thread_nbatches[pt];
+            int my_n = thread_nbatches[t];
+            if (my_n == 0) { t_ms = 0; return; }
+
+            size_t per_batch = (size_t)width_words * K;
+            uint32_t *al = new uint32_t[per_batch * my_n];
+            uint32_t *bl = new uint32_t[per_batch * my_n];
+            uint32_t *rl = new uint32_t[per_batch * my_n];
+
+            for (int b = 0; b < my_n; ++b) {
+                int gb = my_start + b, base = gb * K;
+                uint32_t *ap = al + b * width_words * K;
+                uint32_t *bp = bl + b * width_words * K;
+                for (uint32_t limb = 0; limb < (uint32_t)width_words; ++limb) {
+                    for (int inst = 0; inst < K; ++inst)
+                        ap[limb * K + inst] = a_buf[(base + inst) * width_words + limb];
+                    for (int inst = 0; inst < K; ++inst)
+                        bp[limb * K + inst] = b_buf[(base + inst) * width_words + limb];
+                }
+            }
+            std::memcpy(rl, al, per_batch * my_n * sizeof(uint32_t));
+
+            auto t0 = std::chrono::high_resolution_clock::now();
+            for (int it = 0; it < iters; ++it) {
+                for (int b = 0; b < my_n; ++b) {
+                    uint32_t *rp = rl + b * width_words * K;
+                    const uint32_t *ap = al + b * width_words * K;
+                    const uint32_t *bp = bl + b * width_words * K;
+                    if (is_add)
+                        is_mask_variant
+                            ? cpu_add_fused_avx512_soa_mask_blend(rp, (it == 0) ? ap : rp, bp, n_buf, (uint32_t)width_words)
+                            : cpu_add_fused_avx512_soa_blend(rp, (it == 0) ? ap : rp, bp, n_buf, (uint32_t)width_words);
+                    else
+                        // sub blend not implemented (inherently sequential correction)
+                        is_mask_variant
+                            ? cpu_sub_fused_avx512_soa_mask(rp, (it == 0) ? ap : rp, bp, n_buf, (uint32_t)width_words)
+                            : cpu_sub_fused_avx512_soa(rp, (it == 0) ? ap : rp, bp, n_buf, (uint32_t)width_words);
+                }
+            }
+            auto t1 = std::chrono::high_resolution_clock::now();
+            t_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+            for (int b = 0; b < my_n; ++b) {
+                int gb = my_start + b, base = gb * K;
+                uint32_t *rp = rl + b * width_words * K;
+                for (uint32_t limb = 0; limb < (uint32_t)width_words; ++limb)
+                    for (int inst = 0; inst < K; ++inst)
+                        r_buf[(base + inst) * width_words + limb] = rp[limb * K + inst];
+            }
+            delete[] al; delete[] bl; delete[] rl;
+        };
+
+        std::vector<std::thread> threads;
+        std::vector<double> thread_ms(num_threads, 0.0);
+        for (int t = 1; t < num_threads; ++t)
+            threads.emplace_back(thread_soa_run, t, std::ref(thread_ms[t]));
+        thread_soa_run(0, thread_ms[0]);
+        for (auto &th : threads) th.join();
+
+        double max_ms = 0;
+        for (int t = 0; t < num_threads; ++t)
+            if (thread_ms[t] > max_ms) max_ms = thread_ms[t];
+        if (max_ms < best_ms) best_ms = max_ms;
+    }
+}
+#endif
+
 } // namespace
 
 bool runCpuAddSubBenchmark(int bits, int kernel_iterations, int ipt, int launch_repeats,
@@ -350,7 +611,8 @@ bool runCpuAddSubBenchmark(int bits, int kernel_iterations, int ipt, int launch_
     delete[] aos_template;
     delete[] bos_template;
 
-    const double op_count = (double)kernel_iterations * (double)total_inst * (double)launch_repeats;
+    // op_count per timing sample = kernel_iters × total_inst (single repeat)
+    const double op_count = (double)kernel_iterations * (double)total_inst;
 
     auto print_line = [&](const std::string &label, double ms) {
         if (ms <= 0.0) {
@@ -401,15 +663,23 @@ bool runCpuAddSubBenchmark(int bits, int kernel_iterations, int ipt, int launch_
                                 launch_repeats, effective_threads, affinity, t_sub8);
             print_line("cpu_add_avx2_soa",   t_add8);
             print_line("cpu_sub_avx2_soa",   t_sub8);
+            // AVX2 blend variant (add only — store-to-tmp + SIMD blend)
+            double t_add8b = 0;
+            run_soa_avx2_blend(true, r_buf, a_buf, b_buf, n_buf,
+                               kernel_iterations, ipt, (int)WORDS,
+                               launch_repeats, effective_threads, affinity, t_add8b);
+            print_line("cpu_add_avx2_blend", t_add8b);
         } else
 #endif
         {
             if (!can_avx2) {
                 print_skip("cpu_add_avx2_soa", K_AVX2);
                 print_skip("cpu_sub_avx2_soa", K_AVX2);
+                print_skip("cpu_add_avx2_blend", K_AVX2);
             } else {
                 print_line("cpu_add_avx2_soa (no ISA)", 0.0);
                 print_line("cpu_sub_avx2_soa (no ISA)", 0.0);
+                print_line("cpu_add_avx2_blend (no ISA)", 0.0);
             }
         }
     }
@@ -430,15 +700,39 @@ bool runCpuAddSubBenchmark(int bits, int kernel_iterations, int ipt, int launch_
                                 launch_repeats, effective_threads, affinity, t_sub16);
             print_line("cpu_add_avx512_soa", t_add16);
             print_line("cpu_sub_avx512_soa", t_sub16);
+            // Mask-register variant: same batch layout, different kernel
+            double t_add16m = 0, t_sub16m = 0;
+            run_soa_mt_immediate_mask(true, K_AVX512, r_buf, a_buf, b_buf, n_buf,
+                                kernel_iterations, ipt, (int)WORDS,
+                                launch_repeats, effective_threads, affinity, t_add16m);
+            run_soa_mt_immediate_mask(false, K_AVX512, r_buf, a_buf, b_buf, n_buf,
+                                kernel_iterations, ipt, (int)WORDS,
+                                launch_repeats, effective_threads, affinity, t_sub16m);
+            print_line("cpu_add_avx512_mask", t_add16m);
+            print_line("cpu_sub_avx512_mask", t_sub16m);
+            // Blend variants (add only — sub correction is inherently sequential)
+            double t_add16b = 0, t_add16mb = 0;
+            run_soa_mt_immediate_blend(true,  K_AVX512, r_buf, a_buf, b_buf, n_buf, kernel_iterations, ipt, (int)WORDS, launch_repeats, effective_threads, affinity, t_add16b, false);
+            run_soa_mt_immediate_blend(true,  K_AVX512, r_buf, a_buf, b_buf, n_buf, kernel_iterations, ipt, (int)WORDS, launch_repeats, effective_threads, affinity, t_add16mb, true);
+            print_line("cpu_add_avx512_blend", t_add16b);
+            print_line("cpu_add_avx512_mblend", t_add16mb);
         } else
 #endif
         {
             if (!can_avx512) {
                 print_skip("cpu_add_avx512_soa", K_AVX512);
                 print_skip("cpu_sub_avx512_soa", K_AVX512);
+                print_skip("cpu_add_avx512_mask", K_AVX512);
+                print_skip("cpu_sub_avx512_mask", K_AVX512);
+                print_skip("cpu_add_avx512_blend", K_AVX512);
+                print_skip("cpu_add_avx512_mblend", K_AVX512);
             } else {
                 print_line("cpu_add_avx512_soa (no ISA)", 0.0);
                 print_line("cpu_sub_avx512_soa (no ISA)", 0.0);
+                print_line("cpu_add_avx512_mask (no ISA)", 0.0);
+                print_line("cpu_sub_avx512_mask (no ISA)", 0.0);
+                print_line("cpu_add_avx512_blend (no ISA)", 0.0);
+                print_line("cpu_add_avx512_mblend (no ISA)", 0.0);
             }
         }
     }

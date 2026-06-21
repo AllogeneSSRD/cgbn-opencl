@@ -124,6 +124,25 @@ Fused modular add/sub 算法有 **两条串行进位链**（add-carry + sub-borr
 
 位宽越大 SoA 加速越显著。**必须用 Release 编译测试**——Debug 下不内联 intrinsic、寄存器分配退化。
 
+### AVX512 性能 (Zen5, /arch:AVX512)
+
+**add 变体对比**：
+
+| 变体 | 512-bit | 4096-bit | 说明 |
+|------|---------|----------|------|
+| scalar baseline | 246 ms | 2402 ms | — |
+| AVX2 SoA (对照) | 160 ms | 1291 ms | — |
+| **AVX512 soa** (原始) | 115 ms (2.14×) | 951 ms (2.53×) | zmm 进位链 |
+| **AVX512 mask** | 101 ms (2.43×) | — | kmask 进位链，512 最优 |
+| **AVX512 mblend** | — | **510 ms (4.71×)** | kmask + blend，4096 最优 |
+
+**结论**：
+- **512-bit add 最优**: AVX512 mask（kmask 进位链，2.43× scalar）
+- **4096-bit add 最优**: AVX512 mblend（kmask + SIMD blend 校正，**4.71×** scalar）
+- blend 变体的优势来自消除 O(limbs×16) 标量 add-N 校正 pass，位宽越大效益越显著
+- sub 无 blend 变体——sub 校正的 per-lane borrow ripple 不可 blend
+- **从 512 到 4096 的绝对加速**: mblend 510 ms vs scalar 2402 ms = **4.71× 加速**
+
 ## 与其他性能基准的关系
 
 | 基准 | 依赖 | 测试对象 | 对标 |
