@@ -33,6 +33,7 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
         "${CMAKE_CURRENT_LIST_DIR}/CL"
         "${MPA_ROOT}/include"
         "${MPA_ROOT}/src"
+        "${MPA_ROOT}/src/core"
         "${MPA_ROOT}/kernels/opencl")
 
 set(_ECM_GMP_HEADER "${ECM_ANDROID_GMP_ROOT}/include/gmp.h")
@@ -43,12 +44,12 @@ if(ECM_ANDROID_GMP_ROOT AND EXISTS "${_ECM_GMP_HEADER}" AND EXISTS "${_ECM_GMP_L
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE ECM_HAVE_GMP=1)
     target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE "${ECM_ANDROID_GMP_ROOT}/include")
     target_sources(${CMAKE_PROJECT_NAME} PRIVATE
-            "${MPA_ROOT}/src/ecm_expr.cpp"
+            "${MPA_ROOT}/src/core/ecm_expr.cpp"
             "${MPA_ROOT}/src/opencl_ecm_entry.cpp"
-            "${MPA_ROOT}/src/cgbn_stage1_opencl.cpp"
-            "${MPA_ROOT}/src/ecm_params_init.cpp"
-            "${MPA_ROOT}/src/opencl_ecm_checkpoint.cpp"
-            "${MPA_ROOT}/src/opencl_ecm_save.cpp"
+            "${MPA_ROOT}/src/opencl_ecm_stage1.cpp"
+            "${MPA_ROOT}/src/core/ecm_params_init.cpp"
+            "${MPA_ROOT}/src/core/ecm_checkpoint.cpp"
+            "${MPA_ROOT}/src/core/ecm_save.cpp"
             "${MPA_ROOT}/src/opencl_ecm_debug_utils.cpp"
             "${MPA_ROOT}/src/opencl_ecm_mont.cpp"
             "${MPA_ROOT}/src/opencl_ecm_limb24.cpp"

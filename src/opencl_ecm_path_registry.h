@@ -13,8 +13,10 @@
 //   OS  -> low  16 bits (mask OS_ANY)
 //   GPU -> high 16 bits (mask GPU_ANY)
 // so a runtime mask = os_bits | gpu_bits never aliases (previously OS_ANDROID collided with
-// GPU_NVIDIA). A descriptor's gpu_vendor_exclude_mask is tested against the FULL runtime mask,
-// so it can exclude by OS (e.g. OS_ANDROID) or by GPU (e.g. GPU_AMD) — any combination.
+// GPU_NVIDIA).
+// gpu_vendor_mask supports multiple GPU vendor bits (e.g. GPU_AMD | GPU_NVIDIA).
+// A descriptor matches if (runtime_mask & gpu_vendor_mask) != 0 (intersection check),
+// or if gpu_vendor_mask == GPU_ANY (any vendor ok).
 enum EcmPathOs : uint32_t {
     OS_WINDOWS = 1u << 0,
     OS_ANDROID = 1u << 1,
@@ -54,7 +56,6 @@ struct EcmMontPathDescriptor {
     uint32_t max_container_limbs;
     uint32_t os_mask;
     uint32_t gpu_vendor_mask;
-    uint32_t gpu_vendor_exclude_mask;
     bool fixed_width;
     uint8_t coop_work_group_size;
     uint16_t local_scratch_u32;
@@ -71,7 +72,6 @@ struct EcmAddSubPathDescriptor {
     uint32_t max_container_limbs;
     uint32_t os_mask;
     uint32_t gpu_vendor_mask;
-    uint32_t gpu_vendor_exclude_mask;
 };
 
 struct EcmSpecialMultPathDescriptor {
@@ -84,7 +84,6 @@ struct EcmSpecialMultPathDescriptor {
     uint32_t max_limbs;
     uint32_t os_mask;
     uint32_t gpu_vendor_mask;
-    uint32_t gpu_vendor_exclude_mask;
 };
 
 enum ecm_stage1_mont_mode {

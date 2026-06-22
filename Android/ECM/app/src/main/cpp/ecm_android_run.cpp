@@ -35,9 +35,9 @@ std::string run_ecm_android(const EcmAndroidRunRequest& req) {
 #else
 
 #include "ecm_expr.h"
-#include "opencl_ecm_checkpoint.h"
+#include "ecm_checkpoint.h"
 #include "opencl_ecm_entry.h"
-#include "opencl_ecm_save.h"
+#include "ecm_save.h"
 
 #include "ecm.h"
 #include "cgbn_stage1.h"

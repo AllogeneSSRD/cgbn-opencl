@@ -73,12 +73,12 @@ target_include_directories(opencl_ecm_entry PUBLIC
 target_link_libraries(opencl_ecm_entry ${GMP_LIBRARY})
 
 add_executable(ecm
-    src/cgbn_stage1_opencl.cpp
+    src/opencl_ecm_stage1.cpp
     src/cl_probe.cpp
-    src/ecm_driver.cpp
-    src/ecm_params_init.cpp
-    src/opencl_ecm_checkpoint.cpp
-    src/opencl_ecm_save.cpp
+    src/core/ecm_driver.cpp
+    src/core/ecm_params_init.cpp
+    src/core/ecm_checkpoint.cpp
+    src/core/ecm_save.cpp
     src/opencl_ecm_debug_utils.cpp
     src/opencl_ecm_log.cpp
     src/opencl_ecm_mont.cpp
@@ -90,6 +90,7 @@ target_include_directories(ecm PRIVATE
     ${CMAKE_SOURCE_DIR}/kernels/opencl
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/core
 )
 
 target_link_libraries(ecm
@@ -165,12 +166,13 @@ target_link_libraries(opencl_ecm_addsub
 
 # CPU addsub micro-benchmark (no OpenCL dependency, GMP only)
 add_executable(cpu_addsub_bench
-    src/cpu_addsub_bench.cpp
+    src/cpu/cpu_addsub_bench.cpp
     ${CMAKE_SOURCE_DIR}/src/opencl_ecm_runtime_config.cpp
 )
 
 target_include_directories(cpu_addsub_bench PRIVATE
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src/cpu
 )
 
 target_compile_definitions(cpu_addsub_bench PRIVATE BUILD_CPU_ADDSUB_MAIN=1)
@@ -272,13 +274,14 @@ target_link_libraries(opencl_addsub_isa_export
 # ── CPU Montgomery Benchmark (AVX512/AVX2 batched CIOS) ──
 add_executable(cpu_mont_bench
     src/cpu_mont_bench.cpp
-    src/cpu_mont_avx.cpp
-    src/cpu_mont_scalar.cpp
+    src/cpu/cpu_mont_avx.cpp
+    src/cpu/cpu_mont_scalar.cpp
 )
 
 target_include_directories(cpu_mont_bench PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/cpu
 )
 
 target_compile_definitions(cpu_mont_bench PRIVATE BUILD_CPU_MONT_MAIN=1)

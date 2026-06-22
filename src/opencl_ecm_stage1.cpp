@@ -3,7 +3,7 @@
 #include "cgbn_stage1.h"
 #include "ecm.h"
 #include "cgbn_opencl.h"
-#include "opencl_ecm_checkpoint.h"
+#include "ecm_checkpoint.h"
 #include "opencl_ecm_debug_utils.h"
 #include "opencl_ecm_log.h"
 #include "opencl_ecm_mont.h"

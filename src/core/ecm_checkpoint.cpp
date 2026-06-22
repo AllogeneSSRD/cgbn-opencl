@@ -1,4 +1,4 @@
-#include "opencl_ecm_checkpoint.h"
+#include "ecm_checkpoint.h"
 
 #include "opencl_ecm_log.h"
 
