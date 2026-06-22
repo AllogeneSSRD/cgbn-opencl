@@ -6,6 +6,7 @@ static inline int sub_mod_asm_4096b_body(uint *r, const uint *a, const uint *b, 
     return br != 0u ? 1 : 0;
 }
 #else
+#if defined(__AMDGCN__)
 static inline int sub_mod_asm_4096b_body(uint *r, const uint *a, const uint *b, const uint *N) {
     ulong br = 0ul;
     for (uint i = 0u; i < MAX_LIMBS; ++i) {
@@ -26,8 +27,10 @@ static inline int sub_mod_asm_4096b_body(uint *r, const uint *a, const uint *b, 
     return 0;
 }
 #endif
+#endif
 
 static inline int sub_mod_asm_4096b(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
     if (limbs == 128u) { return sub_mod_asm_4096b_body(r, a, b, N); }
     return 0;
 }
+

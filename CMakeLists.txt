@@ -219,6 +219,13 @@ target_link_libraries(sliced_cios_test
 )
 ecm_target_link_gmp(sliced_cios_test)
 
+add_executable(sliced_cios_8192_test
+    src/sliced_cios_8192_test.cpp
+)
+target_include_directories(sliced_cios_8192_test PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(sliced_cios_8192_test OpenCL::OpenCL)
+ecm_target_link_gmp(sliced_cios_8192_test)
+
 add_executable(opencl_asm_selftest
     src/cl_probe.cpp
     src/opencl_asm_selftest.cpp

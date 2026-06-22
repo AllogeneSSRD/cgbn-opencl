@@ -5,6 +5,7 @@ static inline void add_mod_asm_4096b_body(uint *r, const uint *a, const uint *b,
     asm_fused_block32_priv(a, b, N, r, ca, cs, &ca, &cs);
 }
 #else
+#if defined(__AMDGCN__)
 static inline void add_mod_asm_4096b_body(uint *r, const uint *a, const uint *b, const uint *N) {
     ulong carry_add = 0ul, carry_sub = 1ul;
     #pragma unroll 32
@@ -25,8 +26,10 @@ static inline void add_mod_asm_4096b_body(uint *r, const uint *a, const uint *b,
     }
 }
 #endif
+#endif
 
 static inline void add_mod_asm_4096b(uint *r, const uint *a, const uint *b, const uint *N, uint limbs) {
     if (limbs == 128u) { add_mod_asm_4096b_body(r, a, b, N); }
     (void)limbs;
 }
+

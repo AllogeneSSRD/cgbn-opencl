@@ -62,6 +62,42 @@ constexpr uint32_t kAddSubNoMaxLimbs = 0;
         "unroll_3072b", "unroll_manual_3072b", "mont_" S "_priv_unroll_manual_3072b", nullptr};   \
     static const char *const kMontAliases_##side##_unroll_manual_3584b[] = {                      \
         "unroll_3584b", "unroll_manual_3584b", "mont_" S "_priv_unroll_manual_3584b", nullptr};   \
+    static const char *const kMontAliases_##side##_unroll_4096b[] = {                             \
+        "unroll_4096b", "unroll_only_4096b", "mont_" S "_priv_unroll_only_4096b", nullptr};       \
+    static const char *const kMontAliases_##side##_unroll_4608b[] = {                             \
+        "unroll_4608b", "unroll_only_4608b", "mont_" S "_priv_unroll_only_4608b", nullptr};       \
+    static const char *const kMontAliases_##side##_unroll_5120b[] = {                             \
+        "unroll_5120b", "unroll_only_5120b", "mont_" S "_priv_unroll_only_5120b", nullptr};       \
+    static const char *const kMontAliases_##side##_unroll_5632b[] = {                             \
+        "unroll_5632b", "unroll_only_5632b", "mont_" S "_priv_unroll_only_5632b", nullptr};       \
+    static const char *const kMontAliases_##side##_unroll_6144b[] = {                             \
+        "unroll_6144b", "unroll_only_6144b", "mont_" S "_priv_unroll_only_6144b", nullptr};       \
+    static const char *const kMontAliases_##side##_unroll_6656b[] = {                             \
+        "unroll_6656b", "unroll_only_6656b", "mont_" S "_priv_unroll_only_6656b", nullptr};       \
+    static const char *const kMontAliases_##side##_unroll_7168b[] = {                             \
+        "unroll_7168b", "unroll_only_7168b", "mont_" S "_priv_unroll_only_7168b", nullptr};       \
+    static const char *const kMontAliases_##side##_unroll_7680b[] = {                             \
+        "unroll_7680b", "unroll_only_7680b", "mont_" S "_priv_unroll_only_7680b", nullptr};       \
+    static const char *const kMontAliases_##side##_unroll_8192b[] = {                             \
+        "unroll_8192b", "unroll_only_8192b", "mont_" S "_priv_unroll_only_8192b", nullptr};       \
+    static const char *const kMontAliases_##side##_unroll_manual_4096b[] = {                      \
+        "unroll_4096b", "unroll_manual_4096b", "mont_" S "_priv_unroll_manual_4096b", nullptr};   \
+    static const char *const kMontAliases_##side##_unroll_manual_4608b[] = {                      \
+        "unroll_4608b", "unroll_manual_4608b", "mont_" S "_priv_unroll_manual_4608b", nullptr};   \
+    static const char *const kMontAliases_##side##_unroll_manual_5120b[] = {                      \
+        "unroll_5120b", "unroll_manual_5120b", "mont_" S "_priv_unroll_manual_5120b", nullptr};   \
+    static const char *const kMontAliases_##side##_unroll_manual_5632b[] = {                      \
+        "unroll_5632b", "unroll_manual_5632b", "mont_" S "_priv_unroll_manual_5632b", nullptr};   \
+    static const char *const kMontAliases_##side##_unroll_manual_6144b[] = {                      \
+        "unroll_6144b", "unroll_manual_6144b", "mont_" S "_priv_unroll_manual_6144b", nullptr};   \
+    static const char *const kMontAliases_##side##_unroll_manual_6656b[] = {                      \
+        "unroll_6656b", "unroll_manual_6656b", "mont_" S "_priv_unroll_manual_6656b", nullptr};   \
+    static const char *const kMontAliases_##side##_unroll_manual_7168b[] = {                      \
+        "unroll_7168b", "unroll_manual_7168b", "mont_" S "_priv_unroll_manual_7168b", nullptr};   \
+    static const char *const kMontAliases_##side##_unroll_manual_7680b[] = {                      \
+        "unroll_7680b", "unroll_manual_7680b", "mont_" S "_priv_unroll_manual_7680b", nullptr};   \
+    static const char *const kMontAliases_##side##_unroll_manual_8192b[] = {                      \
+        "unroll_8192b", "unroll_manual_8192b", "mont_" S "_priv_unroll_manual_8192b", nullptr};   \
     static const char *const kMontAliases_##side##_unroll64_4096[] = {"unroll64_4096", nullptr};  \
     static const char *const kMontAliases_##side##_fips4096[] = {"fips4096", nullptr};            \
     static const char *const kMontAliases_##side##_karatsuba_2048b[] = {"karatsuba_2048b", nullptr}; \
@@ -105,6 +141,24 @@ ECM_MONT_ALIAS_TABLE(sqr, "sqr")
     X(unroll_manual_2560b, unroll_manual_2560b, -1,   0,  80,  80, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
     X(unroll_manual_3072b, unroll_manual_3072b, -1,   0,  96,  96, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
     X(unroll_manual_3584b, unroll_manual_3584b, -1,   0, 112, 112, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_4096b,  unroll_4096b,    30,   0, 128, 128, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_4608b,  unroll_4608b,    31,   0, 144, 144, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_5120b,  unroll_5120b,    32,   0, 160, 160, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_5632b,  unroll_5632b,    33,   0, 176, 176, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_6144b,  unroll_6144b,    34,   0, 192, 192, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_6656b,  unroll_6656b,    35,   0, 208, 208, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_7168b,  unroll_7168b,    36,   0, 224, 224, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_7680b,  unroll_7680b,    37,   0, 240, 240, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_8192b,  unroll_8192b,    38,   0, 256, 256, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_manual_4096b,  unroll_manual_4096b,  -1,   0, 128, 128, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_manual_4608b,  unroll_manual_4608b,  -1,   0, 144, 144, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_manual_5120b,  unroll_manual_5120b,  -1,   0, 160, 160, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_manual_5632b,  unroll_manual_5632b,  -1,   0, 176, 176, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_manual_6144b,  unroll_manual_6144b,  -1,   0, 192, 192, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_manual_6656b,  unroll_manual_6656b,  -1,   0, 208, 208, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_manual_7168b,  unroll_manual_7168b,  -1,   0, 224, 224, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_manual_7680b,  unroll_manual_7680b,  -1,   0, 240, 240, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
+    X(unroll_manual_8192b,  unroll_manual_8192b,  -1,   0, 256, 256, OS_ANY, GPU_ANY, 0, true, 1, 0)  \
 \
     X(unroll64_4096, unroll_4096b,  23,  96, 128, 128, OS_ANY, GPU_ANY, 0, true, 1, 0)     \
     X(fips4096, fips_4096b,         27,  96, 128, 128, OS_ANY, GPU_ANY, 0, true, 1, 0)     \
@@ -137,6 +191,14 @@ static const char *const kAddAliases_asm_2560b[]    = {"asm_2560b", "add_mod_asm
 static const char *const kAddAliases_asm_3072b[]    = {"asm_3072b", "add_mod_asm_3072b", nullptr};
 static const char *const kAddAliases_asm_3584b[]    = {"asm_3584b", "add_mod_asm_3584b", nullptr};
 static const char *const kAddAliases_asm_4096b[]    = {"asm_4096b", "add_mod_asm_4096b", nullptr};
+static const char *const kAddAliases_asm_4608b[]    = {"asm_4608b", "add_mod_asm_4608b", nullptr};
+static const char *const kAddAliases_asm_5120b[]    = {"asm_5120b", "add_mod_asm_5120b", nullptr};
+static const char *const kAddAliases_asm_5632b[]    = {"asm_5632b", "add_mod_asm_5632b", nullptr};
+static const char *const kAddAliases_asm_6144b[]    = {"asm_6144b", "add_mod_asm_6144b", nullptr};
+static const char *const kAddAliases_asm_6656b[]    = {"asm_6656b", "add_mod_asm_6656b", nullptr};
+static const char *const kAddAliases_asm_7168b[]    = {"asm_7168b", "add_mod_asm_7168b", nullptr};
+static const char *const kAddAliases_asm_7680b[]    = {"asm_7680b", "add_mod_asm_7680b", nullptr};
+static const char *const kAddAliases_asm_8192b[]    = {"asm_8192b", "add_mod_asm_8192b", nullptr};
 static const char *const kAddAliases_unroll_128b[]  = {"unroll_128b", "add_mod_unroll_128b", nullptr};
 static const char *const kAddAliases_unroll_192b[]  = {"unroll_192b", "add_mod_unroll_192b", nullptr};
 static const char *const kAddAliases_unroll_256b[]  = {"unroll_256b", "add_mod_unroll_256b", nullptr};
@@ -150,6 +212,14 @@ static const char *const kAddAliases_unroll_2560b[] = {"unroll_2560b","add_mod_u
 static const char *const kAddAliases_unroll_3072b[] = {"unroll_3072b","add_mod_unroll_3072b", nullptr};
 static const char *const kAddAliases_unroll_3584b[] = {"unroll_3584b","add_mod_unroll_3584b", nullptr};
 static const char *const kAddAliases_unroll_4096b[] = {"unroll_4096b", "add_mod_unroll_4096b", nullptr};
+static const char *const kAddAliases_unroll_4608b[] = {"unroll_4608b", "add_mod_unroll_4608b", nullptr};
+static const char *const kAddAliases_unroll_5120b[] = {"unroll_5120b", "add_mod_unroll_5120b", nullptr};
+static const char *const kAddAliases_unroll_5632b[] = {"unroll_5632b", "add_mod_unroll_5632b", nullptr};
+static const char *const kAddAliases_unroll_6144b[] = {"unroll_6144b", "add_mod_unroll_6144b", nullptr};
+static const char *const kAddAliases_unroll_6656b[] = {"unroll_6656b", "add_mod_unroll_6656b", nullptr};
+static const char *const kAddAliases_unroll_7168b[] = {"unroll_7168b", "add_mod_unroll_7168b", nullptr};
+static const char *const kAddAliases_unroll_7680b[] = {"unroll_7680b", "add_mod_unroll_7680b", nullptr};
+static const char *const kAddAliases_unroll_8192b[] = {"unroll_8192b", "add_mod_unroll_8192b", nullptr};
 static const char *const kAddAliases_fused[]        = {"fused", "add_mod_fused", nullptr};
 static const char *const kAddAliases_fused_unroll[] = {"fused_unroll", "add_mod_fused_unroll", nullptr};
 
@@ -166,6 +236,14 @@ static const char *const kSubAliases_asm_2560b[]    = {"asm_2560b", "sub_mod_asm
 static const char *const kSubAliases_asm_3072b[]    = {"asm_3072b", "sub_mod_asm_3072b", nullptr};
 static const char *const kSubAliases_asm_3584b[]    = {"asm_3584b", "sub_mod_asm_3584b", nullptr};
 static const char *const kSubAliases_asm_4096b[]    = {"asm_4096b", "sub_mod_asm_4096b", nullptr};
+static const char *const kSubAliases_asm_4608b[]    = {"asm_4608b", "sub_mod_asm_4608b", nullptr};
+static const char *const kSubAliases_asm_5120b[]    = {"asm_5120b", "sub_mod_asm_5120b", nullptr};
+static const char *const kSubAliases_asm_5632b[]    = {"asm_5632b", "sub_mod_asm_5632b", nullptr};
+static const char *const kSubAliases_asm_6144b[]    = {"asm_6144b", "sub_mod_asm_6144b", nullptr};
+static const char *const kSubAliases_asm_6656b[]    = {"asm_6656b", "sub_mod_asm_6656b", nullptr};
+static const char *const kSubAliases_asm_7168b[]    = {"asm_7168b", "sub_mod_asm_7168b", nullptr};
+static const char *const kSubAliases_asm_7680b[]    = {"asm_7680b", "sub_mod_asm_7680b", nullptr};
+static const char *const kSubAliases_asm_8192b[]    = {"asm_8192b", "sub_mod_asm_8192b", nullptr};
 static const char *const kSubAliases_unroll_128b[]  = {"unroll_128b", "sub_mod_unroll_128b", nullptr};
 static const char *const kSubAliases_unroll_192b[]  = {"unroll_192b", "sub_mod_unroll_192b", nullptr};
 static const char *const kSubAliases_unroll_256b[]  = {"unroll_256b", "sub_mod_unroll_256b", nullptr};
@@ -179,6 +257,14 @@ static const char *const kSubAliases_unroll_2560b[] = {"unroll_2560b", "sub_mod_
 static const char *const kSubAliases_unroll_3072b[] = {"unroll_3072b", "sub_mod_unroll_3072b", nullptr};
 static const char *const kSubAliases_unroll_3584b[] = {"unroll_3584b", "sub_mod_unroll_3584b", nullptr};
 static const char *const kSubAliases_unroll_4096b[] = {"unroll_4096b", "sub_mod_unroll_4096b", nullptr};
+static const char *const kSubAliases_unroll_4608b[] = {"unroll_4608b", "sub_mod_unroll_4608b", nullptr};
+static const char *const kSubAliases_unroll_5120b[] = {"unroll_5120b", "sub_mod_unroll_5120b", nullptr};
+static const char *const kSubAliases_unroll_5632b[] = {"unroll_5632b", "sub_mod_unroll_5632b", nullptr};
+static const char *const kSubAliases_unroll_6144b[] = {"unroll_6144b", "sub_mod_unroll_6144b", nullptr};
+static const char *const kSubAliases_unroll_6656b[] = {"unroll_6656b", "sub_mod_unroll_6656b", nullptr};
+static const char *const kSubAliases_unroll_7168b[] = {"unroll_7168b", "sub_mod_unroll_7168b", nullptr};
+static const char *const kSubAliases_unroll_7680b[] = {"unroll_7680b", "sub_mod_unroll_7680b", nullptr};
+static const char *const kSubAliases_unroll_8192b[] = {"unroll_8192b", "sub_mod_unroll_8192b", nullptr};
 static const char *const kSubAliases_fused[]        = {"fused", "sub_mod_fused", nullptr};
 static const char *const kSubAliases_fused_unroll[] = {"fused_unroll", "sub_mod_fused_unroll", nullptr};
 
@@ -207,8 +293,24 @@ static const char *const kSubAliases_fused_unroll[] = {"fused_unroll", "sub_mod_
     X(unroll_3072b,   29,   0,  96,  96, OS_ANY, GPU_ANY, 0) \
     X(asm_3584b,      30,   0, 112, 112, OS_ANY, GPU_AMD, 0) \
     X(unroll_3584b,   31,   0, 112, 112, OS_ANY, GPU_ANY, 0) \
-    X(asm_4096b,      32, 128, 128, 128, OS_ANY, GPU_AMD, 0) \
-    X(unroll_4096b,   33, 128, 128, 128, OS_ANY, GPU_ANY, 0) \
+    X(asm_4096b,      32,   0, 128, 128, OS_ANY, GPU_AMD, 0) \
+    X(unroll_4096b,   33,   0, 128, 128, OS_ANY, GPU_ANY, 0) \
+    X(asm_4608b,      34,   0, 144, 144, OS_ANY, GPU_AMD, 0) \
+    X(unroll_4608b,   35,   0, 144, 144, OS_ANY, GPU_ANY, 0) \
+    X(asm_5120b,      36,   0, 160, 160, OS_ANY, GPU_AMD, 0) \
+    X(unroll_5120b,   37,   0, 160, 160, OS_ANY, GPU_ANY, 0) \
+    X(asm_5632b,      38,   0, 176, 176, OS_ANY, GPU_AMD, 0) \
+    X(unroll_5632b,   39,   0, 176, 176, OS_ANY, GPU_ANY, 0) \
+    X(asm_6144b,      40,   0, 192, 192, OS_ANY, GPU_AMD, 0) \
+    X(unroll_6144b,   41,   0, 192, 192, OS_ANY, GPU_ANY, 0) \
+    X(asm_6656b,      42,   0, 208, 208, OS_ANY, GPU_AMD, 0) \
+    X(unroll_6656b,   43,   0, 208, 208, OS_ANY, GPU_ANY, 0) \
+    X(asm_7168b,      44,   0, 224, 224, OS_ANY, GPU_AMD, 0) \
+    X(unroll_7168b,   45,   0, 224, 224, OS_ANY, GPU_ANY, 0) \
+    X(asm_7680b,      46,   0, 240, 240, OS_ANY, GPU_AMD, 0) \
+    X(unroll_7680b,   47,   0, 240, 240, OS_ANY, GPU_ANY, 0) \
+    X(asm_8192b,      48,   0, 256, 256, OS_ANY, GPU_AMD, 0) \
+    X(unroll_8192b,   49,   0, 256, 256, OS_ANY, GPU_ANY, 0) \
     X(fused,         126,   0,   0,   0, OS_ANY, GPU_ANY, 0) \
     X(fused_unroll,  127,   0,   0,   0, OS_ANY, GPU_ANY, 0)
 
@@ -231,6 +333,15 @@ static const char *const kSpecialMultAliases_unroll_2048b[] = {"unroll_2048b", n
 static const char *const kSpecialMultAliases_unroll_2560b[] = {"unroll_2560b", nullptr};
 static const char *const kSpecialMultAliases_unroll_3072b[] = {"unroll_3072b", nullptr};
 static const char *const kSpecialMultAliases_unroll_3584b[] = {"unroll_3584b", nullptr};
+static const char *const kSpecialMultAliases_unroll_4096b[] = {"unroll_4096b", nullptr};
+static const char *const kSpecialMultAliases_unroll_4608b[] = {"unroll_4608b", nullptr};
+static const char *const kSpecialMultAliases_unroll_5120b[] = {"unroll_5120b", nullptr};
+static const char *const kSpecialMultAliases_unroll_5632b[] = {"unroll_5632b", nullptr};
+static const char *const kSpecialMultAliases_unroll_6144b[] = {"unroll_6144b", nullptr};
+static const char *const kSpecialMultAliases_unroll_6656b[] = {"unroll_6656b", nullptr};
+static const char *const kSpecialMultAliases_unroll_7168b[] = {"unroll_7168b", nullptr};
+static const char *const kSpecialMultAliases_unroll_7680b[] = {"unroll_7680b", nullptr};
+static const char *const kSpecialMultAliases_unroll_8192b[] = {"unroll_8192b", nullptr};
 static const char *const kSpecialMultAliases_generic[] = {"generic", nullptr};
 
 #define ECM_SPECIAL_MULT_OPERATORS(X) \
@@ -245,6 +356,15 @@ static const char *const kSpecialMultAliases_generic[] = {"generic", nullptr};
     X(unroll_2560b,15, 80u, 80u, OS_ANY, GPU_ANY, OS_ANDROID)   \
     X(unroll_3072b,16, 96u, 96u, OS_ANY, GPU_ANY, OS_ANDROID)   \
     X(unroll_3584b,17,112u,112u, OS_ANY, GPU_ANY, OS_ANDROID)   \
+    X(unroll_4096b,18,128u,128u, OS_ANY, GPU_ANY, OS_ANDROID)   \
+    X(unroll_4608b,19,144u,144u, OS_ANY, GPU_ANY, OS_ANDROID)   \
+    X(unroll_5120b,20,160u,160u, OS_ANY, GPU_ANY, OS_ANDROID)   \
+    X(unroll_5632b,21,176u,176u, OS_ANY, GPU_ANY, OS_ANDROID)   \
+    X(unroll_6144b,22,192u,192u, OS_ANY, GPU_ANY, OS_ANDROID)   \
+    X(unroll_6656b,23,208u,208u, OS_ANY, GPU_ANY, OS_ANDROID)   \
+    X(unroll_7168b,24,224u,224u, OS_ANY, GPU_ANY, OS_ANDROID)   \
+    X(unroll_7680b,25,240u,240u, OS_ANY, GPU_ANY, OS_ANDROID)   \
+    X(unroll_8192b,26,256u,256u, OS_ANY, GPU_ANY, OS_ANDROID)   \
     X(generic,     127, 0u,  0u, OS_ANY, GPU_ANY, 0)
 
 #define ECM_SPECIAL_MULT_ROW(idt, prio, ...) \
@@ -674,6 +794,18 @@ std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(
         append_unique_kernel_path(paths, kEcmStage1Coop);
     }
     append_unique_kernel_path(paths, kEcmStage1Entry);
+    append_unique_kernel_path(paths, kEcmStage1Entry);
+    // Sliced kernel is AMD-only (uses ds_bpermute):
+    // NVIDIA OpenCL can't compile it.  We include it passively — if build fails,
+    // the host-side g_ecm_kernel_sliced stays nullptr and --sliced is ignored.
+    // Sliced kernels hard-reference 1024b fixed-width operators; ensure their
+    // definitions are included regardless of which operators are selected.
+    append_unique_kernel_path(paths, "mont_mul/mont_mul_unroll_1024b.cl");
+    append_unique_kernel_path(paths, "add_mod/add_mod_asm_1024b.cl");
+    append_unique_kernel_path(paths, "sub_mod/sub_mod_asm_1024b.cl");
+    append_unique_kernel_path(paths, "special_mult/special_mult_unroll_1024b.cl");
+    append_unique_kernel_path(paths, kEcmStage1Entry);
+    // Always include sliced — it has NVIDIA stubs for the AMD intrinsics
     append_unique_kernel_path(paths, kEcmStage1Sliced);
     append_unique_kernel_path(paths, kEcmStage1SlicedT16x2);
     return paths;
