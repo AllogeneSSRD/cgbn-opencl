@@ -357,6 +357,19 @@ static constexpr const char *kEcmStage1AsmCommon = "common/asm_common.h.cl";
 static constexpr const char *kEcmStage1OperatorIface = "common/operator_iface.h.cl";
 static constexpr const char *kEcmStage1Coop = "ecm_stage1_coop.cl";
 static constexpr const char *kEcmStage1Entry = "ecm_stage1.cl";
+static constexpr const char *kEcmStage1EntryLocal = "ecm_stage1_local.cl";
+
+std::string mont_kernel_path_local(const EcmMontPathDescriptor *desc) {
+    if (desc == nullptr || desc->kernel_path == nullptr) return "";
+    std::string s(desc->kernel_path);
+    // kernel_path is e.g. "mont_mul/mont_mul_unroll_8192b.cl"
+    // → needs to become  "mont_mul/mont_mul_unroll_8192b_local.cl"
+    size_t dot = s.rfind(".cl");
+    if (dot != std::string::npos) {
+        s.insert(dot, "_local");
+    }
+    return s;
+}
 static constexpr const char *kEcmStage1Sliced = "ecm_stage1_sliced.cl";
 static constexpr const char *kEcmStage1SlicedT16x2 = "ecm_stage1_sliced_t16x2.cl";
 static constexpr const char *kMontFips4096Kernel = "mont_mul/mont_mul_fips_4096b.cl";
@@ -718,6 +731,9 @@ int ecm_coop_kernel_path_from_desc(const EcmMontPathDescriptor *desc) {
 std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(
     const EcmStage1KernelBuildPlan &plan) {
     std::vector<const char *> paths;
+    // Keep dynamically-constructed strings alive beyond function return.
+    static std::vector<std::string> local_strings;
+    local_strings.clear();
     append_unique_kernel_path(paths, kEcmStage1CommonConfig);
     append_unique_kernel_path(paths, kEcmStage1CommonMpPriv);
     append_unique_kernel_path(paths, kEcmStage1LadderHelpers);
@@ -725,10 +741,22 @@ std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(
         append_unique_kernel_path(paths, kEcmStage1AsmCommon);
     }
     if (plan.mul != nullptr) {
-        append_unique_kernel_path(paths, plan.mul->kernel_path);
+        if (plan.local) {
+            local_strings.push_back(mont_kernel_path_local(plan.mul));
+            const std::string &s = local_strings.back();
+            if (!s.empty()) append_unique_kernel_path(paths, s.c_str());
+        } else {
+            append_unique_kernel_path(paths, plan.mul->kernel_path);
+        }
     }
     if (plan.sqr != nullptr) {
-        append_unique_kernel_path(paths, plan.sqr->kernel_path);
+        if (plan.local) {
+            local_strings.push_back(mont_kernel_path_local(plan.sqr));
+            const std::string &s = local_strings.back();
+            if (!s.empty()) append_unique_kernel_path(paths, s.c_str());
+        } else {
+            append_unique_kernel_path(paths, plan.sqr->kernel_path);
+        }
     }
     if (plan.add != nullptr) {
         append_unique_kernel_path(paths, plan.add->kernel_path);
@@ -739,12 +767,16 @@ std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(
     if (plan.special_mult != nullptr && plan.special_mult->kernel_path != nullptr) {
         append_unique_kernel_path(paths, plan.special_mult->kernel_path);
     }
-    append_unique_kernel_path(paths, kEcmStage1OperatorIface);
-    if (stage1_coop_wg_for_plan(plan) > 1) {
-        append_unique_kernel_path(paths, kEcmStage1Coop);
+    if (!plan.local) {
+        append_unique_kernel_path(paths, kEcmStage1OperatorIface);
+        if (stage1_coop_wg_for_plan(plan) > 1) {
+            append_unique_kernel_path(paths, kEcmStage1Coop);
+        }
     }
-    append_unique_kernel_path(paths, kEcmStage1Entry);
-    append_unique_kernel_path(paths, kEcmStage1Entry);
+    append_unique_kernel_path(paths, plan.local ? kEcmStage1EntryLocal : kEcmStage1Entry);
+    if (!plan.local) {
+        append_unique_kernel_path(paths, kEcmStage1Entry);
+    }
     // Sliced kernel is AMD-only (uses ds_bpermute):
     // NVIDIA OpenCL can't compile it.  We include it passively — if build fails,
     // the host-side g_ecm_kernel_sliced stays nullptr and --sliced is ignored.
@@ -754,7 +786,9 @@ std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(
     append_unique_kernel_path(paths, "add_mod/add_mod_asm_1024b.cl");
     append_unique_kernel_path(paths, "sub_mod/sub_mod_asm_1024b.cl");
     append_unique_kernel_path(paths, "special_mult/special_mult_unroll_1024b.cl");
-    append_unique_kernel_path(paths, kEcmStage1Entry);
+    if (!plan.local) {
+        append_unique_kernel_path(paths, kEcmStage1Entry);
+    }
     // Always include sliced — it has NVIDIA stubs for the AMD intrinsics
     append_unique_kernel_path(paths, kEcmStage1Sliced);
     append_unique_kernel_path(paths, kEcmStage1SlicedT16x2);
@@ -770,8 +804,18 @@ std::string opencl_ecm_stage1_assemble_kernel_source(
         plan.special_mult == nullptr) {
         return source;
     }
-    append_impl_macro(source, "ECM_STAGE1_MUL_IMPL", plan.mul->cl_name);
-    append_impl_macro(source, "ECM_STAGE1_SQR_IMPL", plan.sqr->cl_name);
+    if (plan.local) {
+        // Local kernel: suffix _local on mont mul/sqr cl_names and kernel paths.
+        std::string mul_local(plan.mul->cl_name);
+        mul_local += "_local";
+        std::string sqr_local(plan.sqr->cl_name);
+        sqr_local += "_local";
+        append_impl_macro(source, "ECM_STAGE1_MUL_IMPL", mul_local.c_str());
+        append_impl_macro(source, "ECM_STAGE1_SQR_IMPL", sqr_local.c_str());
+    } else {
+        append_impl_macro(source, "ECM_STAGE1_MUL_IMPL", plan.mul->cl_name);
+        append_impl_macro(source, "ECM_STAGE1_SQR_IMPL", plan.sqr->cl_name);
+    }
     append_impl_macro(source, "ECM_STAGE1_ADD_IMPL", plan.add->cl_name);
     append_impl_macro(source, "ECM_STAGE1_SUB_IMPL", plan.sub->cl_name);
     append_impl_macro(source, "ECM_STAGE1_SPECIAL_MULT_IMPL", plan.special_mult->cl_name);
@@ -907,7 +951,7 @@ EcmStage1KernelBuildPlan opencl_ecm_stage1_make_build_plan(
     uint32_t limbs, uint32_t tpi, const EcmMontPathDescriptor *mul,
     const EcmMontPathDescriptor *sqr, const EcmAddSubPathDescriptor *add,
     const EcmAddSubPathDescriptor *sub, const EcmSpecialMultPathDescriptor *special_mult,
-    int stage1_force_normalize, int add_mod_fused_unroll) {
+    int stage1_force_normalize, int add_mod_fused_unroll, bool local, int wg_size) {
     EcmStage1KernelBuildPlan plan{};
     plan.limbs = limbs;
     plan.tpi = tpi;
@@ -918,6 +962,8 @@ EcmStage1KernelBuildPlan opencl_ecm_stage1_make_build_plan(
     plan.add = add;
     plan.sub = sub;
     plan.special_mult = special_mult;
+    plan.local = local;
+    plan.wg_size = wg_size;
     return plan;
 }
 
@@ -926,7 +972,8 @@ bool opencl_ecm_stage1_build_plan_equal(const EcmStage1KernelBuildPlan &a,
     return a.limbs == b.limbs && a.tpi == b.tpi &&
            a.stage1_force_normalize == b.stage1_force_normalize &&
            a.add_mod_fused_unroll == b.add_mod_fused_unroll && a.mul == b.mul && a.sqr == b.sqr &&
-           a.add == b.add && a.sub == b.sub && a.special_mult == b.special_mult;
+           a.add == b.add && a.sub == b.sub && a.special_mult == b.special_mult &&
+           a.local == b.local && a.wg_size == b.wg_size;
 }
 
 std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildPlan &plan) {
@@ -965,6 +1012,13 @@ std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildP
     append_define(opts, "ECM_STAGE1_COOP_SCRATCH_U32", coop_scratch);
     append_define(opts, "ECM_COOP_CONTAINER_LIMBS", coop_container_limbs);
     append_define(opts, "ECM_STAGE1_HAS_FIPS4096", has_fips4096 ? 1 : 0);
+
+    if (plan.local) {
+        uint32_t wg = (plan.limbs <= 128u) ? 16u : 8u;
+        append_define(opts, "ECM_STAGE1_WG_SIZE", static_cast<int>(wg));
+    } else if (plan.wg_size > 0) {
+        append_define(opts, "ECM_STAGE1_WG_SIZE", plan.wg_size);
+    }
 
     return opts;
 }

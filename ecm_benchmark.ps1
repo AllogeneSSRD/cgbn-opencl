@@ -1,5 +1,5 @@
 param(
-    [string]$N_expr  = "2^4027-1", # 421 1009 2017 3049 4027
+    [string]$N_expr  = "2^3049-1", # 421 1009 2017 3049 4027
     [string]$B1_list = "1e3" 				# 1e4 1e5
 )
 
@@ -12,7 +12,7 @@ $device = 1
 
 if (-not (Test-Path $exe)) {
     Write-Host "[ERROR] $exe not found"
-    Write-Host "Build first: cmake --build build --config Debug"
+    Write-Host "Build first: cmake --build build_rel --config Release"
     Pause
     exit 1
 }
@@ -55,7 +55,7 @@ foreach ($b1 in $B1_list -split ' ') {
 
     foreach ($c in $curves) {
         $tag = "[curves=$c  B1=$b1]"
-        Write-Host "$tag warmup..."
+        # Write-Host "$tag warmup..."
 
         # warmup
         # "---- warmup  curves=$c  B1=$b1 ----" | Out-File -FilePath $logFile -Append -Encoding ASCII
@@ -69,7 +69,8 @@ foreach ($b1 in $B1_list -split ' ') {
             Tee-Object -FilePath $tmpFile |
             Out-File -FilePath $logFile -Append -Encoding ASCII
 
-        Get-Content $tmpFile | Select-String "Using |gputime=" | ForEach-Object {
+		# Using | 
+        Get-Content $tmpFile | Select-String "gputime=" | ForEach-Object { 
             Write-Host "  $_"
         }
         $line  = Get-Content $tmpFile | Select-String "gputime=" | Select-Object -First 1
@@ -77,11 +78,11 @@ foreach ($b1 in $B1_list -split ' ') {
 
         # --- run 2 ---
         "---- run 2  curves=$c  B1=$b1 ----" | Out-File -FilePath $logFile -Append -Encoding ASCII
-        echo "($N_expr)" | & $exe -v -d $device -gpu -sigma 3:$sigma -gpucurves $c $b1 0 *>&1 |
+        echo "($N_expr)" | & $exe -v -d $device -gpu -sigma 3:$sigma -gpucurves $c $b1 0 --local *>&1 |
             Tee-Object -FilePath $tmpFile |
             Out-File -FilePath $logFile -Append -Encoding ASCII
 
-        Get-Content $tmpFile | Select-String "Using |gputime=" | ForEach-Object {
+        Get-Content $tmpFile | Select-String "gputime=" | ForEach-Object {
             Write-Host "  $_"
         }
         $line2 = Get-Content $tmpFile | Select-String "gputime=" | Select-Object -First 1

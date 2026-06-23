@@ -127,6 +127,8 @@ struct EcmStage1KernelBuildPlan {
     const EcmAddSubPathDescriptor *add;
     const EcmAddSubPathDescriptor *sub;
     const EcmSpecialMultPathDescriptor *special_mult;
+    bool local;
+    int wg_size;
 };
 
 bool ecm_path_limbs_fits(uint32_t min_limbs, uint32_t max_limbs, uint32_t limbs);
@@ -170,7 +172,7 @@ EcmStage1KernelBuildPlan opencl_ecm_stage1_make_build_plan(
     uint32_t limbs, uint32_t tpi, const EcmMontPathDescriptor *mul,
     const EcmMontPathDescriptor *sqr, const EcmAddSubPathDescriptor *add,
     const EcmAddSubPathDescriptor *sub, const EcmSpecialMultPathDescriptor *special_mult,
-    int stage1_force_normalize, int add_mod_fused_unroll);
+    int stage1_force_normalize, int add_mod_fused_unroll, bool local, int wg_size);
 std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildPlan &plan);
 bool opencl_ecm_stage1_build_plan_equal(const EcmStage1KernelBuildPlan &a,
                                         const EcmStage1KernelBuildPlan &b);

@@ -669,6 +669,8 @@ static void print_ecm_usage(const char *prog) {
               << "  --tpi <1..32>              Threads per instance (default 8)\n"
               << "  --force-normalize <0|1>    Stage1 force-normalize path\n"
               << "  --addsub-fused-unroll <1|2>  add/sub fused-unroll mode\n"
+              << "  --local                    Use LDS-based kernel (reduce scratch spill at large bits)\n"
+              << "  --wg <N>                   Explicit work-group size (0=auto; 1,4,8,16,32…)\n"
               << " Kernel source / cache:\n"
               << "  --kernel-root <dir>        Kernel source root\n"
               << "  --kernel-cache-dir <dir>   OpenCL binary cache directory\n"
@@ -833,6 +835,13 @@ int main(int argc, char **argv){
             if(a == "--addsub-fused-unroll" && i+1<argc){ cfg.add_mod_fused_unroll = std::stoi(argv[++i]); continue; }
             if(a == "--sliced"){ cfg.gpu_sliced = true; continue; }
             if(a == "--sliced-t16"){ cfg.gpu_sliced_t16 = true; continue; }
+            if(a == "--local"){ cfg.gpu_local = true; continue; }
+            if(a == "--wg" && i+1<argc){
+                int wg = std::stoi(argv[++i]);
+                if (wg < 0) { std::cerr << "Invalid --wg value, expected >= 0" << std::endl; return 1; }
+                cfg.wg_size = wg;
+                continue;
+            }
             // kernel source / cache group
             if(a == "--kernel-root" && i+1<argc){ cfg.kernel_root = argv[++i]; continue; }
             if(a == "--kernel-cache-dir" && i+1<argc){ cfg.cache_dir = argv[++i]; continue; }
@@ -929,6 +938,12 @@ int main(int argc, char **argv){
     }
     if (!gp_bin_path.empty()) {
         std::cout << ", gp=" << gp_bin_path;
+    }
+    if (ecm_runtime_config().gpu_local) {
+        std::cout << ", local";
+    }
+    if (ecm_runtime_config().wg_size > 0) {
+        std::cout << ", wg=" << ecm_runtime_config().wg_size;
     }
     std::cout << std::endl;
     // if(!pos.empty()){
