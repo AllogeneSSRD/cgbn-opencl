@@ -190,6 +190,8 @@ static inline int sub_mod_asm_5632b_body(uint *r, const uint *a, const uint *b, 
 }
 
 #if !defined(__AMDGCN__)
+#ifndef SUB_MOD_UNROLL_5632B_BODY_DEFINED
+#define SUB_MOD_UNROLL_5632B_BODY_DEFINED
 static inline int sub_mod_unroll_5632b_body(uint *r, const uint *a, const uint *b, const uint *N) {
     ulong br = 0ul;
     {
@@ -2310,6 +2312,7 @@ static inline int sub_mod_unroll_5632b_body(uint *r, const uint *a, const uint *
     }
     return 0;
 }
+#endif
 
 #endif
 #if defined(__AMDGCN__)

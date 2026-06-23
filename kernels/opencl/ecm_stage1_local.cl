@@ -11,6 +11,10 @@
 #ifndef ECM_STAGE1_WG_SIZE
 #define ECM_STAGE1_WG_SIZE 8u
 #endif
+#define ECM_STAGE1_LOCAL_PAD 2u
+#define ECM_STAGE1_LOCAL_BLOCKS 2u
+// Pre-computed: ECM_STAGE1_WG_SIZE * ECM_STAGE1_LOCAL_BLOCKS * (MAX_LIMBS + ECM_STAGE1_LOCAL_PAD)
+#define ECM_STAGE1_LOCAL_SCRATCH_U32 (ECM_STAGE1_WG_SIZE * ECM_STAGE1_LOCAL_BLOCKS * (MAX_LIMBS + ECM_STAGE1_LOCAL_PAD))
 
 #ifndef ECM_STAGE1_MUL_IMPL
 #error "ECM_STAGE1_MUL_IMPL not defined"
@@ -155,7 +159,7 @@ void kernel_double_add_local(__global const uint *s_bits, ulong s_num_bits, ulon
     if (instance_i >= count) return;
     if (limbs == 0u || limbs > MAX_LIMBS) return;
 
-    __local uint scratch[ECM_STAGE1_WG_SIZE * 2u * (MAX_LIMBS + 2u)];
+    __local uint scratch[ECM_STAGE1_LOCAL_SCRATCH_U32];
     uint lid = get_local_id(0);
     __local uint *wi_scratch = scratch + lid * 2u * (MAX_LIMBS + 2u);
 

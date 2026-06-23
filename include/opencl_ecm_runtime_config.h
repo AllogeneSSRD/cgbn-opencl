@@ -23,7 +23,7 @@ struct EcmRuntimeConfig {
     // --- device / kernel build (main solver) ---
     int device_index = 0;               // was CGBN_OPENCL_DEVICE_INDEX   / CLI: -d
     uint32_t tpi = 8u;                  // was ECM_OPENCL_TPI             / CLI: --tpi (1..32)
-    int stage1_force_normalize = 0;     // was ECM_STAGE1_FORCE_NORMALIZE / CLI: --force-normalize
+    int stage1_force_normalize = 1;     // was ECM_STAGE1_FORCE_NORMALIZE / CLI: --force-normalize
     int add_mod_fused_unroll = 2;       // was ECM_MP_ADD_MOD_FUSED_UNROLL/ CLI: --fused-unroll (1|2)
 
     // --- OpenCL backend (impl_opencl.cpp) ---
@@ -55,7 +55,7 @@ struct EcmRuntimeConfig {
     bool gpu_sliced = false;            // CLI: --sliced  → use sliced shuffle kernel (PoC, 32T)
     bool gpu_sliced_t16 = false;        // CLI: --sliced-t16 → 16 lanes × 2 limbs (PoC, lower VGPR)
     bool gpu_local = false;             // CLI: --local  → LDS-based kernel (avoid scratch spill at large bits)
-    int wg_size = 32;                    // CLI: --wg <N>  → explicit work-group size (0=auto, 1,4,8,16,32)
+    int wg_size = 0;                    // CLI: --wg <N>  → explicit work-group size (0=auto, 1,4,8,16,32)
 };
 
 // Process-wide mutable singleton. Each main() writes it after parsing argv; the

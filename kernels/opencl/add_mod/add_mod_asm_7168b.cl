@@ -238,6 +238,8 @@ static inline void add_mod_asm_7168b_body(uint *r, const uint *a, const uint *b,
 }
 
 #if !defined(__AMDGCN__)
+#ifndef ADD_MOD_UNROLL_7168B_BODY_DEFINED
+#define ADD_MOD_UNROLL_7168B_BODY_DEFINED
 static inline void add_mod_unroll_7168b_body(uint *r, const uint *a, const uint *b, const uint *N) {
     ulong carry_add = 0ul;
     ulong carry_sub = 1ul;
@@ -2934,6 +2936,7 @@ static inline void add_mod_unroll_7168b_body(uint *r, const uint *a, const uint 
         c = s >> 32;
     }
 }
+#endif
 
 #endif
 #if defined(__AMDGCN__)

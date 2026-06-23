@@ -685,7 +685,8 @@ static int ensure_ecm_kernel(const EcmStage1KernelBuildPlan &plan, int verbose,
             ecm_ts_fprintf(stderr, "OpenCL: kernel_double_add_local not found (%d)\n", err);
             return -1;
         }
-        g_kernel_local_wg = (plan.limbs <= 128u) ? 16u : 8u;
+        g_kernel_local_wg = (plan.wg_size > 0) ? (uint32_t)plan.wg_size
+                            : (plan.limbs <= 128u) ? 16u : 8u;
     } else {
         g_ecm_kernel = clCreateKernel(g_ecm_program, "kernel_double_add", &err);
         if (err != CL_SUCCESS) {
@@ -991,11 +992,11 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     if (is_local || g_kernel_local_wg > 0u || g_kernel_use_coop_wg) {
         ecm_ts_fprintf(stdout,
                 "GPU: OpenCL<%u limbs, %u wg * %u size%s> kernel, %zu-bit N, s=%llu bits, np0=0x%08x\n",
-                container_limbs, wi_total/wg_actual, wg_actual, local_tag,
+                container_limbs, std::max(wi_total/wg_actual, 1u), wg_actual, local_tag,
                 n_log2, (unsigned long long)s_num_bits, np0);
     } else {
         ecm_ts_fprintf(stdout,
-                "GPU: OpenCL<%u limbs, %u wg * 1 size%s> kernel, %zu-bit N, s=%llu bits, np0=0x%08x\n",
+                "GPU: OpenCL<%u limbs, %u WI%s> kernel, %zu-bit N, s=%llu bits, np0=0x%08x\n",
                 container_limbs, wi_total, local_tag,
                 n_log2, (unsigned long long)s_num_bits, np0);
     }

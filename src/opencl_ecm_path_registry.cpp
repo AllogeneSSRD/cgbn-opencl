@@ -777,9 +777,6 @@ std::vector<const char *> opencl_ecm_stage1_kernel_source_paths(
     if (!plan.local) {
         append_unique_kernel_path(paths, kEcmStage1Entry);
     }
-    // Sliced kernel is AMD-only (uses ds_bpermute):
-    // NVIDIA OpenCL can't compile it.  We include it passively — if build fails,
-    // the host-side g_ecm_kernel_sliced stays nullptr and --sliced is ignored.
     // Sliced kernels hard-reference 1024b fixed-width operators; ensure their
     // definitions are included regardless of which operators are selected.
     append_unique_kernel_path(paths, "mont_mul/mont_mul_unroll_1024b.cl");
@@ -1014,7 +1011,8 @@ std::string opencl_ecm_stage1_generate_build_options(const EcmStage1KernelBuildP
     append_define(opts, "ECM_STAGE1_HAS_FIPS4096", has_fips4096 ? 1 : 0);
 
     if (plan.local) {
-        uint32_t wg = (plan.limbs <= 128u) ? 16u : 8u;
+        uint32_t wg = (plan.wg_size > 0) ? (uint32_t)plan.wg_size
+                        : (plan.limbs <= 128u) ? 16u : 8u;
         append_define(opts, "ECM_STAGE1_WG_SIZE", static_cast<int>(wg));
     } else if (plan.wg_size > 0) {
         append_define(opts, "ECM_STAGE1_WG_SIZE", plan.wg_size);

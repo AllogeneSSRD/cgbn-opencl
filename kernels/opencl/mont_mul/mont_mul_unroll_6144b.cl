@@ -9,22 +9,21 @@ static inline void mont_mul_unroll_6144b(uint *out, const uint *a, const uint *b
     #pragma unroll
     for (uint j = 0u; j <192u; ++j) B[j] = b[j];
     for (uint i = 0u; i <192u; ++i) {
-        uint ai = a[i]; ulong carry = 0ul;
+        uint ai = a[i]; ulong carry = 0ul, uv;
     #pragma unroll
         for (uint j = 0u; j < 192u; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
+            uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
             t[j] = (uint)uv; carry = uv>>32;
         }
         ulong top = (ulong)t[192u] + carry;
         t[192u]    = (uint)top;
         t[192u+1u] = (uint)(top>>32);
-        t[192u+1u] = (uint)(top>>32);
         uint m = (uint)((ulong)t[0] * (ulong)np0);
-        carry=0ul;
+        uv = (ulong)t[0] + (ulong)m * (ulong)N[0]; carry = uv>>32;
     #pragma unroll
-        for (uint j = 0u; j < 192u; ++j) {
-            ulong uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
-            if (j > 0u) t[j-1u] = (uint)uv; carry = uv>>32;
+        for (uint j = 1u; j < 192u; ++j) {
+            uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
+            t[j-1u] = (uint)uv; carry = uv>>32;
             }
         top = (ulong)t[192u] + carry;
         t[192u-1u] = (uint)top;
