@@ -56,29 +56,78 @@ def emit_add_unroll(limbs: int, bits: int) -> str:
         f"#ifndef {guard}\n",
         f"#define {guard}\n",
         f"static inline void add_mod_unroll_{bits}b_body(uint *r, const uint *a, const uint *b, const uint *N) {{\n",
-        "    ulong carry_add = 0ul;\n",
-        "    ulong carry_sub = 1ul;\n",
     ]
-    for i in range(limbs):
-        lines.append(
-            f"    {{\n"
-            f"        ulong sum = (ulong)a[{i}] + (ulong)b[{i}] + carry_add;\n"
-            f"        carry_add = sum >> 32;\n"
-            f"        ulong temp = (ulong)(uint)sum + (ulong)(~N[{i}]) + carry_sub;\n"
-            f"        carry_sub = temp >> 32;\n"
-            f"        r[{i}] = (uint)temp;\n"
-            f"    }}\n"
-        )
-    lines.append("    if ((carry_add | carry_sub) != 0ul) {\n        return;\n    }\n")
-    lines.append("    ulong c = 0ul;\n")
-    for i in range(limbs):
-        lines.append(
-            f"    {{\n"
-            f"        ulong s = (ulong)r[{i}] + (ulong)N[{i}] + c;\n"
-            f"        r[{i}] = (uint)s;\n"
-            f"        c = s >> 32;\n"
-            f"    }}\n"
-        )
+    if limbs < 112:
+        # Flat: each limb is a separate block.  Up to 96 limbs (3072b) the
+        # compiler pipelines this well.  At 112+ limbs (3584b+) block-fusing
+        # avoids VGPR overflow.
+        lines.append("    ulong carry_add = 0ul;\n")
+        lines.append("    ulong carry_sub = 1ul;\n")
+        for i in range(limbs):
+            lines.append(
+                f"    {{\n"
+                f"        ulong sum = (ulong)a[{i}] + (ulong)b[{i}] + carry_add;\n"
+                f"        carry_add = sum >> 32;\n"
+                f"        ulong temp = (ulong)(uint)sum + (ulong)(~N[{i}]) + carry_sub;\n"
+                f"        carry_sub = temp >> 32;\n"
+                f"        r[{i}] = (uint)temp;\n"
+                f"    }}\n"
+            )
+        lines.append("    if ((carry_add | carry_sub) != 0ul) {\n        return;\n    }\n")
+        lines.append("    ulong c = 0ul;\n")
+        for i in range(limbs):
+            lines.append(
+                f"    {{\n"
+                f"        ulong s = (ulong)r[{i}] + (ulong)N[{i}] + c;\n"
+                f"        r[{i}] = (uint)s;\n"
+                f"        c = s >> 32;\n"
+                f"    }}\n"
+            )
+    else:
+        # Block-fused: 32-element blocks with inner #pragma unroll 32.
+        # Prevents NVIDIA compiler from choking on massive flat inline expansion.
+        # For >8192b, use larger blocks to avoid excessive code size.
+        n_blk = limbs // 32
+        n_rem = limbs % 32
+        lines.append("    ulong carry_add = 0ul;\n")
+        lines.append("    ulong carry_sub = 1ul;\n")
+        if n_blk > 0:
+            lines.append("    #pragma unroll\n")
+            lines.append(f"    for (uint blk = 0u; blk < {n_blk}u; ++blk) {{\n")
+            lines.append( "        uint off = blk * 32u;\n")
+            lines.append( "        #pragma unroll 32\n")
+            lines.append( "        for (uint j = 0u; j < 32u; ++j) {\n")
+            lines.append( "            uint i = off + j;\n")
+            lines.append( "            ulong sum = (ulong)a[i] + (ulong)b[i] + carry_add;\n")
+            lines.append( "            carry_add = sum >> 32;\n")
+            lines.append( "            ulong temp = (ulong)(uint)sum + (ulong)(~N[i]) + carry_sub;\n")
+            lines.append( "            carry_sub = temp >> 32;\n")
+            lines.append( "            r[i] = (uint)temp;\n")
+            lines.append( "        }\n")
+            lines.append( "    }\n")
+        if n_rem > 0:
+            lines.append(f"    {{ uint off = {n_blk} * 32u;\n")
+            for i in range(n_rem):
+                lines.append(
+                    f"        {{ uint i = off + {i};\n"
+                    f"            ulong sum = (ulong)a[i] + (ulong)b[i] + carry_add;\n"
+                    f"            carry_add = sum >> 32;\n"
+                    f"            ulong temp = (ulong)(uint)sum + (ulong)(~N[i]) + carry_sub;\n"
+                    f"            carry_sub = temp >> 32;\n"
+                    f"            r[i] = (uint)temp; }}\n"
+                )
+            lines.append("    }\n")
+        lines.append("    if ((carry_add | carry_sub) != 0ul) {\n        return;\n    }\n")
+        lines.append("    ulong c = 0ul;\n")
+        if limbs <= 128:
+            lines.append(f"    #pragma unroll 32\n")
+        else:
+            lines.append(f"    // NVIDIA compiler crash avoidance: no unroll for large limb counts\n")
+        lines.append(f"    for (uint i = 0u; i < {limbs}u; ++i) {{\n")
+        lines.append( "        ulong s = (ulong)r[i] + (ulong)N[i] + c;\n")
+        lines.append( "        r[i] = (uint)s;\n")
+        lines.append( "        c = s >> 32;\n")
+        lines.append( "    }\n")
     lines.append("}\n#endif\n\n")
     return "".join(lines)
 
@@ -89,28 +138,71 @@ def emit_sub_unroll(limbs: int, bits: int) -> str:
         f"#ifndef {guard}\n",
         f"#define {guard}\n",
         f"static inline int sub_mod_unroll_{bits}b_body(uint *r, const uint *a, const uint *b, const uint *N) {{\n",
-        "    ulong br = 0ul;\n",
     ]
-    for i in range(limbs):
-        lines.append(
-            f"    {{\n"
-            f"        ulong av = (ulong)a[{i}];\n"
-            f"        ulong bv = (ulong)b[{i}];\n"
-            f"        ulong w = av - bv - br;\n"
-            f"        r[{i}] = (uint)w;\n"
-            f"        br = (av < bv + br) ? 1ul : 0ul;\n"
-            f"    }}\n"
-        )
-    lines.append("    if (br != 0ul) {\n        ulong c = 0ul;\n")
-    for i in range(limbs):
-        lines.append(
-            f"        {{\n"
-            f"            ulong s = (ulong)r[{i}] + (ulong)N[{i}] + c;\n"
-            f"            r[{i}] = (uint)s;\n"
-            f"            c = s >> 32;\n"
-            f"        }}\n"
-        )
-    lines.append("        return 1;\n    }\n    return 0;\n}\n#endif\n\n")
+    if limbs < 112:
+        # Flat: each limb is a separate block (see add_unroll comment above).
+        lines.append("    ulong br = 0ul;\n")
+        for i in range(limbs):
+            lines.append(
+                f"    {{\n"
+                f"        ulong av = (ulong)a[{i}];\n"
+                f"        ulong bv = (ulong)b[{i}];\n"
+                f"        ulong w = av - bv - br;\n"
+                f"        r[{i}] = (uint)w;\n"
+                f"        br = (av < bv + br) ? 1ul : 0ul;\n"
+                f"    }}\n"
+            )
+        lines.append("    if (br != 0ul) {\n        ulong c = 0ul;\n")
+        for i in range(limbs):
+            lines.append(
+                f"        {{\n"
+                f"            ulong s = (ulong)r[{i}] + (ulong)N[{i}] + c;\n"
+                f"            r[{i}] = (uint)s;\n"
+                f"            c = s >> 32;\n"
+                f"        }}\n"
+            )
+        lines.append("        return 1;\n    }\n    return 0;\n}\n#endif\n\n")
+    else:
+        n_blk = limbs // 32
+        n_rem = limbs % 32
+        lines.append("    ulong br = 0ul;\n")
+        if n_blk > 0:
+            lines.append("    #pragma unroll\n")
+            lines.append(f"    for (uint blk = 0u; blk < {n_blk}u; ++blk) {{\n")
+            lines.append( "        uint off = blk * 32u;\n")
+            lines.append( "        #pragma unroll 32\n")
+            lines.append( "        for (uint j = 0u; j < 32u; ++j) {\n")
+            lines.append( "            uint i = off + j;\n")
+            lines.append( "            ulong av = (ulong)a[i];\n")
+            lines.append( "            ulong bv = (ulong)b[i];\n")
+            lines.append( "            ulong w = av - bv - br;\n")
+            lines.append( "            r[i] = (uint)w;\n")
+            lines.append( "            br = (av < bv + br) ? 1ul : 0ul;\n")
+            lines.append( "        }\n")
+            lines.append( "    }\n")
+        if n_rem > 0:
+            lines.append(f"    {{ uint off = {n_blk} * 32u;\n")
+            for i in range(n_rem):
+                lines.append(
+                    f"        {{ uint i = off + {i};\n"
+                    f"            ulong av = (ulong)a[i];\n"
+                    f"            ulong bv = (ulong)b[i];\n"
+                    f"            ulong w = av - bv - br;\n"
+                    f"            r[i] = (uint)w;\n"
+                    f"            br = (av < bv + br) ? 1ul : 0ul; }}\n"
+                )
+            lines.append("    }\n")
+        lines.append("    if (br != 0ul) {\n        ulong c = 0ul;\n")
+        if limbs <= 128:
+            lines.append(f"    #pragma unroll 32\n")
+        else:
+            lines.append(f"    // NVIDIA compiler crash avoidance: no unroll for large limb counts\n")
+        lines.append(f"    for (uint i = 0u; i < {limbs}u; ++i) {{\n")
+        lines.append( "        ulong s = (ulong)r[i] + (ulong)N[i] + c;\n")
+        lines.append( "        r[i] = (uint)s;\n")
+        lines.append( "        c = s >> 32;\n")
+        lines.append( "    }\n")
+        lines.append("        return 1;\n    }\n    return 0;\n}\n#endif\n\n")
     return "".join(lines)
 
 
