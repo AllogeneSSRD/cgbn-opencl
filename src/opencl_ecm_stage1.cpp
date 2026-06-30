@@ -25,6 +25,7 @@
 #include <vector>
 
 #ifdef _WIN32
+#include <io.h>
 #include <process.h>
 #ifndef getpid
 #define getpid _getpid
@@ -33,6 +34,37 @@
 #include <unistd.h>
 #endif
 #include <ctime>
+
+#include <atomic>
+#include <csignal>
+
+// Progress bar (indicators header-only library)
+#include "indicators/indicators.hpp"
+
+// ── Interrupt handling ──────────────────────────────────────────────────
+static std::atomic<bool> g_interrupted{false};
+
+#ifdef _WIN32
+#include <windows.h>
+static BOOL WINAPI console_ctrl_handler(DWORD ctrl_type) {
+    if (ctrl_type == CTRL_C_EVENT || ctrl_type == CTRL_BREAK_EVENT) {
+        static int count = 0;
+        if (++count > 1) return FALSE;          // second Ctrl+C → let OS kill
+        g_interrupted.store(true, std::memory_order_relaxed);
+        // Reset terminal attributes immediately.
+        const char *reset = "\033[0m\r\n";
+        _write(2, reset, (unsigned int)strlen(reset));
+        return TRUE;   // TRUE = we handled it, do NOT terminate the process
+    }
+    return FALSE;
+}
+#else
+static void signal_handler(int) {
+    g_interrupted.store(true, std::memory_order_relaxed);
+    const char *reset = "\033[0m\n";
+    write(STDERR_FILENO, reset, strlen(reset));
+}
+#endif
 
 #define CARRY_BITS ECM_STAGE1_MONT_CARRY_BITS
 
@@ -264,14 +296,6 @@ static void emit_ops_profile(const ecm_ops_profile_counts_t &c, uint32_t curves,
         << "\n";
 }
 
-
-static int print_nth_batch(int n) {
-    return ((n < 3) ||
-            (n < 30 && n % 10 == 0) ||
-            (n < 500 && n % 100 == 0) ||
-            (n < 5000 && n % 1000 == 0) ||
-            (n % 10000 == 0));
-}
 
 static void print_opencl_device_info(int device_index, double init_ms) {
     if (!g_ctx_ready) {
@@ -1048,6 +1072,29 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
     using steady_clock = std::chrono::steady_clock;
     const auto checkpoint_epoch = steady_clock::now();
     auto last_checkpoint_wall = checkpoint_epoch;
+
+    // ── Progress bar ──────────────────────────────────────────────────────
+    indicators::ProgressBar bar{
+        indicators::option::BarWidth{40},
+        indicators::option::Start{"["},
+        indicators::option::Fill{"="},
+        indicators::option::Lead{">"},
+        indicators::option::Remainder{" "},
+        indicators::option::End{"]"},
+        indicators::option::PrefixText{"GPU: "},
+        indicators::option::PostfixText{""},
+        indicators::option::ShowElapsedTime{true},
+        indicators::option::ShowRemainingTime{true},
+        indicators::option::ForegroundColor{indicators::Color::cyan},
+        indicators::option::FontStyles{
+            std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}
+    };
+    // ──────────────────────────────────────────────────────────────────────
+#ifdef _WIN32
+    SetConsoleCtrlHandler(console_ctrl_handler, TRUE);
+#else
+    std::signal(SIGINT, signal_handler);
+#endif
     while (s_partial < s_num_bits) {
         uint64_t this_batch = std::min(batch_size, s_num_bits - s_partial);
         if (g_dump_ctx.enabled) {
@@ -1057,8 +1104,6 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             dump_opencl_state_rows(g_dump_ctx, "begin", batches_complete, s_partial, this_batch,
                                    sigma, curves, BITS, tpi, dump_rows.data(), limbs);
         }
-
-        const bool should_log_batch = (verbose >= 1 && print_nth_batch(batches_complete));
 
         cl_ulong s_num_bits_arg = (cl_ulong)s_num_bits;
         cl_ulong s_start_arg = (cl_ulong)s_partial;
@@ -1181,31 +1226,66 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
             }
         }
 
-        if (should_log_batch) {
-            double elapsed_s =
-                std::chrono::duration<double>(std::chrono::high_resolution_clock::now() -
-                                              t_global_start)
-                    .count();
-            double progress =
-                (s_num_bits > 0u) ? ((double)s_partial / (double)s_num_bits) : 0.0;
-            const double progress_pct = 100.0 * progress;
-            if (progress > 1e-9) {
-                double total_s = elapsed_s / progress;
-                double remain_s = std::max(0.0, total_s - elapsed_s);
-                double total_ms = total_s * 1000.0;
-                double per_curve_ms = (curves > 0u) ? (total_ms / (double)curves) : 0.0;
-                ecm_ts_fprintf(stderr,
-                               "GPU: Computing %llu bits/call, %llu/%llu (%.1f%%), "
-                               "ETA %.0f + %.0f = %.0f seconds (~%.0f ms/curves)\n",
-                               (unsigned long long)this_batch, (unsigned long long)s_partial,
-                               (unsigned long long)s_num_bits, progress_pct,
-                               remain_s, elapsed_s, total_s, per_curve_ms);
-            } else {
-                ecm_ts_fprintf(stderr, "GPU: Computing %llu bits/call, %llu/%llu (%.1f%%)\n",
-                               (unsigned long long)this_batch, (unsigned long long)s_partial,
-                               (unsigned long long)s_num_bits, progress_pct);
-            }
+        // ── Update progress bar (every batch) ────────────────────────────────
+        {
+            double pct =
+                (s_num_bits > 0u) ? (100.0 * (double)s_partial / (double)s_num_bits) : 0.0;
+            if (pct > 100.0) pct = 100.0;
+            bar.set_progress(static_cast<float>(pct));
+
+            double per_curve_ms = (curves > 0u) ? (batch_ms / (double)curves) : 0.0;
+            char postfix[160];
+            snprintf(postfix, sizeof(postfix), "%.1f%%  %llu, +%llu bits (~%.1f ms/curve)",
+                     pct,
+                     (unsigned long long)s_partial, (unsigned long long)this_batch,
+                     per_curve_ms);
+            bar.set_option(indicators::option::PostfixText{postfix});
         }
+
+        // ── Ctrl+C → break early ─────────────────────────────────────
+        if (g_interrupted.load(std::memory_order_relaxed)) break;
+    }
+
+    // ── Mark progress bar complete ──────────────────────────────────────
+    bar.mark_as_completed();
+
+    // ── Ctrl+C: save checkpoint before normal exit ─────────────────────
+    if (g_interrupted.load(std::memory_order_relaxed)) {
+        ecm_ts_fprintf(stderr, "\nInterrupted — saving checkpoint before exit...\n");
+        fflush(stderr);
+        std::vector<uint32_t> ckpt_buf(data_size / sizeof(uint32_t));
+        clFinish(g_ctx.queue);
+        cl_int ckpt_err = clEnqueueReadBuffer(g_ctx.queue, gpu_data, CL_FALSE, 0, data_size,
+                                              ckpt_buf.data(), 0, nullptr, nullptr);
+        if (ckpt_err == CL_SUCCESS)
+            ckpt_err = clFinish(g_ctx.queue);
+        if (ckpt_err == CL_SUCCESS) {
+            opencl_ecm_checkpoint_header_t hdr{};
+            hdr.magic    = OPENCL_ECM_CHECKPOINT_MAGIC;
+            hdr.version  = OPENCL_ECM_CHECKPOINT_VERSION;
+            hdr.s_partial = s_partial;
+            hdr.s_num_bits = s_num_bits;
+            hdr.batches_complete = batches_complete;
+            hdr.curves   = curves;
+            hdr.sigma    = sigma;
+            hdr.BITS     = BITS;
+            hdr.TPI      = tpi;
+            hdr.data_size = (uint64_t)data_size;
+            hdr.timestamp = (int64_t)time(nullptr);
+            opencl_ecm_checkpoint_save(ckpt_filename, &hdr, ckpt_buf.data(), data_size);
+            ecm_ts_fprintf(stderr, "Checkpoint saved (%llu/%llu bits, %.1f%%)\n",
+                           (unsigned long long)s_partial, (unsigned long long)s_num_bits,
+                           s_num_bits > 0u ? (100.0*s_partial/s_num_bits) : 0.0);
+        } else {
+            ecm_ts_fprintf(stderr, "Warning: checkpoint GPU readback failed (%d)\n", ckpt_err);
+        }
+        free(s_bits);  s_bits  = nullptr;
+        free(data);    data    = nullptr;
+        clReleaseMemObject(gpu_s_bits);  gpu_s_bits = nullptr;
+        clReleaseMemObject(gpu_data);    gpu_data   = nullptr;
+        *sigma_ptr = sigma;
+        opencl_dump_end(g_dump_ctx);
+        return ECM_ERROR;
     }
 
     if (err == CL_SUCCESS && !sync_each_batch) {
@@ -1238,6 +1318,7 @@ extern "C" int cgbn_ecm_stage1(mpz_t *factors, int *array_found, const mpz_t N, 
         youpi = ECM_ERROR;
     }
 
+cleanup:
     clReleaseMemObject(gpu_s_bits);
     clReleaseMemObject(gpu_data);
     opencl_dump_end(g_dump_ctx);

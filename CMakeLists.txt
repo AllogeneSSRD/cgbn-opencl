@@ -103,6 +103,13 @@ target_link_libraries(ecm
 
 ecm_target_link_gmp(ecm)
 
+# indicators.hpp contains Unicode block characters (▌▐█▄…) for progress
+# bars. MSVC's GBK code page misparses them; /utf-8 tells the compiler to
+# treat source files as UTF-8 regardless of system locale.
+if(MSVC)
+    target_compile_options(ecm PRIVATE /utf-8)
+endif()
+
 # Copy OpenSSL + GMP runtime DLLs from vcpkg to output dir
 if(MSVC AND EXISTS "${OPENSSL_ROOT_DIR}/bin")
     set(_vcpkg_bin "${OPENSSL_ROOT_DIR}/bin")
