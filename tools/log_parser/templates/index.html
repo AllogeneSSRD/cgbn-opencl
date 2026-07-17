@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ECM 日志解析器</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">Σ</span>
+      <div>
+        <h1>ECM 日志解析器</h1>
+        <p class="sub">Prime95 / mprime worker log visualizer</p>
+      </div>
+    </div>
+    <div class="upload">
+      <label class="file-btn">
+        <input type="file" id="logfile" accept=".log,.txt" hidden />
+        选择日志文件
+      </label>
+      <span id="filename" class="filename">未选择文件</span>
+      <button id="parseBtn" class="btn primary" disabled>解析</button>
+    </div>
+  </header>
+
+  <main id="app" class="hidden">
+    <section class="cards" id="statCards"></section>
+
+    <section class="panel filters">
+      <div class="panel-head">
+        <h2>筛选</h2>
+        <button id="resetFilters" class="btn ghost">重置</button>
+      </div>
+      <div class="filter-grid">
+        <div class="filter">
+          <label>Worker 序号</label>
+          <div id="fWorker" class="chips"></div>
+        </div>
+        <div class="filter">
+          <label>指数</label>
+          <div id="fExp" class="chips"></div>
+        </div>
+        <div class="filter">
+          <label>Curve #</label>
+          <div id="fCurve" class="chips"></div>
+        </div>
+        <div class="filter">
+          <label>状态</label>
+          <div id="fStatus" class="chips"></div>
+        </div>
+        <div class="filter range">
+          <label>B1</label>
+          <div class="range-inputs">
+            <input type="number" id="b1Min" placeholder="最小" />
+            <span>–</span>
+            <input type="number" id="b1Max" placeholder="最大" />
+          </div>
+        </div>
+        <div class="filter range">
+          <label>Available mem (MB)</label>
+          <div class="range-inputs">
+            <input type="number" id="availMin" placeholder="最小" />
+            <span>–</span>
+            <input type="number" id="availMax" placeholder="最大" />
+          </div>
+        </div>
+        <div class="filter range">
+          <label>Using mem (MB)</label>
+          <div class="range-inputs">
+            <input type="number" id="usingMin" placeholder="最小" />
+            <span>–</span>
+            <input type="number" id="usingMax" placeholder="最大" />
+          </div>
+        </div>
+        <div class="filter range">
+          <label>日期范围 (开始时间)</label>
+          <div class="range-inputs">
+            <input type="datetime-local" id="dateMin" />
+            <span>–</span>
+            <input type="datetime-local" id="dateMax" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>运行时间线 (Gantt)</h2>
+        <span class="hint">按 Worker 分组，蓝=Stage 1，橙=Stage 2</span>
+      </div>
+      <div id="gantt" class="gantt"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>数据 <span id="rowCount" class="hint"></span></h2>
+        <div class="export">
+          <label class="scope">
+            范围
+            <select id="exportScope">
+              <option value="filtered">当前筛选</option>
+              <option value="all">全部</option>
+            </select>
+          </label>
+          <button class="btn" data-fmt="xlsx">导出 XLSX</button>
+          <button class="btn" data-fmt="csv">导出 CSV</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="dataTable">
+          <thead><tr id="theadRow"></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="empty" class="empty">
+    <div class="empty-inner">
+      <div class="empty-icon">📄</div>
+      <p>上传一个 worker 日志文件开始解析</p>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

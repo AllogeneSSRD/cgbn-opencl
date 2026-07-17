@@ -11,10 +11,13 @@ build_rel/
 docs/ecm/
 test/bench
 
-*/__pycache__/
+**/__pycache__/
 *.save
 *-*signature.txt
 
 # Android Studio apk
 Android/ECM/app/debug/
 Android/ECM/app/release/
+
+# log
+tools/log_parser/example
