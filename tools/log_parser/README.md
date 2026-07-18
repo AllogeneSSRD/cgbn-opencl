@@ -9,9 +9,11 @@
   - `complete` — 完整跑完 Stage 1 & Stage 2
   - `stage1-only` — 只完成 Stage 1
   - `interrupted` — Stage 1 未完成
-- **提取字段**：Worker、指数、Curve#、s、B1、Actual B2、Worth、Available/Using 内存、Stage 1 时间、Stage 2 init/complete/GCD 时间、S1 FFT、S2 FFT、FFT 类型、开始/结束时间。
-  - S1 FFT = ECM 行之前最近的 `Using ... FFT length`。
-  - S2 FFT = Stage 1 完成后到 Stage 2 之间的 `Switching to ... FFT length`（若无则沿用 S1）。
+- **提取字段**：Worker、指数、Curve#、s、B1、Actual B2、Worth、Available/Using 内存、Stage 1 时间、Stage 2 init/complete/GCD 时间、S1 FFT、S1 FFT type、S2 FFT、S2 FFT type、开始/结束时间。
+  - FFT 追踪：每个 worker 维护一个“当前 FFT”，由 `Using` / `Switching to` / `Switching back to` 三种行更新（FFT 类型支持 `AVX-512`、`FMA3` 等含连字符的写法）。
+  - S1 FFT = ECM 行处 worker 的当前 FFT（worker 首次运行某指数、或重启恢复的首次才会打印一次 `Using`；同一指数后续 curve 无 `Using`，会沿用上一次的当前 FFT）。
+  - S2 FFT = Stage 1 完成后到 Stage 2 之间的 `Switching to ... FFT length`；若 S1 FFT == S2 FFT，程序不会打印 `Switching to`，此时 S2 FFT/type 自动沿用 S1。
+  - S1 与 S2 的 FFT type 可能不同，故分列显示。
 - **筛选**：Worker 序号 / 指数 / Curve# / 状态（多选），B1 / Available mem / Using mem（区间），日期范围（按开始时间）。
 - **可视化**：汇总统计卡片、按 Worker 分组的 Gantt 时间线（Stage 1 蓝 / Stage 2 橙）、可排序的数据表格。
 - **导出**：XLSX（openpyxl）或 CSV，可选“当前筛选”或“全部”。

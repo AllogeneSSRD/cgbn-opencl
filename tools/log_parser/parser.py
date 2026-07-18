@@ -20,9 +20,15 @@ ECM_RE = re.compile(
     r"with s=(?P<s>\d+),\s*B1=(?P<b1>\d+),\s*B2=(?P<b2tbd>TBD|\d+)"
 )
 
-# FFT lines. "back" is captured separately so it never overrides S2.
-FFT_USING_RE = re.compile(r"Using (?P<type>\w+) FFT length (?P<len>\d+)")
-FFT_SWITCH_TO_RE = re.compile(r"Switching to (?P<type>\w+) FFT length (?P<len>\d+)")
+# FFT lines. The FFT "type" may contain hyphens/plus (e.g. AVX-512, FMA3).
+# "Using" sets the stage-1 FFT at worker/exponent start; "Switching to" is the
+# (usually larger) stage-2 FFT; "Switching back to" restores the stage-1 FFT
+# for the next curve. A worker only prints "Using" the first time it runs an
+# exponent, so we must track the worker's *current* FFT across all three kinds.
+FFT_LINE_RE = re.compile(
+    r"(?P<kind>Using|Switching to|Switching back to) "
+    r"(?P<type>[\w+-]+) FFT length (?P<len>\d+)"
+)
 
 B2_RE = re.compile(
     r"Actual B2 will be (?P<b2>\d+).*?Curve is worth (?P<worth>\d+(?:\.\d+)?)"
@@ -43,7 +49,7 @@ STAGE2_GCD_RE = re.compile(
 TS_FMT = "%Y-%m-%d %H:%M:%S"
 
 
-def _new_run(worker_label, worker_num, ts, m, s1_fft):
+def _new_run(worker_label, worker_num, ts, m, cur_fft):
     return {
         "worker": worker_num,
         "worker_label": worker_label,
@@ -59,9 +65,10 @@ def _new_run(worker_label, worker_num, ts, m, s1_fft):
         "s2_init_time": None,
         "s2_time": None,
         "s2_gcd_time": None,
-        "s1_fft": s1_fft[1] if s1_fft else None,
+        "s1_fft": cur_fft[1] if cur_fft else None,
+        "s1_fft_type": cur_fft[0] if cur_fft else None,
         "s2_fft": None,
-        "fft_type": s1_fft[0] if s1_fft else None,
+        "s2_fft_type": None,
         "start_ts": ts,
         "end_ts": ts,
         # timestamps used for the gantt breakdown (not exported columns)
@@ -85,8 +92,8 @@ def _finalize(run):
 def parse_log(text):
     """Parse raw log text -> list of run dicts (in start order)."""
     runs = []
-    open_run = {}          # worker_num -> run dict
-    last_using_fft = {}    # worker_num -> (type, length)  (most recent "Using")
+    open_run = {}       # worker_num -> run dict
+    current_fft = {}    # worker_num -> (type, length)  (worker's live FFT)
 
     for raw in text.splitlines():
         m = LINE_RE.match(raw.rstrip("\r"))
@@ -102,11 +109,23 @@ def parse_log(text):
             continue
         wnum = int(wnum_m.group(1))
 
-        # Track the most-recent "Using ... FFT length" for this worker so an
-        # ECM line can grab the FFT that precedes it.
-        um = FFT_USING_RE.search(msg)
-        if um:
-            last_using_fft[wnum] = (um.group("type"), int(um.group("len")))
+        # FFT change line: update the worker's live FFT. If it's a stage-2
+        # "Switching to" inside an open run, record the run's S2 FFT.
+        fft = FFT_LINE_RE.search(msg)
+        if fft:
+            ftype, flen = fft.group("type"), int(fft.group("len"))
+            current_fft[wnum] = (ftype, flen)
+            run = open_run.get(wnum)
+            if (
+                fft.group("kind") == "Switching to"
+                and run is not None
+                and run["s1_time"] is not None
+                and run["s2_fft"] is None
+            ):
+                run["s2_fft"] = flen
+                run["s2_fft_type"] = ftype
+                run["end_ts"] = ts
+            continue
 
         # New ECM run.
         ecm = ECM_RE.search(msg)
@@ -114,7 +133,7 @@ def parse_log(text):
             if wnum in open_run:
                 runs.append(_finalize(open_run.pop(wnum)))
             open_run[wnum] = _new_run(
-                worker_label, wnum, ts, ecm, last_using_fft.get(wnum)
+                worker_label, wnum, ts, ecm, current_fft.get(wnum)
             )
             continue
 
@@ -142,13 +161,6 @@ def parse_log(text):
             run["s1_time"] = float(s1.group("t"))
             run["s1_end_ts"] = ts
 
-        # S2 FFT: only the "Switching to" line after stage 1 completed.
-        sw = FFT_SWITCH_TO_RE.search(msg)
-        if sw and run["s1_time"] is not None and run["s2_fft"] is None:
-            run["s2_fft"] = int(sw.group("len"))
-            if not run["fft_type"]:
-                run["fft_type"] = sw.group("type")
-
         s2i = STAGE2_INIT_RE.search(msg)
         if s2i:
             run["s2_init_time"] = float(s2i.group("t"))
@@ -167,10 +179,13 @@ def parse_log(text):
     for run in open_run.values():
         runs.append(_finalize(run))
 
-    # If S2 FFT never switched but S1 known, inherit S1 (FFT stayed the same).
+    # When S1 FFT == S2 FFT the program prints no "Switching to" line, so a run
+    # that entered stage 2 without a switch keeps the same FFT as stage 1.
     for run in runs:
-        if run["s2_fft"] is None and run["s2_time"] is not None:
+        entered_stage2 = run["s2_time"] is not None or run["s2_init_time"] is not None
+        if run["s2_fft"] is None and entered_stage2:
             run["s2_fft"] = run["s1_fft"]
+            run["s2_fft_type"] = run["s1_fft_type"]
 
     runs.sort(key=lambda r: (r["start_ts"], r["worker"]))
     return runs
@@ -180,20 +195,21 @@ def parse_log(text):
 COLUMNS = [
     ("worker_label", "Worker"),
     ("exponent", "Exponent"),
-    ("curve", "Curve #"),
+    ("curve", "Curve"), # Curve #
     ("s", "s"),
     ("b1", "B1"),
     ("b2", "B2 (Actual)"),
     ("worth", "Worth"),
     ("avail_mem", "mem (MB)"), # Available mem (MB)
-    ("using_mem", "Using mem (MB)"),
+    ("using_mem", "Using (MB)"), # Using mem (MB)
     ("s1_time", "S1 time (s)"), # Stage 1 time (s)
-    ("s2_init_time", "S2 init time (s)"), # Stage 2 init time (s)
+    ("s2_init_time", "S2 init (s)"), # Stage 2 init time (s)
     ("s2_time", "S2 time (s)"), # Stage 2 time (s)
-    ("s2_gcd_time", "S2 GCD time (s)"), # Stage 2 GCD time (s)
+    ("s2_gcd_time", "GCD (s)"), # Stage 2 GCD time (s)
     ("s1_fft", "S1 FFT"),
+    ("s1_fft_type", "type"),
     ("s2_fft", "S2 FFT"),
-    ("fft_type", "FFT type"),
+    ("s2_fft_type", "type"),
     ("start_ts", "Start"),
     ("end_ts", "End"),
     ("status", "Status"),

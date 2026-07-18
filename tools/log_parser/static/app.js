@@ -113,9 +113,14 @@ function makeChipGroup(containerId, values, filterKey, label, isStatus) {
   });
 }
 
-// range + date inputs
+// range + date inputs: filter only after editing is committed (focus leaves
+// the field or Enter pressed), so typing doesn't re-render on every keystroke.
 ["b1Min", "b1Max", "availMin", "availMax", "usingMin", "usingMax", "dateMin", "dateMax"]
-  .forEach((id) => $(id).addEventListener("input", render));
+  .forEach((id) => {
+    const el = $(id);
+    el.addEventListener("change", render);
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter") el.blur(); });
+  });
 
 $("resetFilters").addEventListener("click", () => {
   Object.values(state.filters).forEach((s) => s.clear());
@@ -257,7 +262,7 @@ function renderGantt(rows) {
       data.push({ value: [idx, start, tsToMs(r.end_ts), "run", r], itemStyle: { color: "#556080" } });
     }
     if (s2Start && s2End) {
-      data.push({ value: [idx, s2Start, s2End, "S2", r], itemStyle: { color: "#ff9f43" } });
+      data.push({ value: [idx, s2Start, s2End, "S2", r], itemStyle: { color: "#ffb3e6" } });
     }
   });
 
