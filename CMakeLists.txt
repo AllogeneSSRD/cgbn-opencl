@@ -172,8 +172,15 @@ target_link_libraries(opencl_ecm_addsub
 )
 
 # CPU addsub micro-benchmark (no OpenCL dependency, GMP only)
+#
+# ISA strategy: the main TU + scalar/AVX2 kernels are compiled with an AVX2
+# baseline so the binary runs on any AVX2 CPU.  The AVX512 kernels live in a
+# separate TU compiled with /arch:AVX512 and are dispatched only after runtime
+# CPUID detection.  Compiling the whole program with /arch:AVX512 would let the
+# compiler emit AVX512 instructions in scalar code, crashing AVX2-only CPUs.
 add_executable(cpu_addsub_bench
     src/cpu/cpu_addsub_bench.cpp
+    src/cpu/cpu_addsub_avx512.cpp
     ${CMAKE_SOURCE_DIR}/src/opencl_ecm_runtime_config.cpp
 )
 
@@ -186,11 +193,20 @@ target_compile_definitions(cpu_addsub_bench PRIVATE BUILD_CPU_ADDSUB_MAIN=1)
 
 ecm_target_link_gmp(cpu_addsub_bench)
 
-# Enable AVX2/AVX512 if the compiler host supports them
+# Baseline for the whole target: AVX2 (safe on all target CPUs).
 if(MSVC)
-    target_compile_options(cpu_addsub_bench PRIVATE /arch:AVX512)
+    target_compile_options(cpu_addsub_bench PRIVATE /arch:AVX2)
 else()
-    target_compile_options(cpu_addsub_bench PRIVATE -mavx2 -mfma -mavx512f -mavx512dq)
+    target_compile_options(cpu_addsub_bench PRIVATE -mavx2 -mfma)
+endif()
+
+# AVX512 kernels: isolated TU, only this file gets AVX512 codegen.
+if(MSVC)
+    set_source_files_properties(src/cpu/cpu_addsub_avx512.cpp PROPERTIES
+        COMPILE_OPTIONS "/arch:AVX512")
+else()
+    set_source_files_properties(src/cpu/cpu_addsub_avx512.cpp PROPERTIES
+        COMPILE_OPTIONS "-mavx512f;-mavx512dq")
 endif()
 
 add_executable(opencl_ecm_montsqr
