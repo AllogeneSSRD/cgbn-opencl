@@ -12,7 +12,8 @@ test/bench
 # build
 build/
 build_rel/
-build_cuda/
+build_cuda/*
+!build_cuda/*.bat
 build_cuda_cmake/
 
 **/__pycache__/

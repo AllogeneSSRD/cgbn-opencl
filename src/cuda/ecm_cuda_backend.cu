@@ -4,7 +4,7 @@
      - the GMP-ECM logging shims (outputf / test_verbose) that
        kernels/cuda/cgbn_stage1.cu expects, routed to the project's timestamped
        logger (ecm_ts_vfprintf);
-     - kernel_info (occupancy/register report);
+     - ecm_cuda_print_ptx_version (runtime PTX/SM version report);
      - the three backend hooks (print_kernels / prepare / stage1), with device
        enumeration + selection done here (the .cu never calls cudaSetDevice).
 */
@@ -42,20 +42,34 @@ extern "C" void outputf(int verbosity, const char *format, ...) {
     fflush(stream);
 }
 
-/* ── kernel_info (used once by cgbn_stage1.cu) ──────────────────────────── */
+/* ── PTX version report (used once by cgbn_stage1.cu) ────────────────────── */
 
-void kernel_info(const void *func, int verbose) {
-    if (verbose >= OUTPUT_VERBOSE) {
-        struct cudaFuncAttributes attr;
-        cudaError_t err = cudaFuncGetAttributes(&attr, func);
-        if (err == cudaSuccess) {
-            outputf(OUTPUT_VERBOSE,
-                    "GPU: kernel binaryVersion=%d ptxVersion=%d "
-                    "maxThreadsPerBlock=%d numRegs=%d sharedMemPerBlock=%zu bytes\n",
-                    attr.binaryVersion, attr.ptxVersion, attr.maxThreadsPerBlock,
-                    attr.numRegs, attr.sharedSizeBytes);
-        }
+/* Prints, at runtime, the PTX ISA version the kernel was compiled to and the
+   SM/cubin binary version it targets. cudaFuncAttributes encodes both as
+   major*10 + minor (e.g. ptxVersion=85 -> PTX ISA 8.5, binaryVersion=80 -> SM 8.0).
+   Also reports the CUDA runtime version for context. */
+void ecm_cuda_print_ptx_version(const void *func) {
+    struct cudaFuncAttributes attr;
+    cudaError_t err = cudaFuncGetAttributes(&attr, func);
+    if (err != cudaSuccess) {
+        outputf(OUTPUT_ERROR, "GPU: cudaFuncGetAttributes failed: %s\n",
+                cudaGetErrorString(err));
+        return;
     }
+
+    int rt = 0;
+    cudaRuntimeGetVersion(&rt); /* e.g. 12060 -> CUDA 12.6 */
+
+    outputf(OUTPUT_NORMAL,
+            "GPU: kernel PTX ISA %d.%d, SM binary sm_%d%d (CUDA runtime %d.%d)\n",
+            attr.ptxVersion / 10, attr.ptxVersion % 10,
+            attr.binaryVersion / 10, attr.binaryVersion % 10,
+            rt / 1000, (rt % 1000) / 10);
+
+    outputf(OUTPUT_NORMAL,
+            "GPU: maxThreadsPerBlock = %d GPU: numRegsPerThread = %d sharedMemPerBlock = %zu bytes\n",
+            attr.maxThreadsPerBlock, attr.numRegs,
+            attr.sharedSizeBytes);
 }
 
 /* ── Backend hooks ──────────────────────────────────────────────────────── */

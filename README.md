@@ -195,6 +195,12 @@ Visual Studio 生成器（`build_rel`）需要 CUDA 的 MSBuild 集成文件；*
 
 ```bat
 :: 在 "x64 Native Tools Command Prompt"，或先 call vcvars64.bat
+
+# PowerShell (推荐)
+# 修改为本地vcvars64.bat路径
+cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"" >nul && cmake -DECM_CUDA_ARCHITECTURES=80 -S . -B build_cuda_cmake && cmake --build build_cuda_cmake --target ecm_cuda"
+
+# CMD (命令可能过长)
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 
 cmake -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release ^
@@ -206,6 +212,19 @@ cmake --build build_cuda_cmake --target ecm_cuda
 ```
 
 产物：`build_cuda_cmake\ecm_cuda.exe`（GMP DLL 自动复制到同目录）。
+
+### 便捷脚本（`build_cuda/`）
+
+`build_cuda/` 下有一组本地便捷脚本（该目录已 `.gitignore`），均先 `call vcvars64.bat` 再执行，省去手动进 Native Tools 提示符。**脚本内硬编码了 vcvars64 / cmake / `sm_89` 等路径，换机器需自行修改；正式构建架构以 `ECM_CUDA_ARCHITECTURES` 为准。**
+
+| 脚本 | 作用 |
+|------|------|
+| `cfg_cuda.bat` | **配置**：以 NMake 生成器配置到 `build_cuda_cmake`（等价上文 `cmake -G "NMake Makefiles" ...`） |
+| `build_cuda_target.bat` | **编译**：`cmake --build build_cuda_cmake --target ecm_cuda`，错误输出存 `build_cuda\build_err.txt` |
+| `compile_cu.bat` | **诊断**：`nvcc -c` 单独编译 `kernels/cuda/cgbn_stage1.cu`（`--ptxas-options=-v` 看寄存器占用），只编译不链接 |
+| `smoke_build.bat` | **冒烟测试**：`nvcc` 直接编译 CGBN 自带 `samples/sample_01_add`，验证 `nvcc + CGBN + cl + gmp` 工具链可用 |
+
+前两个是正式的两步构建流程；后两个仅用于排错 / 环境验证，不产出 `ecm_cuda.exe`。
 
 ### CMake 选项
 

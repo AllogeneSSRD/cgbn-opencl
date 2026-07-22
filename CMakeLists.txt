@@ -386,6 +386,7 @@ if(ECM_ENABLE_CUDA)
     if(MSVC)
         # indicators.hpp uses Unicode block glyphs; force UTF-8 for host C++ TUs.
         target_compile_options(ecm_cuda PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
+        target_compile_options(ecm_cuda PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--ptxas-options=-v>)
     endif()
 
     # Copy GMP runtime DLL next to ecm_cuda.exe (same as `ecm`).

@@ -2,8 +2,8 @@
 
    This is a trimmed replacement for GMP-ECM's cudacommon.h. It provides only
    what kernels/cuda/cgbn_stage1.cu actually needs:
-     - CUDA_CHECK / cuda_check   (error-checking wrapper, used pervasively)
-     - kernel_info               (occupancy/reg info; defined in the CUDA glue)
+     - CUDA_CHECK / cuda_check          (error-checking wrapper, used pervasively)
+     - ecm_cuda_print_ptx_version       (runtime PTX/SM version report; CUDA glue)
 
    Device enumeration / selection (GMP-ECM's select_and_init_GPU / get_device_prop)
    is intentionally omitted: the ecm_cuda driver performs device selection through
@@ -36,9 +36,10 @@ inline void cuda_check(cudaError_t status, const char *action = NULL,
   }
 }
 
-/* Defined in src/cuda/ecm_cuda_backend.cu. Prints kernel register/occupancy
-   info when verbose >= OUTPUT_VERBOSE. */
-void kernel_info(const void *func, int verbose);
+/* Defined in src/cuda/ecm_cuda_backend.cu. Queries the given compiled kernel and
+   prints, at runtime, the PTX ISA version it was compiled to (and the SM/cubin
+   binary version). `func` must be an instantiated __global__ kernel pointer. */
+void ecm_cuda_print_ptx_version(const void *func);
 
 #endif /* __cplusplus */
 

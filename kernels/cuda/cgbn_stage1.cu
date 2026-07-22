@@ -981,7 +981,7 @@ int cgbn_ecm_stage1(mpz_t *factors, int *array_found,
   available_kernels.push_back((uint32_t)cgbn_params_medium::BITS);
 
   #ifdef IS_DEV_BUILD
-    outputf(OUTPUT_ALWAYS, "Warning: 最小编译，仅支持 N<1024.\n");
+    outputf(OUTPUT_ALWAYS, "Warning: Dev buils, only support N<1024.\n");
     outputf(OUTPUT_ALWAYS, "Warning: Using dev build with only 2 kernels. Consider adding more kernels for better performance on large inputs.\n");
   #endif
 
@@ -1291,7 +1291,7 @@ int cgbn_ecm_stage1(mpz_t *factors, int *array_found,
       return ECM_ERROR;
     }
 
-  kernel_info((const void*)kernel_double_add<cgbn_params_medium>, verbose);
+  ecm_cuda_print_ptx_version((const void*)kernel_double_add<cgbn_params_medium>);
 
   /* Alert that recompiling with a smaller kernel would likely improve speed */
   {
