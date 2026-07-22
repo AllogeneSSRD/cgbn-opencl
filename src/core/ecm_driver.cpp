@@ -25,14 +25,12 @@
 
 #include <gmp.h>
 
-#include "opencl_ecm_entry.h"
+#include "ecm_backend.h"           /* GPU backend seam (OpenCL or CUDA glue) */
 #include "ecm_save.h"
-#include "opencl_ecm_path_registry.h"
 #include "opencl_ecm_runtime_config.h"
 #include "ecm.h"
-#include "cgbn_stage1.h"
+#include "cgbn_stage1.h"            /* gpu_pick_random_sigma / gpu_compute_batch_d */
 #include "opencl_ecm_log.h"
-#include "cl_probe.h"
 
 static void trim(std::string &s){
     while(!s.empty() && isspace((unsigned char)s.back())) s.pop_back();
@@ -873,7 +871,7 @@ int main(int argc, char **argv){
     ecm_install_timestamped_iostreams();
 
     if (show_kernels) {
-        opencl_ecm_print_available_kernels(stdout);
+        ecm_backend_print_kernels(stdout);
         return 0;
     }
 
@@ -1042,21 +1040,16 @@ int main(int argc, char **argv){
     }
 
     if (use_gpu) {
-        if (!configureOpenclDeviceIndex(gpu_device_index, true)) {
-            mpz_clear(N);
-            mpz_clear(batch_s);
-            ecm_clear(params);
-            return 1;
-        }
-        int prep = gpu_prepare_opencl((size_t)mpz_sizeinbase(N, 2), params->verbose,
-                                      params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
-                                      params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr,
-                                      params->gpu_add_path[0] ? params->gpu_add_path : nullptr,
-                                      params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr,
-                                      params->gpu_special_mult_path[0] ? params->gpu_special_mult_path
-                                                                       : nullptr);
+        int prep = ecm_backend_prepare((size_t)mpz_sizeinbase(N, 2), params->verbose,
+                                       gpu_device_index,
+                                       params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
+                                       params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr,
+                                       params->gpu_add_path[0] ? params->gpu_add_path : nullptr,
+                                       params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr,
+                                       params->gpu_special_mult_path[0] ? params->gpu_special_mult_path
+                                                                        : nullptr);
         if (prep != 0) {
-            std::cerr << "GPU: OpenCL prepare failed" << std::endl;
+            std::cerr << "GPU: backend prepare failed" << std::endl;
             mpz_clear(N);
             mpz_clear(batch_s);
             ecm_clear(params);
@@ -1110,16 +1103,16 @@ int main(int argc, char **argv){
 
     float gputime = 0.0f;
 
-    int ret = opencl_ecm_stage1(factors, array_found, N, params->batch_s, curves, &firstsigma,
-                                params->gpu_checkpoint_interval_ms, &gputime, params->verbose,
-                                params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
-                                params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr,
-                                params->gpu_add_path[0] ? params->gpu_add_path : nullptr,
-                                params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr,
-                                params->gpu_special_mult_path[0] ? params->gpu_special_mult_path
-                                                                 : nullptr);
+    int ret = ecm_backend_stage1(factors, array_found, N, params->batch_s, curves, &firstsigma,
+                                 params->gpu_checkpoint_interval_ms, &gputime, params->verbose,
+                                 params->gpu_mul_path[0] ? params->gpu_mul_path : nullptr,
+                                 params->gpu_sqr_path[0] ? params->gpu_sqr_path : nullptr,
+                                 params->gpu_add_path[0] ? params->gpu_add_path : nullptr,
+                                 params->gpu_sub_path[0] ? params->gpu_sub_path : nullptr,
+                                 params->gpu_special_mult_path[0] ? params->gpu_special_mult_path
+                                                                  : nullptr);
 
-    std::cout << "opencl_ecm_stage1 returned: "<< ret <<" gputime="<< gputime <<" ms\n";
+    std::cout << "GPU stage1 returned: "<< ret <<" gputime="<< gputime <<" ms\n";
     for(uint32_t i=0;i<curves;i++){
         if(array_found[i] != ECM_NO_FACTOR_FOUND){
             char *s = mpz_get_str(NULL,10,factors[i]);

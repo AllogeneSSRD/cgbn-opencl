@@ -6,10 +6,14 @@ skills-lock.json
 .refactor/
 .vscode/
 logs/
-build/
-build_rel/
 docs/ecm/
 test/bench
+
+# build
+build/
+build_rel/
+build_cuda/
+build_cuda_cmake/
 
 **/__pycache__/
 *.save

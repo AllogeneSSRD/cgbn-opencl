@@ -1,12 +1,15 @@
 param(
-    [string]$N_expr  = "2^3049-1", # 421 1009 2017 3049 4027
-    [string]$B1_list = "1e3" 				# 1e4 1e5
+    [string]$N_expr  = "2^421-1", # 421 1009 2017 3049 4027
+    [string]$B1_list = "1e5" 				# 1e4 1e5
 )
 
 $curves = @(1, 32, 64, 128, 256, 384, 512, 1024, 1536, 2048, 3072, 4096, 6144, 9216, 12288, 16384)
 #1, 32, 64, 128, 256, 384, 512, 1024, 1536, 2048, 3072, 4096, 6144, 9216, 12288, 16384
 
-$exe    = Join-Path $PSScriptRoot "build_rel\Release\ecm.exe"
+$exe    = Join-Path $PSScriptRoot "build_cuda_cmake\ecm_cuda.exe"
+# build\Debug\ecm.exe
+# build_rel\Release\ecm.exe
+# build_cuda_cmake\ecm_cuda.exe
 $sigma  = "2026"
 $device = 0
 
@@ -88,41 +91,41 @@ foreach ($b1 in $B1_list -split ' ') {
         $line2 = Get-Content $tmpFile | Select-String "gputime=" | Select-Object -First 1
         $gt2   = if ($line2) { ($line2 -split "gputime=")[1]} else { "N/A" }
 
-        # --- run 3 ---
-        "---- run 3  curves=$c  B1=$b1 ----" | Out-File -FilePath $logFile -Append -Encoding ASCII
-        echo "($N_expr)" | & $exe -v -d $device -gpu -sigma 3:$sigma -gpucurves $c $b1 0 --wg 64 *>&1 | # --local 
-            Tee-Object -FilePath $tmpFile |
-            Out-File -FilePath $logFile -Append -Encoding ASCII
+        # # --- run 3 ---
+        # "---- run 3  curves=$c  B1=$b1 ----" | Out-File -FilePath $logFile -Append -Encoding ASCII
+        # echo "($N_expr)" | & $exe -v -d $device -gpu -sigma 3:$sigma -gpucurves $c $b1 0 --wg 64 *>&1 | # --local 
+        #     Tee-Object -FilePath $tmpFile |
+        #     Out-File -FilePath $logFile -Append -Encoding ASCII
 
-        Get-Content $tmpFile | Select-String "gputime=" | ForEach-Object {
-            Write-Host "  $_  --wg 64"
-        }
-        $line3 = Get-Content $tmpFile | Select-String "gputime=" | Select-Object -First 1
-        $gt3   = if ($line3) { ($line3 -split "gputime=")[1] } else { "N/A" }
+        # Get-Content $tmpFile | Select-String "gputime=" | ForEach-Object {
+        #     Write-Host "  $_  --wg 64"
+        # }
+        # $line3 = Get-Content $tmpFile | Select-String "gputime=" | Select-Object -First 1
+        # $gt3   = if ($line3) { ($line3 -split "gputime=")[1] } else { "N/A" }
 
-        # --- run 4 ---
-        "---- run 4  curves=$c  B1=$b1 ----" | Out-File -FilePath $logFile -Append -Encoding ASCII
-        echo "($N_expr)" | & $exe -v -d $device -gpu -sigma 3:$sigma -gpucurves $c $b1 0 --local  *>&1 | # --local 
-            Tee-Object -FilePath $tmpFile |
-            Out-File -FilePath $logFile -Append -Encoding ASCII
+        # # --- run 4 ---
+        # "---- run 4  curves=$c  B1=$b1 ----" | Out-File -FilePath $logFile -Append -Encoding ASCII
+        # echo "($N_expr)" | & $exe -v -d $device -gpu -sigma 3:$sigma -gpucurves $c $b1 0 --local  *>&1 | # --local 
+        #     Tee-Object -FilePath $tmpFile |
+        #     Out-File -FilePath $logFile -Append -Encoding ASCII
 
-        Get-Content $tmpFile | Select-String "gputime=" | ForEach-Object {
-            Write-Host "  $_  --local "
-        }
-        $line4 = Get-Content $tmpFile | Select-String "gputime=" | Select-Object -First 1
-        $gt4   = if ($line4) { ($line4 -split "gputime=")[1] } else { "N/A" }
+        # Get-Content $tmpFile | Select-String "gputime=" | ForEach-Object {
+        #     Write-Host "  $_  --local "
+        # }
+        # $line4 = Get-Content $tmpFile | Select-String "gputime=" | Select-Object -First 1
+        # $gt4   = if ($line4) { ($line4 -split "gputime=")[1] } else { "N/A" }
 	
-        # --- run 5 ---
-        "---- run 5  curves=$c  B1=$b1 ----" | Out-File -FilePath $logFile -Append -Encoding ASCII
-        echo "($N_expr)" | & $exe -v -d $device -gpu -sigma 3:$sigma -gpucurves $c $b1 0 --local --wg 32 *>&1 | # --local 
-            Tee-Object -FilePath $tmpFile |
-            Out-File -FilePath $logFile -Append -Encoding ASCII
+        # # --- run 5 ---
+        # "---- run 5  curves=$c  B1=$b1 ----" | Out-File -FilePath $logFile -Append -Encoding ASCII
+        # echo "($N_expr)" | & $exe -v -d $device -gpu -sigma 3:$sigma -gpucurves $c $b1 0 --local --wg 32 *>&1 | # --local 
+        #     Tee-Object -FilePath $tmpFile |
+        #     Out-File -FilePath $logFile -Append -Encoding ASCII
 
-        Get-Content $tmpFile | Select-String "gputime=" | ForEach-Object {
-            Write-Host "  $_  --local --wg 32"
-        }
-        $line5 = Get-Content $tmpFile | Select-String "gputime=" | Select-Object -First 1
-        $gt5   = if ($line5) { ($line5 -split "gputime=")[1] } else { "N/A" }	
+        # Get-Content $tmpFile | Select-String "gputime=" | ForEach-Object {
+        #     Write-Host "  $_  --local --wg 32"
+        # }
+        # $line5 = Get-Content $tmpFile | Select-String "gputime=" | Select-Object -First 1
+        # $gt5   = if ($line5) { ($line5 -split "gputime=")[1] } else { "N/A" }	
 		
 
         Write-Host "    $tag  run1: $gt1  run2: $gt2  run3: $gt3  run4: $gt4  run5: $gt5"

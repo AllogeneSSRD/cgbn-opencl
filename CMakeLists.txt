@@ -74,11 +74,13 @@ target_link_libraries(opencl_ecm_entry ${GMP_LIBRARY})
 
 add_executable(ecm
     src/opencl_ecm_stage1.cpp
+    src/opencl_backend_glue.cpp
     src/cl_probe.cpp
     src/core/ecm_driver.cpp
     src/core/ecm_params_init.cpp
     src/core/ecm_checkpoint.cpp
     src/core/ecm_save.cpp
+    src/core/ecm_gpu_common.cpp
     src/opencl_ecm_debug_utils.cpp
     src/opencl_ecm_log.cpp
     src/opencl_ecm_mont.cpp
@@ -314,4 +316,86 @@ ecm_target_link_gmp(cpu_mont_bench)
 if(MSVC)
     # AVX512 intrinsics require /arch:AVX512 on MSVC (avx512f, avx512dq used)
     set_source_files_properties(src/cpu_mont_avx.cpp PROPERTIES COMPILE_FLAGS "/arch:AVX512")
+endif()
+
+# ══════════════════════════════════════════════════════════════════════════
+#  ecm_cuda — native CUDA/CGBN backend (mirror of the OpenCL `ecm` executable)
+#
+#  Reuses the exact same driver / argument parsing / checkpoint / save / logging
+#  translation units as `ecm`, swapping only the GPU backend at link time via the
+#  ecm_backend_* seam (include/ecm_backend.h):
+#     - OpenCL: src/opencl_backend_glue.cpp  (in `ecm`)
+#     - CUDA:   src/cuda/ecm_cuda_backend.cu  (here)
+#
+#  Auto-enabled when a CUDA toolkit is present; force off with -DECM_ENABLE_CUDA=OFF.
+# ══════════════════════════════════════════════════════════════════════════
+include(CheckLanguage)
+check_language(CUDA)
+if(CMAKE_CUDA_COMPILER)
+    option(ECM_ENABLE_CUDA "Build the ecm_cuda (CUDA/CGBN) executable" ON)
+else()
+    message(STATUS "CUDA compiler not found; ecm_cuda target disabled")
+    set(ECM_ENABLE_CUDA OFF)
+endif()
+
+set(ECM_CUDA_ARCHITECTURES "80" CACHE STRING
+    "CUDA compute capabilities for ecm_cuda (e.g. 89 for RTX 40-series)")
+
+if(ECM_ENABLE_CUDA)
+    enable_language(CUDA)
+
+    set(CGBN_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/cgbn/include")
+
+    add_executable(ecm_cuda
+        # Shared, backend-neutral host TUs (same files `ecm` uses)
+        src/core/ecm_driver.cpp
+        src/core/ecm_params_init.cpp
+        src/core/ecm_checkpoint.cpp
+        src/core/ecm_save.cpp
+        src/core/ecm_gpu_common.cpp
+        src/opencl_ecm_log.cpp
+        src/opencl_ecm_runtime_config.cpp
+        # CUDA backend + CGBN stage 1 kernel
+        src/cuda/ecm_cuda_backend.cu
+        kernels/cuda/cgbn_stage1.cu
+    )
+
+    target_include_directories(ecm_cuda PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/src/core
+        ${CMAKE_SOURCE_DIR}/kernels/cuda
+        ${CGBN_INCLUDE_DIR}
+        ${CGBN_INCLUDE_DIR}/cgbn   # the .cu uses #include <cgbn.h>
+        ${GMP_INCLUDE_DIR}
+    )
+
+    set_target_properties(ecm_cuda PROPERTIES
+        CUDA_ARCHITECTURES "${ECM_CUDA_ARCHITECTURES}"
+    )
+
+    # Dev build (kernels up to 1024 bits) is the default; enable the full CGBN
+    # kernel set (larger N, much longer compile) with -DECM_CUDA_FULL_BUILD=ON.
+    option(ECM_CUDA_FULL_BUILD "Compile the full CGBN kernel set instead of the dev build (N<=1024)" OFF)
+    if(ECM_CUDA_FULL_BUILD)
+        target_compile_definitions(ecm_cuda PRIVATE ECM_CUDA_FULL_BUILD)
+    endif()
+
+    target_link_libraries(ecm_cuda ${GMP_LIBRARY})
+
+    if(MSVC)
+        # indicators.hpp uses Unicode block glyphs; force UTF-8 for host C++ TUs.
+        target_compile_options(ecm_cuda PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/utf-8>)
+    endif()
+
+    # Copy GMP runtime DLL next to ecm_cuda.exe (same as `ecm`).
+    if(MSVC AND EXISTS "${OPENSSL_ROOT_DIR}/bin/gmp-10.dll")
+        add_custom_command(TARGET ecm_cuda POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${OPENSSL_ROOT_DIR}/bin/gmp-10.dll"
+                "$<TARGET_FILE_DIR:ecm_cuda>"
+            COMMENT "Copying GMP DLL to ecm_cuda output dir")
+    endif()
+
+    message(STATUS "ecm_cuda enabled (CUDA arch ${ECM_CUDA_ARCHITECTURES}, CGBN ${CGBN_INCLUDE_DIR})")
 endif()

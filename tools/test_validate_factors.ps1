@@ -4,7 +4,7 @@
 $ErrorActionPreference = "Continue"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RootDir = Resolve-Path "$ScriptDir\.."
-$EcmBin = Join-Path $RootDir "build\Debug\ecm.exe"
+$EcmBin = Join-Path $RootDir "build_rel\Release\ecm.exe"
 
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "  ECM Factor Validation Test" -ForegroundColor Cyan

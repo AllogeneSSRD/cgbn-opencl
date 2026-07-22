@@ -334,46 +334,8 @@ static void print_opencl_device_info(int device_index, double init_ms) {
     fflush(stdout);
 }
 
-// Uniform sigma in [1, UINT32_MAX - curves] for ECM_PARAM_BATCH_32BITS_D.
-extern "C" uint32_t gpu_pick_random_sigma(uint32_t curves) {
-    if (curves == 0 || (uint64_t)curves >= (uint64_t)UINT32_MAX) {
-        return 2u;
-    }
-
-    gmp_randstate_t rng;
-    gmp_randinit_default(rng);
-    unsigned long seed = (unsigned long)time(nullptr);
-    seed ^= (unsigned long)getpid() * 0x9e3779b9ul;
-    seed ^= (unsigned long)std::chrono::high_resolution_clock::now().time_since_epoch().count();
-    gmp_randseed_ui(rng, seed);
-
-    mpz_t range, r;
-    mpz_init(range);
-    mpz_init(r);
-    mpz_set_ui(range, 0);
-    mpz_setbit(range, 32);
-    mpz_sub_ui(range, range, (unsigned long)curves);
-    mpz_urandomm(r, rng, range);
-    uint32_t sigma = (uint32_t)mpz_get_ui(r) + 1u;
-
-    mpz_clear(range);
-    mpz_clear(r);
-    gmp_randclear(rng);
-    return sigma;
-}
-
-extern "C" void gpu_compute_batch_d(mpz_t d_out, uint32_t sigma, const mpz_t N) {
-    mpz_t pow2_32, inv;
-    mpz_init(pow2_32);
-    mpz_init(inv);
-    mpz_ui_pow_ui(pow2_32, 2, 32);
-    mpz_invert(inv, pow2_32, N);
-    mpz_set_ui(d_out, sigma);
-    mpz_mul(d_out, d_out, inv);
-    mpz_mod(d_out, d_out, N);
-    mpz_clear(pow2_32);
-    mpz_clear(inv);
-}
+// gpu_pick_random_sigma() and gpu_compute_batch_d() moved to
+// src/core/ecm_gpu_common.cpp (backend-neutral, shared by ecm and ecm_cuda).
 
 static uint32_t *allocate_and_set_s_bits(const mpz_t s, uint64_t *nbits) {
     uint64_t num_bits = *nbits = mpz_sizeinbase(s, 2);

@@ -22,7 +22,7 @@
 
 - **同一套 ECM stage-1 数学流程**，可在不同后端与设备上运行或对照验证。
 - **OpenCL 后端**（本仓库主线）：Windows 上 **NVIDIA 独显、AMD 独显、Intel 独显/核显（iGPU）**；**Android** 上通过厂商 `libOpenCL.so` 运行探测与微基准。
-- **CUDA / CGBN 参考路径**：与上游 GPU-ECM 一致，CUDA stage-1 参考实现位于 `test/`（见 [docs/ECM_GPU_FLOW.md](docs/ECM_GPU_FLOW.md)）。
+- **CUDA / CGBN 后端**（`ecm_cuda`）：将上游 GPU-ECM 的 CGBN stage-1（`kernels/cuda/cgbn_stage1.cu`）移植到 **Windows**，产出原生 `ecm_cuda` 可执行文件；与 OpenCL `ecm` **共享同一 driver**，仅在链接期通过后端接缝（`include/ecm_backend.h`）切换 GPU 实现。CGBN 头文件库位于 `cgbn/`（见 [docs/ECM_GPU_FLOW.md](docs/ECM_GPU_FLOW.md)）。
 - **NPU 探索**：`RyzenAI/` 提供与 OpenCL 微基准对标的 add/sub 算子测试（ONNX + Vitis AI）。
 - **优化重心**：Montgomery 与模运算内核的 **AMD 内联汇编**（`v_mad_u64_u32` 等）、RGA/ISA 反汇编闭环、4096-bit 路径与工作组协作框架；移动 Adreno 以 **`unroll_only_512*`** 等路径为主（详见 [bench/0530_report.md](bench/0530_report.md)）。
 
@@ -34,6 +34,7 @@
 |------|------|
 | [Quick Start（Windows）](#quick-startwindows) | 最短路径：构建 → `ecm` → 微基准 |
 | [Windows](#windows) | 桌面构建、使用与 OpenCL 能力 |
+| [CUDA 后端（ecm_cuda）](#cuda-后端ecm_cudanvidia) | NVIDIA CGBN stage-1 构建与使用 |
 | [Android](#android) | 真机 App、微基准与缓存 |
 | [开发与文档](#开发与文档) | 数学原理、param、算子分析、工具、bench、AMD 汇编 |
 | [其他文档索引](#其他文档索引) | 正文未单独展开的子文档列表 |
@@ -75,7 +76,7 @@ build_rel\Release\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 | CMake 3.20+ | 推荐 Visual Studio 2022（x64） |
 | OpenCL ICD | NVIDIA / AMD / Intel 运行时 |
 | OpenSSL | `find_package(OpenSSL)` |
-| GMP | `CMakeLists.txt` 中当前硬编码 vcpkg 路径，需按本机修改 |
+| GMP | 自动探测 `$VCPKG_ROOT/installed/x64-windows` 或 `D:/code/vcpkg/...`；否则用 `-DECM_WINDOWS_GMP_ROOT=<prefix>`（含 `include/gmp.h` 与 `lib/gmp.lib`）指定 |
 
 ```powershell
 # Debug
@@ -139,7 +140,7 @@ build\Debug\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 | 主题 | 说明 | 详细文档 |
 |------|------|----------|
 | OpenCL 实现总览 | stage-1 主机/内核分工、与 CUDA 差异 | [docs/OPENCL_IMPLEMENTATION.md](docs/OPENCL_IMPLEMENTATION.md) |
-| 程序二进制缓存 | FNV-1a 键、`/.opencl_cache/` | 实现见 `cgbn/backends/opencl/impl_opencl.cpp`；变量见下表 |
+| 程序二进制缓存 | FNV-1a 键、`/.opencl_cache/` | 实现见 `kernels/opencl/impl_opencl.cpp`；变量见下表 |
 | 内核树与 manifest | `.cl` 注册、路径枚举 | [kernels/opencl/bench/mp_addsub/README.md](kernels/opencl/bench/mp_addsub/README.md) |
 | 调试参数 | `--profile-ops`、`--verify-gpu` 等 | [docs/DEBUG_PARAMETERS_GUIDE.md](docs/DEBUG_PARAMETERS_GUIDE.md) |
 
@@ -173,6 +174,57 @@ build\Debug\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 > Android 无命令行：JNI 入口直接写入 `EcmRuntimeConfig`，缺省沿用默认值。
 
 OpenCL 后端骨架说明：[kernels/opencl/README.md](kernels/opencl/README.md)
+
+---
+
+## CUDA 后端（`ecm_cuda`，NVIDIA）
+
+`ecm_cuda` 是基于上游 CGBN 的原生 CUDA stage-1（`kernels/cuda/cgbn_stage1.cu`），与 OpenCL `ecm` **共享同一 driver / 参数解析 / 检查点 / 保存 / 日志**，仅在链接期通过后端接缝（`include/ecm_backend.h`）切换 GPU 实现（OpenCL glue：`src/opencl_backend_glue.cpp`；CUDA glue：`src/cuda/ecm_cuda_backend.cu`）。
+
+### 依赖
+
+| 依赖 | 说明 |
+|------|------|
+| CUDA Toolkit | 含 `nvcc`（本仓库在 12.6 上验证），host 编译器需为匹配的 MSVC |
+| CGBN | 头文件库，已随仓库置于 `cgbn/`（`.cu` 使用 `#include <cgbn.h>`） |
+| GMP / OpenSSL | 同 OpenCL 构建 |
+
+### 为何单独构建
+
+Visual Studio 生成器（`build_rel`）需要 CUDA 的 MSBuild 集成文件；**仅安装 Build Tools 时通常缺失**，此时 CMake 检测不到 CUDA 编译器并**自动禁用** `ecm_cuda`（对现有 OpenCL 工程零影响）。因此改用 **NMake（或 Ninja）生成器**，并在 `vcvars64` 环境下让 `cl` 与 `nvcc` 同时可见：
+
+```bat
+:: 在 "x64 Native Tools Command Prompt"，或先 call vcvars64.bat
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+
+cmake -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release ^
+  -DOPENSSL_ROOT_DIR=D:/code/vcpkg/installed/x64-windows ^
+  -DECM_WINDOWS_GMP_ROOT=D:/code/vcpkg/installed/x64-windows ^
+  -S . -B build_cuda_cmake
+
+cmake --build build_cuda_cmake --target ecm_cuda
+```
+
+产物：`build_cuda_cmake\ecm_cuda.exe`（GMP DLL 自动复制到同目录）。
+
+### CMake 选项
+
+| 选项 | 默认 | 说明 |
+|------|------|------|
+| `ECM_ENABLE_CUDA` | 检测到 `nvcc` 时 `ON` | 是否构建 `ecm_cuda` |
+| `ECM_CUDA_ARCHITECTURES` | `89` | CUDA 计算能力（`89`=RTX 40 系；按 GPU 调整，如 `86`=RTX 30 系） |
+| `ECM_CUDA_FULL_BUILD` | `OFF` | `ON` 时编译 CGBN 全尺寸 kernel；默认 dev build 仅支持 **N ≤ 1024 bit**，编译更快 |
+
+### 使用
+
+命令行与 `ecm.exe` **完全一致**，`-d` 选择 CUDA 设备（`-gpu` 下枚举 NVIDIA 设备；`--mul`/`--sqr`/`--add`/`--sub`/`--special-mult` 为 OpenCL 专用，CUDA 后端忽略）。
+
+```powershell
+echo "(2^421-1)" | build_cuda_cmake\ecm_cuda.exe -v -d 0 -gpu -sigma 3:268526266 -gpucurves 32 1e4 0
+:: -> factor[0]=614002928307599
+```
+
+> 默认 dev build 支持 N ≤ 1024 bit；更大位宽需 `-DECM_CUDA_FULL_BUILD=ON` 重新配置（编译时间显著增加）。
 
 ---
 
@@ -290,22 +342,29 @@ adb shell run-as com.example.ecm ls -la code_cache/opencl_cache/
 
 ```
 ECM-OpenCl/
-├── src/                    # ecm driver, stage-1 OpenCL host, micro-benchmarks
-├── include/                # public headers
+├── src/                    # host code (compiled per target)
+│   ├── core/               #   shared driver: ecm_driver, params, checkpoint, save, gpu_common
+│   ├── cuda/               #   CUDA backend glue (ecm_cuda_backend.cu)
+│   ├── opencl_backend_glue.cpp   # OpenCL backend glue (ecm_backend_* hooks)
+│   ├── opencl_ecm_stage1.cpp     # OpenCL stage-1 host
+│   └── ...                 #   micro-benchmarks, cl_probe, logging, registry
+├── include/                # public headers (ecm_backend.h, cgbn_stage1.h, ...)
 ├── kernels/opencl/         # OpenCL kernel sources
 │   ├── common/             #   shared helpers, operator interface, mp primitives
 │   ├── mont_mul/           #   Montgomery multiply kernels
 │   ├── add_mod/            #   modular addition kernels
 │   ├── sub_mod/            #   modular subtraction kernels
 │   ├── bench/              #   micro-benchmark kernels (addsub, mont, asm selftest)
+│   ├── impl_opencl.cpp     #   OpenCL backend runtime (context, build, binary cache)
 │   └── ecm_stage1*.cl      #   stage-1 ladder entry points
-├── cgbn/backends/opencl/   # OpenCL backend runtime (context, build, cache)
+├── kernels/cuda/           # CUDA/CGBN stage-1 (cgbn_stage1.cu) + port shims
+├── cgbn/                   # CGBN header-only library (include/, samples/, ...)
 ├── docs/                   # principles, debug, upstream README copies
 ├── bench/                  # performance records and tuning notes
 ├── tools/                  # generators and disassembly
 ├── Android/ECM/            # Android App
 ├── RyzenAI/                # NPU micro-benchmarks
-└── test/                   # CUDA/OpenCL correctness suite (Makefile)
+└── test/                   # CUDA/OpenCL correctness & bench suite (Makefile)
 ```
 
 ---
