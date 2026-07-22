@@ -15,6 +15,9 @@ test/bench
 *.save
 *-*signature.txt
 
+# CGBN
+cgbn/
+
 # Android Studio apk
 Android/ECM/app/debug/
 Android/ECM/app/release/
