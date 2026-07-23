@@ -75,7 +75,7 @@ Binaries appear under `build/Debug/` (MSVC multi-config generator).
 Reads composite **N** from stdin (decimal or expression), then runs stage-1 with optional GPU batching.
 
 ```powershell
-echo "(2^991-1)" | build\Debug\ecm.exe -v --go -gpu -gpucurves 384 1e6 0
+echo "(2^991-1)" | build\Debug\ecm.exe -v -gpu -gpucurves 384 1e6 0
 build\Debug\ecm.exe --showkernel
 ```
 
