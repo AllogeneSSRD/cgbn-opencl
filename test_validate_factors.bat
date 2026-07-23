@@ -11,7 +11,7 @@ echo   ECM Factor Validation Test
 echo ============================================
 echo.
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "tools\test_validate_factors.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -File "test_validate_factors.ps1"
 set EXITCODE=%ERRORLEVEL%
 
 popd

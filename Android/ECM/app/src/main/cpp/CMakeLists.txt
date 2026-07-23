@@ -47,6 +47,7 @@ if(ECM_ANDROID_GMP_ROOT AND EXISTS "${_ECM_GMP_HEADER}" AND EXISTS "${_ECM_GMP_L
             "${MPA_ROOT}/src/core/ecm_expr.cpp"
             "${MPA_ROOT}/src/opencl_ecm_entry.cpp"
             "${MPA_ROOT}/src/opencl_ecm_stage1.cpp"
+            "${MPA_ROOT}/src/core/ecm_gpu_common.cpp"
             "${MPA_ROOT}/src/core/ecm_params_init.cpp"
             "${MPA_ROOT}/src/core/ecm_checkpoint.cpp"
             "${MPA_ROOT}/src/core/ecm_save.cpp"

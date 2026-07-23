@@ -381,6 +381,24 @@ if(ECM_ENABLE_CUDA)
         target_compile_definitions(ecm_cuda PRIVATE ECM_CUDA_FULL_BUILD)
     endif()
 
+    # Pascal sm_60 / Maxwell workaround: with NDEBUG (Release), CUDA 12.x fails to
+    # unroll one of CGBN's carry chains on the compute_60 PTX path, so CGBN emits
+    # its intentional poison ("ASM_ERROR chain destructor: ... loop not unrolled")
+    # and ptxas aborts with a parse error near 'destructor'. Undefining NDEBUG for
+    # the CUDA TUs restores unrolling. compute_61/70/80/89 are unaffected, so we
+    # only apply it when an architecture <= 60 is targeted.
+    set(_ecm_cuda_low_arch OFF)
+    foreach(_a IN LISTS ECM_CUDA_ARCHITECTURES)
+        string(REGEX MATCH "^[0-9]+" _an "${_a}")
+        if(_an AND (_an LESS 61))
+            set(_ecm_cuda_low_arch ON)
+        endif()
+    endforeach()
+    if(_ecm_cuda_low_arch)
+        target_compile_options(ecm_cuda PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-UNDEBUG>)
+        message(STATUS "ecm_cuda: undefining NDEBUG for CUDA (sm<=60 CGBN chain-unroll workaround)")
+    endif()
+
     target_link_libraries(ecm_cuda ${GMP_LIBRARY})
 
     if(MSVC)

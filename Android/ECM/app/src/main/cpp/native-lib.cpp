@@ -57,7 +57,7 @@ std::string build_path_list(const char *const *aliases, std::string &result) {
 std::string build_mont_list(const EcmMontPathDescriptor *registry, size_t count) {
     std::string result = "auto\n";
     for (size_t i = 0; i < count; ++i) {
-        if (registry[i].os_mask & ECM_OS_ANDROID) {
+        if (registry[i].os_mask & OS_ANDROID) {
             if (registry[i].id != nullptr) {
                 result += registry[i].id;
                 result += '\n';
@@ -70,7 +70,7 @@ std::string build_mont_list(const EcmMontPathDescriptor *registry, size_t count)
 std::string build_addsub_list(const EcmAddSubPathDescriptor *registry, size_t count) {
     std::string result = "auto\n";
     for (size_t i = 0; i < count; ++i) {
-        if (registry[i].os_mask & ECM_OS_ANDROID) {
+        if (registry[i].os_mask & OS_ANDROID) {
             if (registry[i].aliases != nullptr && registry[i].aliases[0] != nullptr) {
                 result += registry[i].aliases[0];
                 result += '\n';
@@ -85,7 +85,7 @@ std::string build_special_mult_list() {
     std::string result = "auto\n";
     for (size_t i = 0; i < count; ++i) {
         const EcmSpecialMultPathDescriptor *desc = opencl_ecm_special_mult_registry_entry(i);
-        if (desc != nullptr && (desc->os_mask & ECM_OS_ANDROID)) {
+        if (desc != nullptr && (desc->os_mask & OS_ANDROID)) {
             if (desc->aliases != nullptr && desc->aliases[0] != nullptr) {
                 result += desc->aliases[0];
                 result += '\n';

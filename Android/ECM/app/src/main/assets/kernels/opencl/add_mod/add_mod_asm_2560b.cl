@@ -89,9 +89,11 @@ static inline void add_mod_asm_2560b_body(uint *r, const uint *a, const uint *b,
         c = (ulong)r[79] + (ulong)N[79] + c; r[79] = (uint)c; c >>= 32;
     }
 }
-#endif
 
+#endif
 #if !defined(__AMDGCN__)
+#ifndef ADD_MOD_UNROLL_2560B_BODY_DEFINED
+#define ADD_MOD_UNROLL_2560B_BODY_DEFINED
 static inline void add_mod_unroll_2560b_body(uint *r, const uint *a, const uint *b, const uint *N) {
     ulong carry_add = 0ul;
     ulong carry_sub = 1ul;
@@ -1060,6 +1062,7 @@ static inline void add_mod_unroll_2560b_body(uint *r, const uint *a, const uint 
         c = s >> 32;
     }
 }
+#endif
 
 #endif
 #if defined(__AMDGCN__)
@@ -1075,4 +1078,3 @@ static inline void add_mod_asm_2560b(uint *r, const uint *a, const uint *b,
     (void)limbs;
 }
 #endif
-

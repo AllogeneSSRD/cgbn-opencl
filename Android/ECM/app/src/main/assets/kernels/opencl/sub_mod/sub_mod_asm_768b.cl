@@ -5,9 +5,11 @@ static inline int sub_mod_asm_768b_body(uint *r, const uint *a, const uint *b, c
     asm_sub_fused_block24_priv(a, b, N, r, br, &br);
     return br != 0u ? 1 : 0;
 }
-#endif
 
+#endif
 #if !defined(__AMDGCN__)
+#ifndef SUB_MOD_UNROLL_768B_BODY_DEFINED
+#define SUB_MOD_UNROLL_768B_BODY_DEFINED
 static inline int sub_mod_unroll_768b_body(uint *r, const uint *a, const uint *b, const uint *N) {
     ulong br = 0ul;
     {
@@ -304,6 +306,7 @@ static inline int sub_mod_unroll_768b_body(uint *r, const uint *a, const uint *b
     }
     return 0;
 }
+#endif
 
 #endif
 #if defined(__AMDGCN__)
@@ -319,4 +322,3 @@ static inline int sub_mod_asm_768b(uint *r, const uint *a, const uint *b,
     return 0;
 }
 #endif
-

@@ -4,26 +4,47 @@
 static inline void mont_mul_unroll_768b(uint *out, const uint *a, const uint *b, const uint *N, uint np0, uint limbs) {
     uint t[24u+2u];
     #pragma unroll
-    for (uint i=0u;i<24u+2u;++i) t[i]=0u;
+    for (uint i = 0u; i < 24u + 2u; ++i) t[i] = 0u;
     uint B[24u];
     #pragma unroll
-    for (uint j=0u;j<24u;++j) B[j]=b[j];
-    for (uint i=0u;i<24u;++i) {
-        uint ai=a[i]; ulong carry=0ul;
+    for (uint j = 0u; j <24u; ++j) B[j] = b[j];
+    for (uint i = 0u; i <24u; ++i) {
+        uint ai = a[i]; ulong carry = 0ul, uv;
     #pragma unroll
-        for (uint j=0u;j<24u;++j) { ulong uv=(ulong)t[j]+(ulong)ai*(ulong)B[j]+carry; t[j]=(uint)uv; carry=uv>>32; }
-        ulong top=(ulong)t[24u]+carry; t[24u]=(uint)top; t[24u+1u]=(uint)(top>>32);
-        uint m=(uint)((ulong)t[0]*(ulong)np0); carry=0ul;
+        for (uint j = 0u; j < 24u; ++j) {
+            uv = (ulong)t[j] + (ulong)ai * (ulong)B[j] + carry;
+            t[j] = (uint)uv; carry = uv>>32;
+        }
+        ulong top = (ulong)t[24u] + carry;
+        t[24u]    = (uint)top;
+        t[24u+1u] = (uint)(top>>32);
+        uint m = (uint)((ulong)t[0] * (ulong)np0);
+        uv = (ulong)t[0] + (ulong)m * (ulong)N[0]; carry = uv>>32;
     #pragma unroll
-        for (uint j=0u;j<24u;++j) { ulong uv=(ulong)t[j]+(ulong)m*(ulong)N[j]+carry; if(j>0u) t[j-1u]=(uint)uv; carry=uv>>32; }
-        top=(ulong)t[24u]+carry; t[24u-1u]=(uint)top; top=(ulong)t[24u+1u]+(top>>32); t[24u]=(uint)top; t[24u+1u]=(uint)(top>>32);
+        for (uint j = 1u; j < 24u; ++j) {
+            uv = (ulong)t[j] + (ulong)m * (ulong)N[j] + carry;
+            t[j-1u] = (uint)uv; carry = uv>>32;
+            }
+        top = (ulong)t[24u] + carry;
+        t[24u-1u] = (uint)top;
+        top = (ulong)t[24u + 1u] + (top>>32);
+        t[24u]    = (uint)top;
+        t[24u+1u] = (uint)(top>>32);
     }
-    ulong borrow=0ul; uint D[24u];
+    ulong borrow = 0ul;
+    uint D[24u];
     #pragma unroll
-    for (uint i=0u;i<24u;++i) { ulong tv=(ulong)t[i],nv=(ulong)N[i]; ulong w=tv-nv-borrow; D[i]=(uint)w; borrow=(tv<nv+borrow)?1ul:0ul; }
-    uint need_sub=(t[24u]|t[24u+1u])!=0u?1u:0u; need_sub=(borrow==0u)?1u:need_sub; uint mask=0u-need_sub;
+    for (uint i = 0u;i<24u;++i) {
+            ulong tv = (ulong)t[i], nv = (ulong)N[i];
+            ulong w = tv - nv - borrow;
+            D[i] = (uint)w;
+            borrow = (tv < nv + borrow) ? 1ul : 0ul;
+        }
+        uint need_sub = (t[24u] | t[24u+1u]) != 0u ? 1u : 0u;
+        need_sub  = (borrow == 0u) ? 1u : need_sub;
+        uint mask = 0u - need_sub;
     #pragma unroll
-    for (uint i=0u;i<24u;++i) out[i]=(D[i]&mask)|(t[i]&~mask);
+    for (uint i = 0u; i < 24u; ++i) out[i] = (D[i] & mask) | (t[i] & ~mask);
     (void)limbs;
 }
 

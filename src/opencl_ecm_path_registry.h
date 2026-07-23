@@ -24,6 +24,10 @@ enum EcmPathOs : uint32_t {
     OS_MACOS = 1u << 3,
 };
 constexpr uint32_t OS_ANY = 0x0000FFFFu;
+// Desktop OSes only (excludes Android). Used by operators that rely on the
+// desktop AMD compiler (inline GCN asm guarded by __AMDGCN__), which is not
+// defined by mobile AMD drivers even on AMD-vendor GPUs (e.g. Samsung Xclipse).
+constexpr uint32_t OS_DESKTOP = OS_WINDOWS | OS_LINUX | OS_MACOS;
 
 enum EcmPathGpuVendor : uint32_t {
     GPU_AMD = 1u << 16,
@@ -50,7 +54,7 @@ struct EcmMontPathDescriptor {
     const char *cl_name;
     const char *const *aliases;
     const char *kernel_path;
-    uint16_t auto_priority;
+    int16_t auto_priority;  // negative => manual-only (excluded from auto selection)
     uint32_t min_limbs;
     uint32_t max_limbs;
     uint32_t max_container_limbs;
@@ -66,7 +70,7 @@ struct EcmAddSubPathDescriptor {
     const char *cl_name;
     const char *const *aliases;
     const char *kernel_path;
-    uint16_t auto_priority;
+    int16_t auto_priority;  // negative => manual-only (excluded from auto selection)
     uint32_t min_limbs;
     uint32_t max_limbs;
     uint32_t max_container_limbs;
@@ -79,7 +83,7 @@ struct EcmSpecialMultPathDescriptor {
     const char *cl_name;
     const char *const *aliases;
     const char *kernel_path;
-    uint16_t auto_priority;
+    int16_t auto_priority;  // negative => manual-only (excluded from auto selection)
     uint32_t min_limbs;
     uint32_t max_limbs;
     uint32_t os_mask;

@@ -72,7 +72,7 @@ opencl_ecm_path_registry.cpp                注入的汇编头：
 #define ECM_MONT_OPERATORS(X)                                                  \
     X(unroll_384b, unroll_384b, unroll384, 10, kMontNoMinLimbs,            \
       kMontUnroll384MaxLimbs, kMontUnroll384MaxLimbs, ECM_OS_ANY, ECM_GPU_ANY, \
-      ECM_OS_ANDROID, true, 1, 0)                                              \
+      OS_ANDROID, true, 1, 0)                                              \
     ... /* 其余算子各一行 (idt, stem, al, prio, min_l, max_l,                 \
            container_l, os_mask, gpu_mask, gpu_excl, fixed_width, coop, scratch) */
 
@@ -146,7 +146,7 @@ static const char *const kMontAliases_mul_unroll768[] = {
     "mont_mul_unroll_768b",                  // cl_name
     kMontAliases_mul_unroll768,              // aliases → 指向第一阶段数组的指针
     "mont_mul/mont_mul_unroll_768b.cl",      // kernel_path
-    22, 0, 24, 24, ECM_OS_ANY, ECM_GPU_ANY, ECM_OS_ANDROID, true, 1, 0
+    22, 0, 24, 24, ECM_OS_ANY, ECM_GPU_ANY, OS_ANDROID, true, 1, 0
 }
 ```
 
@@ -201,7 +201,7 @@ struct EcmMontPathDescriptor {           // special_mult 版去掉最后三个�
     uint32_t os_mask;          // OS 白名单（ECM_OS_*，低 16 位；ANY=不限）
     uint32_t gpu_vendor_mask;  // GPU 厂商白名单（ECM_GPU_*，高 16 位；ANY=不限）
     uint32_t gpu_vendor_exclude_mask; // 黑名单：按【完整 runtime mask = OS|GPU】判定，
-                                      // 可排除 OS（如 ECM_OS_ANDROID）或 GPU（如 ECM_GPU_AMD），任意组合
+                                      // 可排除 OS（如 OS_ANDROID）或 GPU（如 ECM_GPU_AMD），任意组合
     bool     fixed_width;        // 固定位宽算子
     uint8_t  coop_work_group_size;    // 协作工作组大小：==1 单线程，>1 多线程
     uint16_t local_scratch_u32;       // 本地内存占用（4096 专用）
@@ -408,7 +408,7 @@ static const char *const kMontAliases_mul_unroll768manual[] = {
 ```
 
 `resolve_mont_side` 在别名匹配循环中按注册表顺序扫描：桌面端 auto 先匹配且 `*_fits()` 通过
-→ 返回 auto；安卓端 auto 匹配但被 `ECM_OS_ANDROID` 排除 mask 拦截 → 继续扫描 → manual
+→ 返回 auto；安卓端 auto 匹配但被 `OS_ANDROID` 排除 mask 拦截 → 继续扫描 → manual
 匹配且通过 → 返回 manual。
 
 **下拉框区分**：Android JNI `build_mont_list` 用 `id` 字段（而非 `aliases[0]`）生成下拉列表，

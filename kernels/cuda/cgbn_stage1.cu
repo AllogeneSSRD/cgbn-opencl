@@ -49,6 +49,9 @@ http://www.gnu.org/licenses/ or write to the Free Software Foundation, Inc.,
 #include <sys/stat.h>
 #include <algorithm>
 
+// For %I64u on windows or %llu on linux
+#include <cinttypes>
+
 
 // See cgbn_error_t enum (cgbn.h:39)
 #define cgbn_normalized_error ((cgbn_error_t) 14)
@@ -870,7 +873,8 @@ void dump_curve_state_csv(FILE *f,
 
   for (uint32_t i = 0; i < curves; i++) {
     const uint32_t *datum = data + (5 * i * limbs_per);
-    fprintf(f, "%s,%d,%lu,%lu,%u,%u,%u,%u,", stage, batch_index, s_partial, batch_size, sigma, i, BITS, TPI);
+    fprintf(f, "%s,%d," "%" PRIu64 "," "%" PRIu64 ",%u,%u,%u,%u,",
+            stage, batch_index, s_partial, batch_size, sigma, i, BITS, TPI);
     for (uint32_t word = 0; word < 5; word++) {
       if (word != 0) {
         fputc(',', f);
@@ -1045,19 +1049,19 @@ int cgbn_ecm_stage1(mpz_t *factors, int *array_found,
   typedef cgbn_params_t<32, 14336> cgbn_params_14336;
   typedef cgbn_params_t<32, 15360> cgbn_params_15360;
   typedef cgbn_params_t<32, 16384> cgbn_params_16384;
-  typedef cgbn_params_t<32, 17408> cgbn_params_17408;
-  typedef cgbn_params_t<32, 18432> cgbn_params_18432;
-  typedef cgbn_params_t<32, 19456> cgbn_params_19456;
-  typedef cgbn_params_t<32, 20480> cgbn_params_20480;
-  typedef cgbn_params_t<32, 21504> cgbn_params_21504;
-  typedef cgbn_params_t<32, 22528> cgbn_params_22528;
-  typedef cgbn_params_t<32, 23552> cgbn_params_23552;
-  typedef cgbn_params_t<32, 24576> cgbn_params_24576;
-  typedef cgbn_params_t<32, 25600> cgbn_params_25600;
-  typedef cgbn_params_t<32, 26624> cgbn_params_26624;
-  typedef cgbn_params_t<32, 27648> cgbn_params_27648;
-  typedef cgbn_params_t<32, 28672> cgbn_params_28672;
-  typedef cgbn_params_t<32, 32768> cgbn_params_32768;
+  // typedef cgbn_params_t<32, 17408> cgbn_params_17408;
+  // typedef cgbn_params_t<32, 18432> cgbn_params_18432;
+  // typedef cgbn_params_t<32, 19456> cgbn_params_19456;
+  // typedef cgbn_params_t<32, 20480> cgbn_params_20480;
+  // typedef cgbn_params_t<32, 21504> cgbn_params_21504;
+  // typedef cgbn_params_t<32, 22528> cgbn_params_22528;
+  // typedef cgbn_params_t<32, 23552> cgbn_params_23552;
+  // typedef cgbn_params_t<32, 24576> cgbn_params_24576;
+  // typedef cgbn_params_t<32, 25600> cgbn_params_25600;
+  // typedef cgbn_params_t<32, 26624> cgbn_params_26624;
+  // typedef cgbn_params_t<32, 27648> cgbn_params_27648;
+  // typedef cgbn_params_t<32, 28672> cgbn_params_28672;
+  // typedef cgbn_params_t<32, 32768> cgbn_params_32768;
   
   available_kernels.push_back((uint32_t)cgbn_params_9216::BITS);
   available_kernels.push_back((uint32_t)cgbn_params_10240::BITS);
@@ -1067,19 +1071,19 @@ int cgbn_ecm_stage1(mpz_t *factors, int *array_found,
   available_kernels.push_back((uint32_t)cgbn_params_14336::BITS);
   available_kernels.push_back((uint32_t)cgbn_params_15360::BITS);
   available_kernels.push_back((uint32_t)cgbn_params_16384::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_17408::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_18432::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_19456::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_20480::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_21504::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_22528::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_23552::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_24576::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_25600::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_26624::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_27648::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_28672::BITS);
-  available_kernels.push_back((uint32_t)cgbn_params_32768::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_17408::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_18432::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_19456::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_20480::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_21504::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_22528::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_23552::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_24576::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_25600::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_26624::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_27648::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_28672::BITS);
+  // available_kernels.push_back((uint32_t)cgbn_params_32768::BITS);
 
 #endif
 
@@ -1234,45 +1238,46 @@ int cgbn_ecm_stage1(mpz_t *factors, int *array_found,
       } else if (BITS == cgbn_params_16384::BITS) {
         TPI = cgbn_params_16384::TPI;
         kernel = kernel_double_add<cgbn_params_16384>;
-      } else if (BITS == cgbn_params_17408::BITS) {
-        TPI = cgbn_params_17408::TPI;
-        kernel = kernel_double_add<cgbn_params_17408>;
-      } else if (BITS == cgbn_params_18432::BITS) {
-        TPI = cgbn_params_18432::TPI;
-        kernel = kernel_double_add<cgbn_params_18432>;
-      } else if (BITS == cgbn_params_19456::BITS) {
-        TPI = cgbn_params_19456::TPI;
-        kernel = kernel_double_add<cgbn_params_19456>;
-      } else if (BITS == cgbn_params_20480::BITS) {
-        TPI = cgbn_params_20480::TPI;
-        kernel = kernel_double_add<cgbn_params_20480>;
-      } else if (BITS == cgbn_params_21504::BITS) {
-        TPI = cgbn_params_21504::TPI;
-        kernel = kernel_double_add<cgbn_params_21504>;
-      } else if (BITS == cgbn_params_22528::BITS) {
-        TPI = cgbn_params_22528::TPI;
-        kernel = kernel_double_add<cgbn_params_22528>;
-      } else if (BITS == cgbn_params_23552::BITS) {
-        TPI = cgbn_params_23552::TPI;
-        kernel = kernel_double_add<cgbn_params_23552>;
-      } else if (BITS == cgbn_params_24576::BITS) {
-        TPI = cgbn_params_24576::TPI;
-        kernel = kernel_double_add<cgbn_params_24576>;
-      } else if (BITS == cgbn_params_25600::BITS) {
-        TPI = cgbn_params_25600::TPI;
-        kernel = kernel_double_add<cgbn_params_25600>;
-      } else if (BITS == cgbn_params_26624::BITS) {
-        TPI = cgbn_params_26624::TPI;
-        kernel = kernel_double_add<cgbn_params_26624>;
-      } else if (BITS == cgbn_params_27648::BITS) {
-        TPI = cgbn_params_27648::TPI;
-        kernel = kernel_double_add<cgbn_params_27648>;
-      } else if (BITS == cgbn_params_28672::BITS) {
-        TPI = cgbn_params_28672::TPI;
-        kernel = kernel_double_add<cgbn_params_28672>;
-      } else if (BITS == cgbn_params_32768::BITS) {
-        TPI = cgbn_params_32768::TPI;
-        kernel = kernel_double_add<cgbn_params_32768>;
+
+      // } else if (BITS == cgbn_params_17408::BITS) {
+      //   TPI = cgbn_params_17408::TPI;
+      //   kernel = kernel_double_add<cgbn_params_17408>;
+      // } else if (BITS == cgbn_params_18432::BITS) {
+      //   TPI = cgbn_params_18432::TPI;
+      //   kernel = kernel_double_add<cgbn_params_18432>;
+      // } else if (BITS == cgbn_params_19456::BITS) {
+      //   TPI = cgbn_params_19456::TPI;
+      //   kernel = kernel_double_add<cgbn_params_19456>;
+      // } else if (BITS == cgbn_params_20480::BITS) {
+      //   TPI = cgbn_params_20480::TPI;
+      //   kernel = kernel_double_add<cgbn_params_20480>;
+      // } else if (BITS == cgbn_params_21504::BITS) {
+      //   TPI = cgbn_params_21504::TPI;
+      //   kernel = kernel_double_add<cgbn_params_21504>;
+      // } else if (BITS == cgbn_params_22528::BITS) {
+      //   TPI = cgbn_params_22528::TPI;
+      //   kernel = kernel_double_add<cgbn_params_22528>;
+      // } else if (BITS == cgbn_params_23552::BITS) {
+      //   TPI = cgbn_params_23552::TPI;
+      //   kernel = kernel_double_add<cgbn_params_23552>;
+      // } else if (BITS == cgbn_params_24576::BITS) {
+      //   TPI = cgbn_params_24576::TPI;
+      //   kernel = kernel_double_add<cgbn_params_24576>;
+      // } else if (BITS == cgbn_params_25600::BITS) {
+      //   TPI = cgbn_params_25600::TPI;
+      //   kernel = kernel_double_add<cgbn_params_25600>;
+      // } else if (BITS == cgbn_params_26624::BITS) {
+      //   TPI = cgbn_params_26624::TPI;
+      //   kernel = kernel_double_add<cgbn_params_26624>;
+      // } else if (BITS == cgbn_params_27648::BITS) {
+      //   TPI = cgbn_params_27648::TPI;
+      //   kernel = kernel_double_add<cgbn_params_27648>;
+      // } else if (BITS == cgbn_params_28672::BITS) {
+      //   TPI = cgbn_params_28672::TPI;
+      //   kernel = kernel_double_add<cgbn_params_28672>;
+      // } else if (BITS == cgbn_params_32768::BITS) {
+      //   TPI = cgbn_params_32768::TPI;
+      //   kernel = kernel_double_add<cgbn_params_32768>;
 #endif
       } else {
         outputf (OUTPUT_ERROR, "CGBN kernel not found for %d bits\n", BITS);
@@ -1291,7 +1296,7 @@ int cgbn_ecm_stage1(mpz_t *factors, int *array_found,
       return ECM_ERROR;
     }
 
-  ecm_cuda_print_ptx_version((const void*)kernel_double_add<cgbn_params_medium>);
+  ecm_cuda_print_ptx_version((const void*)kernel);
 
   /* Alert that recompiling with a smaller kernel would likely improve speed */
   {
@@ -1385,32 +1390,33 @@ int cgbn_ecm_stage1(mpz_t *factors, int *array_found,
       kernel = kernel_double_add<cgbn_params_15360>;
     } else if (BITS == cgbn_params_16384::BITS) {
       kernel = kernel_double_add<cgbn_params_16384>;
-    } else if (BITS == cgbn_params_17408::BITS) {
-      kernel = kernel_double_add<cgbn_params_17408>;
-    } else if (BITS == cgbn_params_18432::BITS) {
-      kernel = kernel_double_add<cgbn_params_18432>;
-    } else if (BITS == cgbn_params_19456::BITS) {
-      kernel = kernel_double_add<cgbn_params_19456>;
-    } else if (BITS == cgbn_params_20480::BITS) {
-      kernel = kernel_double_add<cgbn_params_20480>;
-    } else if (BITS == cgbn_params_21504::BITS) {
-      kernel = kernel_double_add<cgbn_params_21504>;
-    } else if (BITS == cgbn_params_22528::BITS) {
-      kernel = kernel_double_add<cgbn_params_22528>;
-    } else if (BITS == cgbn_params_23552::BITS) {
-      kernel = kernel_double_add<cgbn_params_23552>;
-    } else if (BITS == cgbn_params_24576::BITS) {
-      kernel = kernel_double_add<cgbn_params_24576>;
-    } else if (BITS == cgbn_params_25600::BITS) {
-      kernel = kernel_double_add<cgbn_params_25600>;
-    } else if (BITS == cgbn_params_26624::BITS) {
-      kernel = kernel_double_add<cgbn_params_26624>;
-    } else if (BITS == cgbn_params_27648::BITS) {
-      kernel = kernel_double_add<cgbn_params_27648>;
-    } else if (BITS == cgbn_params_28672::BITS) {
-      kernel = kernel_double_add<cgbn_params_28672>;
-    } else if (BITS == cgbn_params_32768::BITS) {
-      kernel = kernel_double_add<cgbn_params_32768>;
+
+    // } else if (BITS == cgbn_params_17408::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_17408>;
+    // } else if (BITS == cgbn_params_18432::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_18432>;
+    // } else if (BITS == cgbn_params_19456::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_19456>;
+    // } else if (BITS == cgbn_params_20480::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_20480>;
+    // } else if (BITS == cgbn_params_21504::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_21504>;
+    // } else if (BITS == cgbn_params_22528::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_22528>;
+    // } else if (BITS == cgbn_params_23552::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_23552>;
+    // } else if (BITS == cgbn_params_24576::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_24576>;
+    // } else if (BITS == cgbn_params_25600::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_25600>;
+    // } else if (BITS == cgbn_params_26624::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_26624>;
+    // } else if (BITS == cgbn_params_27648::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_27648>;
+    // } else if (BITS == cgbn_params_28672::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_28672>;
+    // } else if (BITS == cgbn_params_32768::BITS) {
+    //   kernel = kernel_double_add<cgbn_params_32768>;
 #endif
     } else {
       outputf(OUTPUT_ERROR, "CGBN kernel not found for BITS=%d TPI=%d from checkpoint\n", BITS, TPI);

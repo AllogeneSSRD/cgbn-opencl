@@ -1,12 +1,12 @@
 param(
-    [string]$N_expr  = "2^421-1", # 421 1009 2017 3049 4027
+    [string]$N_expr  = "2^1009-1", # 421 1009 2017 3049 4027
     [string]$B1_list = "1e5" 				# 1e4 1e5
 )
 
 $curves = @(1, 32, 64, 128, 256, 384, 512, 1024, 1536, 2048, 3072, 4096, 6144, 9216, 12288, 16384)
 #1, 32, 64, 128, 256, 384, 512, 1024, 1536, 2048, 3072, 4096, 6144, 9216, 12288, 16384
 
-$exe    = Join-Path $PSScriptRoot "build_cuda_cmake\ecm_cuda.exe"
+$exe    = Join-Path $PSScriptRoot "build_cuda_cmake\ecm_cuda_sm89_cuda13.3.exe"
 # build\Debug\ecm.exe
 # build_rel\Release\ecm.exe
 # build_cuda_cmake\ecm_cuda.exe

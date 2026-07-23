@@ -108,6 +108,8 @@ static inline void run_double_add_instance(uint instance_i, __global const uint 
 
 #if ECM_STAGE1_COOP_WG > 1
 __kernel __attribute__((reqd_work_group_size(ECM_STAGE1_COOP_WG, 1, 1)))
+#elif defined(ECM_STAGE1_WG_SIZE)
+__kernel __attribute__((reqd_work_group_size(ECM_STAGE1_WG_SIZE, 1, 1)))
 #else
 __kernel
 #endif

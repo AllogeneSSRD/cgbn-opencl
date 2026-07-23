@@ -1,60 +1,30 @@
-# ECM-OpenCl
+# OpenCl-ECM
 
-在 [GMP-ECM](https://gitlab.inria.fr/zimmerma/ecm) 因子分解框架基础上，实现 **ECM stage-1** 在多后端、多系统与多设备上的 GPU/NPU 加速与算子优化。本仓库以 **OpenCL** 为主要交付后端，围绕 Montgomery 乘/平方与模加/模减提供大量可切换内核路径；**针对 AMD GPU（GCN/RDNA）的汇编与 ISA 调优**是核心工作方向之一。
+本仓库为椭圆曲线因子分解算法的 **OpenCL** 实现。支持 **Windows, Linux, macOS & Android** , 同时移植了可在 **Windows - CUDA** 环境运行的 **[GMP-ECM](https://gitlab.inria.fr/zimmerma/ecm)** (Montgomery param 3)。
+
+程序兼容 **GPM-ECM** & **Prime95** 的 savefile 格式, 支持 checkpoint, 自定义算子 (Montgomery 乘/平方与模加/模减) 并针对 **AMD GPU（GCN、RDNA）**进行汇编与 ISA 调优。
 
 英文概览见 [README_en.md](README_en.md)。
 
-## 参考与感谢
-
-本仓库参考并感谢上游 **[ZIMMERMANN Paul / ecm · GitLab](https://gitlab.inria.fr/zimmerma/ecm)**（GMP-ECM）的算法、接口与 GPU 路线设计。
-
-上游原始说明文档保存在本仓库 [`docs/`](docs/) 目录（自上游同步，便于离线查阅）：
-
-| 文件 | 内容 |
-|------|------|
-| [docs/README](docs/README) | GMP-ECM 基本用法、B1/B2、表达式语法、`-param` / `-sigma` 等 |
-| [docs/README.gpu](docs/README.gpu) | 上游 CUDA/CGBN GPU 版说明 |
-| [docs/README.lib](docs/README.lib) | `libecm` 库接口与 `ecm_params` |
-| [docs/README.dev](docs/README.dev) | 上游 autotools 开发构建 |
-| [docs/README.dev.asm](docs/README.dev.asm) | 上游架构相关汇编说明 |
-
-## 项目特点
-
-- **同一套 ECM stage-1 数学流程**，可在不同后端与设备上运行或对照验证。
-- **OpenCL 后端**（本仓库主线）：Windows 上 **NVIDIA 独显、AMD 独显、Intel 独显/核显（iGPU）**；**Android** 上通过厂商 `libOpenCL.so` 运行探测与微基准。
-- **CUDA / CGBN 后端**（`ecm_cuda`）：将上游 GPU-ECM 的 CGBN stage-1（`kernels/cuda/cgbn_stage1.cu`）移植到 **Windows**，产出原生 `ecm_cuda` 可执行文件；与 OpenCL `ecm` **共享同一 driver**，仅在链接期通过后端接缝（`include/ecm_backend.h`）切换 GPU 实现。CGBN 头文件库位于 `cgbn/`（见 [docs/ECM_GPU_FLOW.md](docs/ECM_GPU_FLOW.md)）。
-- **NPU 探索**：`RyzenAI/` 提供与 OpenCL 微基准对标的 add/sub 算子测试（ONNX + Vitis AI）。
-- **优化重心**：Montgomery 与模运算内核的 **AMD 内联汇编**（`v_mad_u64_u32` 等）、RGA/ISA 反汇编闭环、4096-bit 路径与工作组协作框架；移动 Adreno 以 **`unroll_only_512*`** 等路径为主（详见 [bench/0530_report.md](bench/0530_report.md)）。
-
 ---
 
-## 目录
+## Contents 目录
 
 | 章节 | 说明 |
 |------|------|
-| [Quick Start（Windows）](#quick-startwindows) | 最短路径：构建 → `ecm` → 微基准 |
-| [Windows](#windows) | 桌面构建、使用与 OpenCL 能力 |
-| [CUDA 后端（ecm_cuda）](#cuda-后端ecm_cudanvidia) | NVIDIA CGBN stage-1 构建与使用 |
-| [Android](#android) | 真机 App、微基准与缓存 |
+| [Quick Start 快速开始](#quick-start-快速开始) | 最短路径：构建 → `ecm` → 微基准 |
+| [命令行选项](#命令行选项) | 命令行选项 |
+| [从源代码构建 (Windows)](#从源代码构建) | 桌面构建、使用与 OpenCL 能力 |
+| [构建 CUDA 后端](#构建CUDA后端CGBN) | NVIDIA CGBN stage-1 构建与使用 |
+| [Android](#android) | ECM运行、微基准 |
 | [开发与文档](#开发与文档) | 数学原理、param、算子分析、工具、bench、AMD 汇编 |
 | [其他文档索引](#其他文档索引) | 正文未单独展开的子文档列表 |
 
 ---
 
-## Quick Start（Windows）
+## Quick Start 快速开始
 
 ```powershell
-# 1. Debug build (开发调试)
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --config Debug
-
-# 2. Release build (生产部署，MSVC /O2)
-#    需显式指定 vcpkg toolchain + OpenSSL 路径
-cmake -S . -B build_rel -DCMAKE_BUILD_TYPE=Release `
-  -DCMAKE_TOOLCHAIN_FILE=D:/code/vcpkg/scripts/buildsystems/vcpkg.cmake `
-  -DOPENSSL_ROOT_DIR=D:/code/vcpkg/installed/x64-windows
-cmake --build build_rel --config Release
-
 # 3. ECM stage-1（从 stdin 读 N）
 echo "(2^991-1)" | build_rel\Release\ecm.exe -v --go -gpu -gpucurves 384 1e6 0
 
@@ -67,43 +37,21 @@ build_rel\Release\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 
 ---
 
-## Windows
+## 命令行选项
 
-### 构建
+### 运行ECM stage-1（`ecm.exe`）
 
-| 依赖 | 说明 |
-|------|------|
-| CMake 3.20+ | 推荐 Visual Studio 2022（x64） |
-| OpenCL ICD | NVIDIA / AMD / Intel 运行时 |
-| OpenSSL | `find_package(OpenSSL)` |
-| GMP | 自动探测 `$VCPKG_ROOT/installed/x64-windows` 或 `D:/code/vcpkg/...`；否则用 `-DECM_WINDOWS_GMP_ROOT=<prefix>`（含 `include/gmp.h` 与 `lib/gmp.lib`）指定 |
-
-```powershell
-# Debug
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --config Debug
-
-# Release (MSVC /O2, 运行性能最优)
-#   需显式指定 vcpkg toolchain 与 OpenSSL 路径
-cmake -S . -B build_rel -DCMAKE_BUILD_TYPE=Release `
-  -DCMAKE_TOOLCHAIN_FILE=D:/code/vcpkg/scripts/buildsystems/vcpkg.cmake `
-  -DOPENSSL_ROOT_DIR=D:/code/vcpkg/installed/x64-windows
-cmake --build build_rel --config Release
+```text
+echo "N" | ecm.exe <-gpu> [-gpucurves <n>] [...] <B1> <B2>
 ```
 
-产物在 `build/Debug/` 或 `build_rel/Release/`。主要目标：`ecm.exe`、`opencl_ecm_addsub.exe`、`opencl_ecm_montsqr.exe`、`opencl_asm_selftest.exe`、`opencl_*_isa_export.exe` 等。
-
-> Release 构建后 CMake 自动将 `libcrypto-3-x64.dll`、`libssl-3-x64.dll`、`gmp.dll` 从 vcpkg 复制到输出目录，无需额外 PATH 设置。
-
-可选：[Pari/GP](https://pari.math.u-bordeaux.fr/) + `--gp <path>` 参数，配合 `ecm.exe --go` 做群阶诊断。
-
-### 使用：ECM stage-1（`ecm.exe`）
-
 从标准输入读取合数 **N**（十进制或表达式），执行 stage-1；`-gpu` 启用 OpenCL 批处理曲线。
+尖括号 < >：表示必需提供的参数。
+方括号 [ ]：表示可选参数。
 
 ```powershell
-echo "(2^991-1)" | build\Debug\ecm.exe -v --go -gpu -gpucurves 384 1e6 0
-echo "(2^4003-1)" | build\Debug\ecm.exe -gpu -gpucurves 384 --add asm_b32 1e6 0
+echo "(2^991-1)" | build\Debug\ecm.exe -gpu -gpucurves 384 1e6 0
+echo "(2^4003-1)" | build\Debug\ecm.exe -gpu -gpucurves 384 -v --go --add asm_b32 1e6 0
 build\Debug\ecm.exe --showkernel
 
 :: Release build
@@ -112,39 +60,19 @@ echo "(2^991-1)" | build_rel\Release\ecm.exe -v --go -gpu -gpucurves 384 1e6 0
 
 | 选项 | 说明 |
 |------|------|
+| `<B1>` `<B2>` | 必选位置参数，在命令末尾 |
 | `-gpu` / `-gpucurves <n>` | GPU stage-1 与每批曲线数 |
 | `-d <index>` | OpenCL 设备索引 |
+| `-v` | verbose 输出详细信息 |
 | `--mul` / `--sqr` / `--add` / `--sub` / `--special-mult <path>` | 覆盖各算子内核路径（id/别名/auto） |
-| `--showkernel` | 从注册表枚举全部算子（id、别名、文件、平台门控） |
+| `--showkernel` | 从注册表枚举全部算子（id、别名、文件、支持平台） |
 
-上游 `-param`、`-sigma` 等 ECM 参数语义见 [docs/README](docs/README) 第 6 节；本仓库 OpenCL stage-1 与 `ecm_params` / batch-32bit-`D` 参数的对应关系见 [docs/DEBUG_PARAMETERS_GUIDE.md](docs/DEBUG_PARAMETERS_GUIDE.md)。
+可选: `--go` 计算 Group Order 群阶并分解
+- 安装 [Pari/GP](https://pari.math.u-bordeaux.fr/) ; 将 `gp.exe` 添加到环境变量或指定路径 `--gp <path>` 。
 
-### 使用：算子微基准
+上游 `-param`、`-sigma` 等 ECM 参数语义见 [docs/README](docs/README) 第 6 节；
 
-参数形式（两工具相同）：
-
-```text
-<exe> [--bits <bits>] <kernel_iterations> <instances> <launch_repeats>
-```
-
-```powershell
-build\Debug\opencl_ecm_addsub.exe --bits 512 10000 128 3
-build\Debug\opencl_ecm_montsqr.exe --bits 512 1000 128 1
-```
-
-- 追加 CSV：`--csv <file>`
-- 跨厂商 512/4096 对比报告：[bench/0530_report.md](bench/0530_report.md)
-
-### 其他：OpenCL 与运行时
-
-| 主题 | 说明 | 详细文档 |
-|------|------|----------|
-| OpenCL 实现总览 | stage-1 主机/内核分工、与 CUDA 差异 | [docs/OPENCL_IMPLEMENTATION.md](docs/OPENCL_IMPLEMENTATION.md) |
-| 程序二进制缓存 | FNV-1a 键、`/.opencl_cache/` | 实现见 `kernels/opencl/impl_opencl.cpp`；变量见下表 |
-| 内核树与 manifest | `.cl` 注册、路径枚举 | [kernels/opencl/bench/mp_addsub/README.md](kernels/opencl/bench/mp_addsub/README.md) |
-| 调试参数 | `--profile-ops`、`--verify-gpu` 等 | [docs/DEBUG_PARAMETERS_GUIDE.md](docs/DEBUG_PARAMETERS_GUIDE.md) |
-
-### 命令行参数（已取代环境变量）
+### 高级参数（已取代环境变量）
 
 所有自定义环境变量已移除，改为命令行参数（统一收敛到 `EcmRuntimeConfig`，见
 `include/opencl_ecm_runtime_config.h`）。`ecm` 主程序：
@@ -177,16 +105,79 @@ OpenCL 后端骨架说明：[kernels/opencl/README.md](kernels/opencl/README.md)
 
 ---
 
-## CUDA 后端（`ecm_cuda`，NVIDIA）
+## 从源代码构建
 
-`ecm_cuda` 是基于上游 CGBN 的原生 CUDA stage-1（`kernels/cuda/cgbn_stage1.cu`），与 OpenCL `ecm` **共享同一 driver / 参数解析 / 检查点 / 保存 / 日志**，仅在链接期通过后端接缝（`include/ecm_backend.h`）切换 GPU 实现（OpenCL glue：`src/opencl_backend_glue.cpp`；CUDA glue：`src/cuda/ecm_cuda_backend.cu`）。
+### 依赖项
+
+| 依赖 | 说明 | 指定路径 |
+| ---- | ---- | ---- |
+| CMake 3.20+ | 推荐 Visual Studio 2022 或 vcpkg | -DCMAKE_TOOLCHAIN_FILE |
+| OpenCL ICD | NVIDIA / AMD / Intel 运行时 | / |
+| OpenSSL | 推荐 vcpkg | -DOPENSSL_ROOT_DIR |
+| GMP | 推荐 vcpkg | -DECM_WINDOWS_GMP_ROOT |
+
+### 构建
+
+```powershell
+cd opencl-ecm
+# 1. Debug build (开发调试)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --config Debug
+
+# 2. Release build (生产部署，MSVC /O2)
+cmake -S . -B build_rel -DCMAKE_BUILD_TYPE=Release
+cmake --build build_rel --config Release
+
+# 如有需要, 可以显式指定 vcpkg toolchain, OpenSSL 与 GMP 路径
+cmake -S . -B build_rel -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake `
+  -DOPENSSL_ROOT_DIR=vcpkg/installed/x64-windows
+cmake --build build_rel --config Release
+```
+
+产物在 `build/Debug/` 或 `build_rel/Release/`。主要目标：`ecm.exe`、`opencl_ecm_addsub.exe`、`opencl_ecm_montsqr.exe`、`opencl_asm_selftest.exe`、`opencl_*_isa_export.exe` 等。
+
+> Release 构建后 CMake 自动将 `libcrypto-3-x64.dll`、`libssl-3-x64.dll`、`gmp.dll` 从 vcpkg 复制到输出目录，无需额外 PATH 设置。
+
+### 使用：算子微基准
+
+参数形式（两工具相同）：
+
+```text
+<exe> [--bits <bits>] <kernel_iterations> <instances> <launch_repeats>
+```
+
+```powershell
+build\Debug\opencl_ecm_addsub.exe --bits 512 10000 128 3
+build\Debug\opencl_ecm_montsqr.exe --bits 512 1000 128 1
+```
+
+- 追加 CSV：`--csv <file>`
+- 跨厂商 512/4096 对比报告：[bench/0530_report.md](bench/0530_report.md)
+
+### 其他：OpenCL 与运行时
+
+| 主题 | 说明 | 详细文档 |
+|------|------|----------|
+| OpenCL 实现总览 | stage-1 主机/内核分工、与 CUDA 差异 | [docs/OPENCL_IMPLEMENTATION.md](docs/OPENCL_IMPLEMENTATION.md) |
+| 程序二进制缓存 | FNV-1a 键、`/.opencl_cache/` | 实现见 `kernels/opencl/impl_opencl.cpp`；变量见下表 |
+| 内核树与 manifest | `.cl` 注册、路径枚举 | [kernels/opencl/bench/mp_addsub/README.md](kernels/opencl/bench/mp_addsub/README.md) |
+| 调试参数 | `--profile-ops`、`--verify-gpu` 等 | [docs/DEBUG_PARAMETERS_GUIDE.md](docs/DEBUG_PARAMETERS_GUIDE.md) |
+
+---
+
+<a id="构建CUDA后端CGBN"></a>
+
+## 构建CUDA后端（CGBN）
+
+`ecm_cuda` 是基于上游 CGBN 的原生 CUDA stage-1（`kernels/cuda/cgbn_stage1.cu`），与 OpenCL `ecm` **共享同一 driver / 参数解析 / 检查点 / 保存 / 日志**，仅在链接期通过选择不同后端（`include/ecm_backend.h`）切换 GPU 实现（OpenCL glue：`src/opencl_backend_glue.cpp`；CUDA glue：`src/cuda/ecm_cuda_backend.cu`）。
 
 ### 依赖
 
 | 依赖 | 说明 |
 |------|------|
-| CUDA Toolkit | 含 `nvcc`（本仓库在 12.6 上验证），host 编译器需为匹配的 MSVC |
-| CGBN | 头文件库，已随仓库置于 `cgbn/`（`.cu` 使用 `#include <cgbn.h>`） |
+| CUDA Toolkit | 含 `nvcc`（本仓库在 12.6-13.3 上验证），host 编译器需为匹配的 MSVC |
+| CGBN | CUDA高精度整数库，置于 `cgbn/` `git clone https://github.com/NVlabs/CGBN.git` |
 | GMP / OpenSSL | 同 OpenCL 构建 |
 
 ### 为何单独构建
@@ -194,18 +185,18 @@ OpenCL 后端骨架说明：[kernels/opencl/README.md](kernels/opencl/README.md)
 Visual Studio 生成器（`build_rel`）需要 CUDA 的 MSBuild 集成文件；**仅安装 Build Tools 时通常缺失**，此时 CMake 检测不到 CUDA 编译器并**自动禁用** `ecm_cuda`（对现有 OpenCL 工程零影响）。因此改用 **NMake（或 Ninja）生成器**，并在 `vcvars64` 环境下让 `cl` 与 `nvcc` 同时可见：
 
 ```bat
+# 推荐使用便捷脚本(in `build_cuda/`)
+
 :: 在 "x64 Native Tools Command Prompt"，或先 call vcvars64.bat
 
-# PowerShell (推荐)
+# PowerShell
 # 修改为本地vcvars64.bat路径
 cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"" >nul && cmake -DECM_CUDA_ARCHITECTURES=80 -S . -B build_cuda_cmake && cmake --build build_cuda_cmake --target ecm_cuda"
 
-# CMD (命令可能过长)
+# CMD
 call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 
 cmake -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release ^
-  -DOPENSSL_ROOT_DIR=D:/code/vcpkg/installed/x64-windows ^
-  -DECM_WINDOWS_GMP_ROOT=D:/code/vcpkg/installed/x64-windows ^
   -S . -B build_cuda_cmake
 
 cmake --build build_cuda_cmake --target ecm_cuda
@@ -215,12 +206,12 @@ cmake --build build_cuda_cmake --target ecm_cuda
 
 ### 便捷脚本（`build_cuda/`）
 
-`build_cuda/` 下有一组本地便捷脚本（该目录已 `.gitignore`），均先 `call vcvars64.bat` 再执行，省去手动进 Native Tools 提示符。**脚本内硬编码了 vcvars64 / cmake / `sm_89` 等路径，换机器需自行修改；正式构建架构以 `ECM_CUDA_ARCHITECTURES` 为准。**
+`build_cuda/` 下有一组bat脚本，均先 `call vcvars64.bat` 再执行，无需手动进 Native Tools。**脚本内硬编码了 vcvars64 / cmake / `sm_89` 等路径，换需自行修改；正式构建架构以 `ECM_CUDA_ARCHITECTURES` 为准。**
 
 | 脚本 | 作用 |
 |------|------|
 | `cfg_cuda.bat` | **配置**：以 NMake 生成器配置到 `build_cuda_cmake`（等价上文 `cmake -G "NMake Makefiles" ...`） |
-| `build_cuda_target.bat` | **编译**：`cmake --build build_cuda_cmake --target ecm_cuda`，错误输出存 `build_cuda\build_err.txt` |
+| `build_cuda_target.bat` | **编译**：`cmake --build build_cuda_cmake --target ecm_cuda`，重定向错误输出 `build_cuda\build_err.txt` |
 | `compile_cu.bat` | **诊断**：`nvcc -c` 单独编译 `kernels/cuda/cgbn_stage1.cu`（`--ptxas-options=-v` 看寄存器占用），只编译不链接 |
 | `smoke_build.bat` | **冒烟测试**：`nvcc` 直接编译 CGBN 自带 `samples/sample_01_add`，验证 `nvcc + CGBN + cl + gmp` 工具链可用 |
 
@@ -230,9 +221,12 @@ cmake --build build_cuda_cmake --target ecm_cuda
 
 | 选项 | 默认 | 说明 |
 |------|------|------|
-| `ECM_ENABLE_CUDA` | 检测到 `nvcc` 时 `ON` | 是否构建 `ecm_cuda` |
-| `ECM_CUDA_ARCHITECTURES` | `89` | CUDA 计算能力（`89`=RTX 40 系；按 GPU 调整，如 `86`=RTX 30 系） |
-| `ECM_CUDA_FULL_BUILD` | `OFF` | `ON` 时编译 CGBN 全尺寸 kernel；默认 dev build 仅支持 **N ≤ 1024 bit**，编译更快 |
+| `-DECM_ENABLE_CUDA` | 检测到 `nvcc` 时 `ON` | 是否构建 `ecm_cuda` |
+| `-DCMAKE_CUDA_COMPILER` | 从`Path` `环境变量` 读取 | 修改为 `nvcc.exe` 路径 "C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6/bin/nvcc.exe" |
+| `-DECM_CUDA_ARCHITECTURES` | `80` | CUDA 计算能力（`89`=RTX 40 系；按 GPU 调整，如 `86`=RTX 30 系） |
+| `-DECM_CUDA_FULL_BUILD` | `OFF` | `ON` 时编译 CGBN 全尺寸 kernel；默认 dev build 仅支持 **N ≤ 1024 bit**，编译更快 |
+| `-DCMAKE_BUILD_TYPE` | `DEBUG` | `Release` |
+| `-DCMAKE_CUDA_FLAGS` | / | 传递给 `nvcc` 的参数`="--verbose --ptxas-options=-v"` |
 
 ### 使用
 
@@ -387,6 +381,22 @@ ECM-OpenCl/
 ```
 
 ---
+
+## 参考与感谢
+
+本仓库参考并感谢上游 **[ZIMMERMANN Paul / ecm · GitLab](https://gitlab.inria.fr/zimmerma/ecm)**（GMP-ECM）的算法、接口与 GPU 路线设计。
+
+上游原始说明文档保存在本仓库 [`docs/`](docs/) 目录（自上游同步，便于离线查阅）：
+
+| 文件 | 内容 |
+|------|------|
+| [docs/README](docs/README) | GMP-ECM 基本用法、B1/B2、表达式语法、`-param` / `-sigma` 等 |
+| [docs/README.gpu](docs/README.gpu) | 上游 CUDA/CGBN GPU 版说明 |
+| [docs/README.lib](docs/README.lib) | `libecm` 库接口与 `ecm_params` |
+| [docs/README.dev](docs/README.dev) | 上游 autotools 开发构建 |
+| [docs/README.dev.asm](docs/README.dev.asm) | 上游架构相关汇编说明 |
+
+
 
 ## 其他文档索引
 

@@ -16,6 +16,8 @@ build_cuda/*
 !build_cuda/*.bat
 build_cuda_cmake/
 
+release/
+
 **/__pycache__/
 *.save
 *-*signature.txt

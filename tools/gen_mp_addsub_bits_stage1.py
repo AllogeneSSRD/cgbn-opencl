@@ -386,7 +386,12 @@ def write_add_asm(bits: int, limbs: int, asm_body: str, unroll_body: str) -> Non
     path = ADD_MOD / f"add_mod_asm_{bits}b.cl"
     content = (
         f"{HEADER}"
+        # asm_body calls the AMDGCN-only asm_*_priv helpers; guard it so the file
+        # still compiles on non-AMD OpenCL compilers (the wrapper below falls back
+        # to the portable unroll body when __AMDGCN__ is not defined).
+        f"#if defined(__AMDGCN__)\n"
         f"{asm_body}"
+        f"#endif\n"
         f"#if !defined(__AMDGCN__)\n"
         f"{unroll_body}"
         f"#endif\n"
@@ -400,7 +405,12 @@ def write_sub_asm(bits: int, limbs: int, asm_body: str, unroll_body: str) -> Non
     path = SUB_MOD / f"sub_mod_asm_{bits}b.cl"
     content = (
         f"{HEADER}"
+        # asm_body calls the AMDGCN-only asm_*_priv helpers; guard it so the file
+        # still compiles on non-AMD OpenCL compilers (the wrapper below falls back
+        # to the portable unroll body when __AMDGCN__ is not defined).
+        f"#if defined(__AMDGCN__)\n"
         f"{asm_body}"
+        f"#endif\n"
         f"#if !defined(__AMDGCN__)\n"
         f"{unroll_body}"
         f"#endif\n"

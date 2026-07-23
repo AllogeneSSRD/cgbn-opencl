@@ -236,47 +236,47 @@ ECM_ADDSUB_ALIAS_TABLE(Add, "add_mod")
 ECM_ADDSUB_ALIAS_TABLE(Sub, "sub_mod")
 
 #define ECM_ADDSUB_OPERATORS(X)                                     \
-    X(asm_128b,         4,   0,   4,   4, OS_ANY, GPU_AMD) \
+    X(asm_128b,         4,   0,   4,   4, OS_DESKTOP, GPU_AMD) \
     X(unroll_128b,      5,   0,   4,   4, OS_ANY, GPU_ANY) \
-    X(asm_192b,         6,   0,   6,   6, OS_ANY, GPU_AMD) \
+    X(asm_192b,         6,   0,   6,   6, OS_DESKTOP, GPU_AMD) \
     X(unroll_192b,      7,   0,   6,   6, OS_ANY, GPU_ANY) \
-    X(asm_256b,         8,   0,   8,   8, OS_ANY, GPU_AMD) \
+    X(asm_256b,         8,   0,   8,   8, OS_DESKTOP, GPU_AMD) \
     X(unroll_256b,      9,   0,   8,   8, OS_ANY, GPU_ANY) \
-    X(asm_384b,        12,   0,  12,  12, OS_ANY, GPU_AMD) \
+    X(asm_384b,        12,   0,  12,  12, OS_DESKTOP, GPU_AMD) \
     X(unroll_384b,     13,   0,  12,  12, OS_ANY, GPU_ANY) \
-    X(asm_512b,        16,   0,  16,  16, OS_ANY, GPU_AMD) \
+    X(asm_512b,        16,   0,  16,  16, OS_DESKTOP, GPU_AMD) \
     X(unroll_512b,     17,   0,  16,  16, OS_ANY, GPU_ANY) \
-    X(asm_768b,        18,   0,  24,  24, OS_ANY, GPU_AMD) \
+    X(asm_768b,        18,   0,  24,  24, OS_DESKTOP, GPU_AMD) \
     X(unroll_768b,     19,   0,  24,  24, OS_ANY, GPU_ANY) \
-    X(asm_1024b,       20,   0,  32,  32, OS_ANY, GPU_AMD) \
+    X(asm_1024b,       20,   0,  32,  32, OS_DESKTOP, GPU_AMD) \
     X(unroll_1024b,    21,   0,  32,  32, OS_ANY, GPU_ANY) \
-    X(asm_1536b,       22,   0,  48,  48, OS_ANY, GPU_AMD) \
+    X(asm_1536b,       22,   0,  48,  48, OS_DESKTOP, GPU_AMD) \
     X(unroll_1536b,    23,   0,  48,  48, OS_ANY, GPU_ANY) \
-    X(asm_2048b,       24,   0,  64,  64, OS_ANY, GPU_AMD) \
+    X(asm_2048b,       24,   0,  64,  64, OS_DESKTOP, GPU_AMD) \
     X(unroll_2048b,    25,   0,  64,  64, OS_ANY, GPU_ANY) \
-    X(asm_2560b,       26,   0,  80,  80, OS_ANY, GPU_AMD) \
+    X(asm_2560b,       26,   0,  80,  80, OS_DESKTOP, GPU_AMD) \
     X(unroll_2560b,    27,   0,  80,  80, OS_ANY, GPU_ANY) \
-    X(asm_3072b,       28,   0,  96,  96, OS_ANY, GPU_AMD) \
+    X(asm_3072b,       28,   0,  96,  96, OS_DESKTOP, GPU_AMD) \
     X(unroll_3072b,    29,   0,  96,  96, OS_ANY, GPU_ANY) \
-    X(asm_3584b,       30,   0, 112, 112, OS_ANY, GPU_AMD) \
+    X(asm_3584b,       30,   0, 112, 112, OS_DESKTOP, GPU_AMD) \
     X(unroll_3584b,    31,   0, 112, 112, OS_ANY, GPU_ANY) \
-    X(asm_4096b,       32,   0, 128, 128, OS_ANY, GPU_AMD) \
+    X(asm_4096b,       32,   0, 128, 128, OS_DESKTOP, GPU_AMD) \
     X(unroll_4096b,    33,   0, 128, 128, OS_ANY, GPU_ANY) \
-    X(asm_4608b,       34,   0, 144, 144, OS_ANY, GPU_AMD) \
+    X(asm_4608b,       34,   0, 144, 144, OS_DESKTOP, GPU_AMD) \
     X(unroll_4608b,    35,   0, 144, 144, OS_ANY, GPU_ANY) \
-    X(asm_5120b,       36,   0, 160, 160, OS_ANY, GPU_AMD) \
+    X(asm_5120b,       36,   0, 160, 160, OS_DESKTOP, GPU_AMD) \
     X(unroll_5120b,    37,   0, 160, 160, OS_ANY, GPU_ANY) \
-    X(asm_5632b,       38,   0, 176, 176, OS_ANY, GPU_AMD) \
+    X(asm_5632b,       38,   0, 176, 176, OS_DESKTOP, GPU_AMD) \
     X(unroll_5632b,    39,   0, 176, 176, OS_ANY, GPU_ANY) \
-    X(asm_6144b,       40,   0, 192, 192, OS_ANY, GPU_AMD) \
+    X(asm_6144b,       40,   0, 192, 192, OS_DESKTOP, GPU_AMD) \
     X(unroll_6144b,    41,   0, 192, 192, OS_ANY, GPU_ANY) \
-    X(asm_6656b,       42,   0, 208, 208, OS_ANY, GPU_AMD) \
+    X(asm_6656b,       42,   0, 208, 208, OS_DESKTOP, GPU_AMD) \
     X(unroll_6656b,    43,   0, 208, 208, OS_ANY, GPU_ANY) \
-    X(asm_7168b,       44,   0, 224, 224, OS_ANY, GPU_AMD) \
+    X(asm_7168b,       44,   0, 224, 224, OS_DESKTOP, GPU_AMD) \
     X(unroll_7168b,    45,   0, 224, 224, OS_ANY, GPU_ANY) \
-    X(asm_7680b,       46,   0, 240, 240, OS_ANY, GPU_AMD) \
+    X(asm_7680b,       46,   0, 240, 240, OS_DESKTOP, GPU_AMD) \
     X(unroll_7680b,    47,   0, 240, 240, OS_ANY, GPU_ANY) \
-    X(asm_8192b,       48,   0, 256, 256, OS_ANY, GPU_AMD) \
+    X(asm_8192b,       48,   0, 256, 256, OS_DESKTOP, GPU_AMD) \
     X(unroll_8192b,    49,   0, 256, 256, OS_ANY, GPU_ANY) \
     X(fused,         1000,   0,   0,   0, OS_ANY, GPU_ANY) \
     X(fused_unroll,  1001,   0,   0,   0, OS_ANY, GPU_ANY)
