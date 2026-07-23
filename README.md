@@ -1,10 +1,17 @@
-# OpenCl-ECM
+# OpenCL-ECM
 
 本仓库为椭圆曲线因子分解算法的 **OpenCL** 实现。支持 **Windows, Linux, macOS & Android** , 同时移植了可在 **Windows - CUDA** 环境运行的 **[GMP-ECM](https://gitlab.inria.fr/zimmerma/ecm)** (Montgomery param 3)。
 
-程序兼容 **GPM-ECM** & **Prime95** 的 savefile 格式, 支持 checkpoint, 自定义算子 (Montgomery 乘/平方与模加/模减) 并针对 **AMD GPU（GCN、RDNA）**进行汇编与 ISA 调优。
+程序兼容 **GPM-ECM** & **Prime95** 的 savefile 格式, 支持 checkpoint, 自定义算子 (Montgomery 乘/平方与模加/模减) 并针对 **AMD GPU (GCN、RDNA)** 进行汇编与 ISA 调优。
 
 英文概览见 [README_en.md](README_en.md)。
+
+
+![Static Badge](https://img.shields.io/badge/language-C-blue)
+![GitHub License](https://img.shields.io/github/license/AllogeneSSRD/opencl-ecm)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/t/AllogeneSSRD/opencl-ecm)
+![GitHub last commit](https://img.shields.io/github/last-commit/AllogeneSSRD/opencl-ecm)
+
 
 ---
 
@@ -25,12 +32,27 @@
 ## Quick Start 快速开始
 
 ```powershell
-# 3. ECM stage-1（从 stdin 读 N）
-echo "(2^991-1)" | build_rel\Release\ecm.exe -v --go -gpu -gpucurves 384 1e6 0
+# ECM stage-1
+echo '(2^347-1)' | .\ecm.exe -v -d 0 -gpu -gpucurves 1 1e4 0
+echo '(2^421-1)' | .\ecm_cuda.exe -v -gpu -sigma 3:268526266 -gpucurves 1 1e5 0
+:: has factor 22000409
 
-# 4. 算子微基准
-build_rel\Release\opencl_ecm_addsub.exe --bits 512 10000 128 3
-build_rel\Release\opencl_ecm_montsqr.exe --bits 512 1000 128 1
+echo "(2^991-1)" | .\ecm.exe -v --go -gpu -gpucurves 384 1e5 0
+echo '(2^347-1)' | .\ecm.exe -v -d 1 -gpu -sigma 3:561219477 -gpucurves 1 1e4 0
+:: has factor 14143189112952632419639
+
+# 检测支持OpenCL的设备
+opencl_platform_test.bat
+# 运行ECM并于已知因子验证
+test_validate_factors.bat
+# 显示帮助
+ecm.bat
+.\ecm.exe -h
+
+# 算子基准测试
+.\build_rel\Release\cpu_addsub_bench.exe -a 1,3,5,7,9,11,13,15 512 1e6 16 5 -t 8
+.\build_rel\Release\opencl_ecm_addsub.exe --bits 512 10000 128 3 --fixed
+.\build_rel\Release\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 ```
 
 列出全部可切换内核路径：`build\Debug\ecm.exe --showkernel`
