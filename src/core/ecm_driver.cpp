@@ -668,7 +668,7 @@ static void print_ecm_usage(const char *prog) {
               << "  --force-normalize <0|1>    Stage1 force-normalize path\n"
               << "  --addsub-fused-unroll <1|2>  add/sub fused-unroll mode\n"
               << "  --local                    Use LDS-based kernel (reduce scratch spill at large bits)\n"
-              << "  --wg <N>                   Explicit work-group size (0=auto; 1,4,8,16,32…)\n"
+              << "  --wg <N>                   Explicit work-group size (0=auto; 1,4,8,16,32...)\n"
               << " Kernel source / cache:\n"
               << "  --kernel-root <dir>        Kernel source root\n"
               << "  --kernel-cache-dir <dir>   OpenCL binary cache directory\n"

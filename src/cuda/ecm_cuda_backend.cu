@@ -52,8 +52,22 @@ void ecm_cuda_print_ptx_version(const void *func) {
     struct cudaFuncAttributes attr;
     cudaError_t err = cudaFuncGetAttributes(&attr, func);
     if (err != cudaSuccess) {
-        outputf(OUTPUT_ERROR, "GPU: cudaFuncGetAttributes failed: %s\n",
-                cudaGetErrorString(err));
+        /* cudaErrorInvalidDeviceFunction here means the binary has no device code
+           for this GPU's compute capability (no matching cubin, and no embedded
+           PTX to JIT). The actual kernel launch will fail the same way. */
+        int dev = 0;
+        cudaGetDevice(&dev);
+        struct cudaDeviceProp p;
+        if (cudaGetDeviceProperties(&p, dev) == cudaSuccess) {
+            outputf(OUTPUT_ERROR,
+                    "GPU: cannot query kernel (%s). This build has no device code for "
+                    "your GPU (sm_%d%d). Rebuild with -DECM_CUDA_ARCHITECTURES=%d%d "
+                    "(or a list, e.g. \"61;80;89\").\n",
+                    cudaGetErrorString(err), p.major, p.minor, p.major, p.minor);
+        } else {
+            outputf(OUTPUT_ERROR, "GPU: cannot query kernel: %s\n",
+                    cudaGetErrorString(err));
+        }
         return;
     }
 
