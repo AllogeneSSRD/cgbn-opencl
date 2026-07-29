@@ -36,6 +36,6 @@ tools/log_parser/example
 tools/ecm_report/html/
 tools/ecm_report/example/
 tools/ecm_report/*.db*
-tools/ecm_report/*.png
+# tools/ecm_report/*.png
 tools/ecm_report/*.html
 tools/ecm_report/*.bat

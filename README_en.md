@@ -1,197 +1,432 @@
-# ECM-OpenCl
+# OpenCL-ECM
 
-OpenCL implementation of **ECM stage-1** (Elliptic Curve Method factorization) with a large library of Montgomery and modular add/sub kernels. The project targets high-throughput GPU factorization on desktop GPUs and includes an **Android** port for on-device OpenCL microbenchmarks and probing.
+This repository is an **OpenCL** implementation of the Elliptic Curve Method (ECM) for integer factorization. It supports **Windows, Linux, macOS & Android**, and also ports **[GMP-ECM](https://gitlab.inria.fr/zimmerma/ecm)** (Montgomery param 3) for **Windows CUDA**.
 
-Montgomery multiply/square dominate ECM stage-1 runtime; this repository invests heavily in multiple kernel variants (private-memory CIOS, loop unrolling, work-group tiling, FIPS-style paths, inline assembly on AMD) and provides standalone benches to compare them before selecting defaults for full stage-1 runs.
+The programs are compatible with **GMP-ECM** & **Prime95** savefile formats, support checkpoints, custom operators (Montgomery mul/sqr and modular add/sub), and include assembly / ISA tuning for **AMD GPUs (GCN, RDNA)**.
 
-## Features
+For the Chinese documentation, see [README.md](README.md).
 
-- **GPU ECM stage-1 driver** (`ecm.exe`) — batch curves on OpenCL, checkpoint/resume, optional kernel path overrides
-- **Operator microbenchmarks** — `opencl_ecm_addsub`, `opencl_ecm_montsqr` sweep all registered kernel paths for a given modulus width
-- **Pluggable kernel paths** — compile-time `-D` flags and runtime CLI/env selection for mul/sqr/add/sub implementations
-- **OpenCL program binary cache** — FNV-1a keyed disk cache (Windows desktop and Android)
-- **Android ECM app** — device probe, add/sub bench, mont mul/sqr bench on vendor `libOpenCL.so`
-- **Codegen & ISA tooling** — Python generators and disassembly helpers under `tools/`
 
-## Repository layout
+![Static Badge](https://img.shields.io/badge/language-C-blue)
+![GitHub License](https://img.shields.io/github/license/AllogeneSSRD/opencl-ecm)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/t/AllogeneSSRD/opencl-ecm)
+![GitHub last commit](https://img.shields.io/github/last-commit/AllogeneSSRD/opencl-ecm)
 
-```
-ECM-OpenCl/
-├── CMakeLists.txt              # Windows/desktop build (OpenCL, OpenSSL, GMP)
-├── cgbn/backends/opencl/
-│   ├── impl_opencl.cpp         # OpenCL context, program build, binary cache
-│   └── kernels/                # .cl sources (ecm_stage1, mont_*, mp_*)
-├── include/                    # Manifest headers, path enums, ECM API
-├── src/
-│   ├── cgbn_stage1_opencl.cpp  # Stage-1 OpenCL host driver
-│   ├── ecm_driver.cpp          # ecm.exe CLI
-│   ├── opencl_ecm_*_bench.cpp  # Standalone microbenchmarks
-│   └── opencl_ecm_*_manifest.cpp
-├── Android/
-│   ├── README.md               # Android OpenCL loading notes (16 KB pages)
-│   └── ECM/                    # Android Studio app — see ECM/README.md
-├── tools/                      # Kernel/asm generators, disasm scripts
-├── test/                       # CUDA/OpenCL correctness & throughput tests
-├── ECM_OPERATOR_ANALYSIS.md    # Hotspot analysis and bench baselines
-└── README_zh.md                # Chinese documentation
-```
 
-## Prerequisites (Windows / desktop)
+---
 
-| Dependency | Notes |
-|------------|--------|
-| CMake 3.20+ | Visual Studio 2022 (x64) recommended |
-| OpenCL ICD | GPU vendor runtime (NVIDIA, AMD, Intel) |
-| OpenSSL | Via CMake `find_package(OpenSSL)` |
-| GMP | Currently linked via **hardcoded vcpkg paths** in `CMakeLists.txt` |
+## Contents
 
-Before building, edit `CMakeLists.txt` if your vcpkg install is not at `D:/code/vcpkg/installed/x64-windows/` — update `link_directories(...)` and the `gmp.lib` paths for `ecm`, `main`, and the bench targets.
+| Section | Description |
+|------|------|
+| [Quick Start](#quick-start) | Shortest path: build → `ecm` → microbenchmarks |
+| [Command-line options](#command-line-options) | CLI flags |
+| [Building from source (Windows)](#building-from-source) | Desktop build, usage, and OpenCL capabilities |
+| [Building the CUDA backend](#building-the-cuda-backend-cgbn) | NVIDIA CGBN stage-1 build and usage |
+| [Android](#android) | ECM runs and microbenchmarks |
+| [Development and docs](#development-and-docs) | Math background, params, operator analysis, tools, benches, AMD asm |
+| [Other documentation index](#other-documentation-index) | Sub-docs not expanded in the main body |
 
-Optional: [Pari/GP](https://pari.math.u-bordeaux.fr/) for `--go` group-order diagnostics (`ECM_GP_BIN` env var).
+---
 
-## Build (Windows)
+## Quick Start
 
 ```powershell
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build --config Debug
+# ECM stage-1
+echo '(2^347-1)' | .\ecm.exe -v -d 0 -gpu -gpucurves 1 1e4 0
+echo '(2^421-1)' | .\ecm_cuda.exe -v -gpu -sigma 3:268526266 -gpucurves 1 1e5 0
+:: has factor 22000409
+
+echo "(2^991-1)" | .\ecm.exe -v --go -gpu -gpucurves 384 1e5 0
+echo '(2^347-1)' | .\ecm.exe -v -d 1 -gpu -sigma 3:561219477 -gpucurves 1 1e4 0
+:: has factor 14143189112952632419639
+
+# List OpenCL-capable devices
+opencl_platform_test.bat
+# Run ECM and validate against known factors
+test_validate_factors.bat
+# Show help
+ecm.bat
+.\ecm.exe -h
+
+# Operator microbenchmarks
+.\build_rel\Release\cpu_addsub_bench.exe -a 1,3,5,7,9,11,13,15 512 1e6 16 5 -t 8
+.\build_rel\Release\opencl_ecm_addsub.exe --bits 512 10000 128 3 --fixed
+.\build_rel\Release\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 ```
 
-Binaries appear under `build/Debug/` (MSVC multi-config generator).
+List all switchable kernel paths: `build\Debug\ecm.exe --showkernel`
 
-## Executables
+---
 
-| Target | Purpose |
-|--------|---------|
-| `ecm.exe` | ECM stage-1 factorization driver (reads `N` from stdin) |
-| `opencl_ecm_addsub.exe` | Modular add/sub kernel throughput sweep |
-| `opencl_ecm_montsqr.exe` | Montgomery mul/sqr kernel throughput sweep |
-| `main.exe` | Low-risk OpenCL smoke tests |
-| `opencl_asm_selftest.exe` | Inline-asm kernel self-test |
-| `opencl_mont_isa_export.exe` | Export compiled ISA for mont kernels |
-| `opencl_addsub_isa_export.exe` | Export compiled ISA for add/sub kernels |
+## Command-line options
 
-## ECM driver (`ecm.exe`)
+### Running ECM stage-1 (`ecm.exe`)
 
-Reads composite **N** from stdin (decimal or expression), then runs stage-1 with optional GPU batching.
+```text
+echo "N" | ecm.exe <-gpu> [-gpucurves <n>] [...] <B1> <B2>
+```
+
+Read composite **N** from stdin (decimal or expression) and run stage-1; `-gpu` enables OpenCL batched curves.  
+Angle brackets `< >`: required arguments.  
+Square brackets `[ ]`: optional arguments.
 
 ```powershell
-echo "(2^991-1)" | build\Debug\ecm.exe -v -gpu -gpucurves 384 1e6 0
+echo "(2^991-1)" | build\Debug\ecm.exe -gpu -gpucurves 384 1e6 0
+echo "(2^4003-1)" | build\Debug\ecm.exe -gpu -gpucurves 384 -v --go --add asm_b32 1e6 0
 build\Debug\ecm.exe --showkernel
-```
 
-Common options:
+:: Release build
+echo "(2^991-1)" | build_rel\Release\ecm.exe -v --go -gpu -gpucurves 384 1e6 0
+```
 
 | Option | Description |
-|--------|-------------|
-| `-gpu` | Enable GPU stage-1 (requires `-gpucurves`) |
-| `-gpucurves <n>` | Curves per GPU launch |
+|------|------|
+| `<B1>` `<B2>` | Required positional args at the end of the command |
+| `-gpu` / `-gpucurves <n>` | GPU stage-1 and curves per batch |
 | `-d <index>` | OpenCL device index |
-| `--mul`, `--sqr`, `--add`, `--sub <path>` | Override kernel paths |
-| `--showkernel` | List all registered paths and exit |
+| `-v` | Verbose output |
+| `--mul` / `--sqr` / `--add` / `--sub` / `--special-mult <path>` | Override each operator kernel path (id / alias / auto) |
+| `--showkernel` | Enumerate all operators from the registry (id, aliases, file, platforms) |
 
-Add/sub path names include `default`, `fused`, `fused_unroll`, `fused_unroll_b32`, `asm_b32`, etc. Run `--showkernel` for the full Montgomery and add/sub lists.
+Optional: `--go` computes the group order and factors it.  
+- Install [Pari/GP](https://pari.math.u-bordeaux.fr/); add `gp.exe` to `PATH` or pass `--gp <path>`.
 
-## Microbenchmarks
+Upstream semantics for `-param`, `-sigma`, and other ECM parameters: [docs/README](docs/README) §6.
 
-Both benches share the argument pattern:
+### Advanced options (replaced environment variables)
+
+All custom environment variables have been removed in favor of CLI flags (converged into `EcmRuntimeConfig`; see
+`include/opencl_ecm_runtime_config.h`). For the main `ecm` program:
+
+| Old environment variable | New flag (`ecm`) | Description |
+|------------|----------------|------|
+| `CGBN_OPENCL_DEVICE_INDEX` | `-d <index>` | OpenCL device index |
+| `ECM_KERNEL_ROOT` / `CGBN_KERNEL_ROOT` | `--kernel-root <dir>` | Override `.cl` kernel tree directory |
+| `CGBN_OPENCL_CACHE_DIR` | `--kernel-cache-dir <dir>` | Binary cache directory |
+| `CGBN_OPENCL_CACHE_DISABLE` | `--no-kernel-cache` | Disable binary cache |
+| `CGBN_OPENCL_CACHE_VERBOSE` | `--kernel-cache-verbose` | Cache hit/miss details |
+| `CGBN_OPENCL_COMPILE_VERBOSE` | `--compile-verbose` | Print compile timings |
+| `ECM_OPENCL_TPI` | `--tpi <1..32>` | Threads per instance (default 8) |
+| `ECM_STAGE1_FORCE_NORMALIZE` | `--force-normalize <0\|1>` | Force normalize path |
+| `ECM_MP_ADD_MOD_FUSED_UNROLL` | `--addsub-fused-unroll <1\|2>` | add/sub fused-unroll variant |
+| `ECM_PROFILE_OPS` / `_FILE` | `--profile-ops` / `--profile-ops-file <f>` | Operator counts / CSV |
+| `ECM_VERIFY_GPU_RESULTS` / `_STRICT` | `--verify-gpu` / `--verify-gpu-strict` | CPU cross-check |
+| `ECM_SYNC_EACH_BATCH` | `--sync-each-batch` | Sync after each batch |
+| `ECM_GPU_DUMP` / `_FILE` | `--gpu-dump` / `--gpu-dump-file <f>` | Dump GPU state |
+| `ECM_LOG_TIMESTAMP=0` | `--no-log-timestamp` | Disable log timestamps (on by default) |
+| `ECM_GP_BIN` / `PARI_GP_BIN` | `--gp <path>` | Path to `gp` used by `--go` |
+
+Bench / diagnostic tools: `opencl_ecm_addsub` uses `--no-asm`, `--asm-b64`, `--addsub-fused-unroll`, `--csv`;
+`opencl_ecm_montsqr` uses `--wg-impl`, `--wg-impl4-unroll`, `--csv`, `--kernel-root`, `-d`.
+
+> Only standard system variables such as `LOGNAME` / `USERNAME` are still read as usual (not project-specific).  
+> Android has no CLI: the JNI entry writes `EcmRuntimeConfig` directly and falls back to defaults when unset.
+
+OpenCL backend skeleton: [kernels/opencl/README.md](kernels/opencl/README.md)
+
+---
+
+## Building from source
+
+### Dependencies
+
+| Dependency | Notes | Path override |
+| ---- | ---- | ---- |
+| CMake 3.20+ | Visual Studio 2022 or vcpkg recommended | `-DCMAKE_TOOLCHAIN_FILE` |
+| OpenCL ICD | NVIDIA / AMD / Intel runtime | / |
+| OpenSSL | vcpkg recommended | `-DOPENSSL_ROOT_DIR` |
+| GMP | vcpkg recommended | `-DECM_WINDOWS_GMP_ROOT` |
+
+### Build
+
+```powershell
+cd opencl-ecm
+# 1. Debug build (development)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --config Debug
+
+# 2. Release build (deployment, MSVC /O2)
+cmake -S . -B build_rel -DCMAKE_BUILD_TYPE=Release
+cmake --build build_rel --config Release
+
+# Optionally pin vcpkg toolchain, OpenSSL, and GMP paths
+cmake -S . -B build_rel -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake `
+  -DOPENSSL_ROOT_DIR=vcpkg/installed/x64-windows
+cmake --build build_rel --config Release
+```
+
+Artifacts land in `build/Debug/` or `build_rel/Release/`. Main targets: `ecm.exe`, `opencl_ecm_addsub.exe`, `opencl_ecm_montsqr.exe`, `opencl_asm_selftest.exe`, `opencl_*_isa_export.exe`, etc.
+
+> After a Release build, CMake automatically copies `libcrypto-3-x64.dll`, `libssl-3-x64.dll`, and `gmp.dll` from vcpkg into the output directory — no extra `PATH` setup required.
+
+### Usage: operator microbenchmarks
+
+Argument form (same for both tools):
 
 ```text
 <exe> [--bits <bits>] <kernel_iterations> <instances> <launch_repeats>
 ```
 
-Total work ≈ `instances × kernel_iterations × launch_repeats` per path.
-
 ```powershell
-# 512-bit modular add/sub — all manifest paths
 build\Debug\opencl_ecm_addsub.exe --bits 512 10000 128 3
-
-# 512-bit Montgomery mul/sqr — WG mode, tpi=4 default
 build\Debug\opencl_ecm_montsqr.exe --bits 512 1000 128 1
 ```
 
-Set `ECM_BENCH_CSV=<file>` to append CSV results. MSVC links `opencl_ecm_montsqr` with a 16 MB stack because large `.cl` JIT can overflow the default 1 MB thread stack on NVIDIA.
+- Append CSV: `--csv <file>`
+- Cross-vendor 512/4096 comparison report: [bench/0530_report.md](bench/0530_report.md)
 
-## Kernel architecture
+### Other: OpenCL and runtime
 
-1. **`.cl` sources** live in `cgbn/backends/opencl/kernels/`.
-2. **Manifests** (`opencl_ecm_addsub_manifest`, `opencl_ecm_montsqr_manifest`) register named paths, source files, and extra `-D` compile flags.
-3. **Path enums** (`opencl_ecm_*_path.h`) map CLI names to compile-time constants used in `ecm_stage1.cl` dispatch.
-4. **Stage-1 host** (`cgbn_stage1_opencl.cpp`) concatenates kernel sources, applies modulus-width-specific defaults (256 / 512 / 4096 bit), and launches `kernel_double_add`.
+| Topic | Description | Details |
+|------|------|----------|
+| OpenCL implementation overview | stage-1 host/kernel split vs CUDA | [docs/OPENCL_IMPLEMENTATION.md](docs/OPENCL_IMPLEMENTATION.md) |
+| Program binary cache | FNV-1a key, `/.opencl_cache/` | Implementation in `kernels/opencl/impl_opencl.cpp`; variables in the table above |
+| Kernel tree and manifest | `.cl` registration, path enumeration | [kernels/opencl/bench/mp_addsub/README.md](kernels/opencl/bench/mp_addsub/README.md) |
+| Debug parameters | `--profile-ops`, `--verify-gpu`, etc. | [docs/DEBUG_PARAMETERS_GUIDE.md](docs/DEBUG_PARAMETERS_GUIDE.md) |
 
-Stage-1 selects default mul/sqr/add/sub paths by modulus size. For **512-bit** modulus on recent Adreno GPUs, prefer **`unroll_only_512`** / **`unroll_only_512_manual`** over `priv_opt` or generic work-group paths — see [Operator analysis](#operator-analysis) and `ECM_OPERATOR_ANALYSIS.md`.
+---
 
-## Environment variables
+<a id="building-the-cuda-backend-cgbn"></a>
 
-| Variable | Component | Description |
-|----------|-----------|-------------|
-| `CGBN_KERNEL_ROOT` | All | Override directory containing `.cl` kernel tree |
-| `CGBN_OPENCL_DEVICE_INDEX` | All | Default OpenCL device index |
-| `CGBN_OPENCL_CACHE_DIR` | Desktop cache | Directory for `.opencl_cache/opencl_{hash}.bin` |
-| `CGBN_OPENCL_CACHE_DISABLE` | Desktop cache | Disable binary cache when set |
-| `CGBN_OPENCL_CACHE_VERBOSE` | Desktop cache | Log cache hit/miss details |
-| `CGBN_OPENCL_COMPILE_VERBOSE` | Desktop cache | Log full compile options |
-| `ECM_OPENCL_TPI` | Stage-1 | Threads per instance (power of two; default 8) |
-| `ECM_STAGE1_FORCE_NORMALIZE` | Stage-1 | Force normalize path |
-| `ECM_MP_ADD_MOD_FUSED_UNROLL` | Stage-1 / addsub bench | Fused unroll variant |
-| `ECM_PROFILE_OPS` | Stage-1 | Print per-op counters |
-| `ECM_PROFILE_OPS_FILE` | Stage-1 | CSV path for op profile (default `ecm_ops_profile.csv`) |
-| `ECM_VERIFY_GPU_RESULTS` | Stage-1 | CPU cross-check GPU results |
-| `ECM_VERIFY_GPU_STRICT` | Stage-1 | Fail on verification mismatch |
-| `ECM_BENCH_CSV` | Benches | Append bench results to CSV |
-| `ECM_ADDSUB_ASM_DISABLE` | Addsub bench | Skip asm paths |
-| `ECM_MONT_WG_IMPL` | Mont bench | Work-group implementation selector |
-| `ECM_LOG_TIMESTAMP` | Logging | Prefix log lines with timestamps |
-| `ECM_GP_BIN` | ecm driver | Path to `gp` executable for `--go` |
+## Building the CUDA backend (CGBN)
 
-## OpenCL compile cache
+`ecm_cuda` is a native CUDA stage-1 based on upstream CGBN (`kernels/cuda/cgbn_stage1.cu`). It **shares the same driver / argument parsing / checkpoint / save / logging** as the OpenCL `ecm` binary, and only swaps the GPU implementation at link time via `include/ecm_backend.h` (OpenCL glue: `src/opencl_backend_glue.cpp`; CUDA glue: `src/cuda/ecm_cuda_backend.cu`).
 
-Desktop builds use `cgbn::opencl::build_program_from_source` in `cgbn/backends/opencl/impl_opencl.cpp`:
+### Dependencies
 
-- Cache file: `{CGBN_OPENCL_CACHE_DIR or cwd}/.opencl_cache/opencl_{fnv1a64}.bin`
-- Key: GPU name/vendor/driver + build options + full concatenated source
-- Flow: try `clCreateProgramWithBinary` on hit; on miss compile, query binary, write atomically
+| Dependency | Notes |
+|------|------|
+| CUDA Toolkit | Includes `nvcc` (validated on 12.6–13.3); host compiler must be a matching MSVC |
+| CGBN | CUDA high-precision integer library under `cgbn/` — `git clone https://github.com/NVlabs/CGBN.git` |
+| GMP / OpenSSL | Same as the OpenCL build |
 
-The Android app uses the same hash algorithm under `{codeCacheDir}/opencl_cache/`. When drivers cannot export binaries, a **live program cache** retains compiled `cl_program` objects for the app process lifetime. Details: [Android/ECM/README.md](Android/ECM/README.md).
+### Why a separate build
+
+The Visual Studio generator (`build_rel`) needs CUDA’s MSBuild integration files; **Build Tools-only installs usually lack them**, so CMake does not find the CUDA compiler and **automatically disables** `ecm_cuda` (no impact on the existing OpenCL project). Use the **NMake (or Ninja) generator** instead, with `cl` and `nvcc` both visible under a `vcvars64` environment:
+
+```bat
+# Preferred: convenience scripts under `build_cuda/`
+
+:: In "x64 Native Tools Command Prompt", or call vcvars64.bat first
+
+# PowerShell
+# Adjust the path to your local vcvars64.bat
+cmd /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"" >nul && cmake -DECM_CUDA_ARCHITECTURES=80 -S . -B build_cuda_cmake && cmake --build build_cuda_cmake --target ecm_cuda"
+
+# CMD
+call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+
+cmake -G "NMake Makefiles" -DCMAKE_BUILD_TYPE=Release ^
+  -S . -B build_cuda_cmake
+
+cmake --build build_cuda_cmake --target ecm_cuda
+```
+
+Artifact: `build_cuda_cmake\ecm_cuda.exe` (GMP DLL is copied next to it automatically).
+
+### Convenience scripts (`build_cuda/`)
+
+The `.bat` scripts under `build_cuda/` each `call vcvars64.bat` first, so you do not need to open Native Tools manually. **Paths for vcvars64 / cmake / `sm_89` are hardcoded — edit them for your machine; the authoritative architecture for a proper build is `ECM_CUDA_ARCHITECTURES`.**
+
+| Script | Role |
+|------|------|
+| `cfg_cuda.bat` | **Configure**: NMake generator into `build_cuda_cmake` (same as `cmake -G "NMake Makefiles" ...` above) |
+| `build_cuda_target.bat` | **Build**: `cmake --build build_cuda_cmake --target ecm_cuda`; errors redirected to `build_cuda\build_err.txt` |
+| `compile_cu.bat` | **Diagnostics**: `nvcc -c` compiles only `kernels/cuda/cgbn_stage1.cu` (`--ptxas-options=-v` for register pressure); no link |
+| `smoke_build.bat` | **Smoke test**: `nvcc` builds CGBN’s `samples/sample_01_add` to verify `nvcc + CGBN + cl + gmp` |
+
+The first two are the formal two-step build; the last two are for troubleshooting / environment checks and do not produce `ecm_cuda.exe`.
+
+### CMake options
+
+| Option | Default | Description |
+|------|------|------|
+| `-DECM_ENABLE_CUDA` | `ON` when `nvcc` is found | Whether to build `ecm_cuda` |
+| `-DCMAKE_CUDA_COMPILER` | From `Path` | Path to `nvcc.exe`, e.g. `"C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.6/bin/nvcc.exe"` |
+| `-DECM_CUDA_ARCHITECTURES` | `80` | CUDA compute capability (`89` = RTX 40-series; adjust for your GPU, e.g. `86` = RTX 30-series) |
+| `-DECM_CUDA_FULL_BUILD` | `OFF` | `ON` compiles the full CGBN kernel set; default **dev build** supports **N ≤ 1024 bit** and compiles faster |
+| `-DCMAKE_BUILD_TYPE` | `DEBUG` | Use `Release` for deployment |
+| `-DCMAKE_CUDA_FLAGS` | / | Extra `nvcc` flags, e.g. `"--verbose --ptxas-options=-v"` |
+
+### Usage
+
+The CLI matches `ecm.exe` **exactly**. `-d` selects a CUDA device (under `-gpu`, NVIDIA devices are enumerated; `--mul` / `--sqr` / `--add` / `--sub` / `--special-mult` are OpenCL-only and ignored by the CUDA backend).
+
+```powershell
+echo "(2^421-1)" | build_cuda_cmake\ecm_cuda.exe -v -d 0 -gpu -sigma 3:268526266 -gpucurves 32 1e4 0
+:: -> factor[0]=614002928307599
+```
+
+> The default dev build supports N ≤ 1024 bit; larger widths require reconfiguring with `-DECM_CUDA_FULL_BUILD=ON` (compile time increases substantially).
+
+---
 
 ## Android
 
-Open **`Android/ECM`** in Android Studio (not the repo root). The app:
+The full stage-1 **`ecm` driver currently targets Windows desktop**; the Android side provides **OpenCL usability probing** and **ECM-aligned operator microbenchmarks** (add/sub, mont mul/sqr) for on-device selection and compile-cache validation.
 
-- Loads vendor OpenCL via `uses-native-library` (do **not** bundle `libOpenCL.so` — breaks 16 KB page devices)
-- Runs device probe, ECM add/sub bench, and mont mul/sqr bench (same kernels as desktop, minus AMD asm)
-- Passes `codeCacheDir` into native code for OpenCL binary cache
+### Build
 
-See [Android/README.md](Android/README.md) for 16 KB page constraints and [Android/ECM/README.md](Android/ECM/README.md) for UI parameters, cache debugging, and adb commands.
+1. Open **`Android/ECM`** in Android Studio (not the repository root).
+2. Ensure **`jniLibs/` does not contain** a phone-pulled `libOpenCL.so` (`adb pull`) — 16 KB page devices will crash on alignment.
+3. Build and Run on a real **arm64-v8a** device.
+
+Gradle syncs OpenCL kernels into APK assets before build (`syncAddsubKernels`). Overview and 16 KB page constraints: [Android/README.md](Android/README.md).
+
+### Usage: probe and microbenchmarks
+
+| Step | Description |
+|------|------|
+| Device probe | On launch the app enumerates platforms/devices; success marker: `RESULT: PASS (OpenCL usable)` |
+| ECM add/sub | UI’s four parameters map to desktop `opencl_ecm_addsub.exe` |
+| ECM mont mul/sqr | Maps to desktop `opencl_ecm_montsqr.exe` (WG, tpi=4; no AMD asm) |
+
+Desktop command mapping, defaults, and 512-bit path-list format: [Android/ECM/README.md](Android/ECM/README.md).
 
 ```bash
 adb logcat ECM-OpenCL:I *:S
 adb shell run-as com.example.ecm ls -la code_cache/opencl_cache/
 ```
 
-## Operator analysis
+### Other: Android-specific behavior
 
-ECM stage-1 spends most time in **Montgomery mul/sqr**, not modular add/sub. Measured operator mix and microbench numbers are documented in **[ECM_OPERATOR_ANALYSIS.md](ECM_OPERATOR_ANALYSIS.md)**.
+- **OpenCL loading**: `uses-native-library` + runtime `dlopen`; vendor `.so` is not bundled — [Android/README.md](Android/README.md)
+- **Compile cache**: `codeCacheDir/opencl_cache/`; if the driver cannot export binaries, a **live program cache** is used — [Android/ECM/README.md](Android/ECM/README.md) “OpenCL compile cache”
+- **vs desktop**: no AMD asm paths; first compile of large `mont_priv*.cl` kernels may take several minutes
 
-Mobile GPU guidance (512-bit, typical bench config `128 × 1000 × 1`):
+---
 
-| GPU | Recommended mul path | Notes |
-|-----|----------------------|-------|
-| Adreno 830 | `unroll_only_512_manual` | ~8.5M ops/s; auto `unroll_only_512` close second |
-| Adreno 642 | `unroll_only_512` (auto) | ~1.4M ops/s; **avoid** `manual` on older compiler (~5× slower) |
+## Development and docs
 
-Do not use `priv_opt` or generic `wg` paths as 512-bit defaults on mobile when 512-specific paths are available.
+The sections below index subdirectory docs by topic. **This README is an entry point; details live in the linked documents.**
 
-## Tools
+### Math background and GPU-ECM flow
 
-The `tools/` directory contains Python generators for unrolled mont/add/sub kernels, NPU test vectors, and PowerShell scripts for ISA disassembly (`disasm_mont_isa.ps1`, `disasm_addsub_isa.ps1`). See `tools/DISASM_SETUP.md` for installing objdump/llvm-objdump on Windows.
+| Document | Summary |
+|------|------|
+| [docs/ECM_GPU_FLOW.md](docs/ECM_GPU_FLOW.md) | stage-1 math flow: Montgomery ladder, `s` bit scan, checkpoints |
+| [docs/README.gpu](docs/README.gpu) | Upstream CUDA/CGBN GPU-ECM enablement and usage |
+| [docs/README](docs/README) | Upstream ECM/P-1/P+1 basics and `-param` options |
 
-The `test/` directory holds Makefile-based CUDA/OpenCL correctness suites (`opencl_mont_tests.cpp`, `opencl_addsub_tests.cpp`, etc.) used during kernel development.
+### GPU-ECM `param` and debugging
 
-## Related documentation
+| Document | Summary |
+|------|------|
+| [docs/DEBUG_PARAMETERS_GUIDE.md](docs/DEBUG_PARAMETERS_GUIDE.md) | `cgbn_ecm_stage1` / batch params, `gpu_ecm()` debug output |
+| [docs/README.lib](docs/README.lib) | `ecm_params` structure and `ecm_factor()` return values |
 
-| Document | Content |
-|----------|---------|
-| [README_zh.md](README_zh.md) | Chinese version of this file |
-| [ECM_OPERATOR_ANALYSIS.md](ECM_OPERATOR_ANALYSIS.md) | Hotspot breakdown, path inventory, bench CSV |
-| [Android/ECM/README.md](Android/ECM/README.md) | Android app build, cache, mont/addsub UI |
-| [Android/README.md](Android/README.md) | OpenCL loading on Android 15+ |
+### Operator analysis
+
+| Document | Summary |
+|------|------|
+| [docs/ECM_OPERATOR_ANALYSIS.md](docs/ECM_OPERATOR_ANALYSIS.md) | stage-1 operator mix, microbench data, optimization priorities (Montgomery is the primary hotspot) |
+
+### Tools (`tools/`)
+
+| Document / entry | Summary |
+|-------------|------|
+| [tools/DISASM_SETUP.md](tools/DISASM_SETUP.md) | Install objdump / llvm-objdump on Windows for ISA export |
+| [kernels/opencl/bench/mp_addsub/README.md](kernels/opencl/bench/mp_addsub/README.md) | add/sub kernel layout, `gen_all.py` regeneration, bench priorities |
+| `tools/gen_*.py`, `disasm_*_isa.ps1` | Montgomery/addsub unroll and asm-block generators; disassembly scripts |
+
+### Performance benches (`bench/`)
+
+Cross-vendor overview: [bench/0530_report.md](bench/0530_report.md) (512 / 4096-bit, NVIDIA / AMD / Intel iGPU).
+
+| Series | Document | Topic |
+|------|------|------|
+| Montgomery WG | [MONT_WG_SWITCHABLE_FRAMEWORK_CN.md](bench/MONT_WG_SWITCHABLE_FRAMEWORK_CN.md) | Switchable WG framework |
+| | [MONT_WG_IMPL4_CROSS_VENDOR_TUNING_CN.md](bench/MONT_WG_IMPL4_CROSS_VENDOR_TUNING_CN.md) | impl4 cross-vendor unroll tuning |
+| | [MONT_WG_MINIMAL_IMPL4_PLAN_CN.md](bench/MONT_WG_MINIMAL_IMPL4_PLAN_CN.md) | Minimal impl4 plan |
+| | [MONT_ISA_4096_ANALYSIS.md](bench/MONT_ISA_4096_ANALYSIS.md) | 4096-bit Montgomery ISA |
+| Add/Sub tuning | [ADDSUB_BASELINE_CN.md](bench/ADDSUB_BASELINE_CN.md) | 4096-bit pure-kernel baseline (AMD gfx1150) |
+| | [ADDSUB_ADDMOD_SPECULATIVE_CN.md](bench/ADDSUB_ADDMOD_SPECULATIVE_CN.md) | Speculative reduction |
+| | [ADDSUB_ADDMOD_FULL_UNROLL_CN.md](bench/ADDSUB_ADDMOD_FULL_UNROLL_CN.md) | Full unroll |
+| | [ADDSUB_ADDMOD_ASM_4096_CN.md](bench/ADDSUB_ADDMOD_ASM_4096_CN.md) | 4096-bit asm |
+| Profiling / TPI | [RadeonGPUProfiler_1.md](bench/RadeonGPUProfiler_1.md) | RGP analysis notes |
+| | [TPI_1.md](bench/TPI_1.md) | TPI-related tests |
+| Intel iGPU | [0530_Intel.md](bench/0530_Intel.md) | 2026-05-30 Intel iGPU raw notes |
+
+### AMD assembly optimization
+
+| Document | Summary |
+|------|------|
+| [docs/README.dev.asm](docs/README.dev.asm) | Upstream asm-redc directory conventions (historical reference) |
+| [bench/ADDSUB_ADDMOD_ASM_4096_CN.md](bench/ADDSUB_ADDMOD_ASM_4096_CN.md) | add/sub-mod 4096-bit AMDGCN asm |
+| [bench/MONT_ISA_4096_ANALYSIS.md](bench/MONT_ISA_4096_ANALYSIS.md) | Montgomery 4096 ISA and asm paths |
+| `tools/disasm_mont_isa.ps1` | Disassembly with `opencl_mont_isa_export` |
+
+### IM Compiler (integer-multiply codegen)
+
+| Document | Summary |
+|------|------|
+| [docs/IM_Compiler/分段整数乘法.md](docs/IM_Compiler/分段整数乘法.md) | Segmented integer multiplication approach |
+| [docs/IM_Compiler/IMCompiler论文.md](docs/IM_Compiler/IMCompiler论文.md) | Paper summary |
+| [docs/IM_Compiler/IMCompiler：面向密码学整数乘法的高性能GPU内核自动生成框架.md](docs/IM_Compiler/IMCompiler：面向密码学整数乘法的高性能GPU内核自动生成框架.md) | Framework overview |
+
+### NPU (Ryzen AI)
+
+| Document | Summary |
+|------|------|
+| [RyzenAI/README_ADDSUB.md](RyzenAI/README_ADDSUB.md) | NPU add/sub microbench vs OpenCL `opencl_ecm_addsub` |
+| [RyzenAI/quicktest/README.md](RyzenAI/quicktest/README.md) | Quick validation scripts |
+
+### Repository layout (sketch)
+
+```
+ECM-OpenCl/
+├── src/                    # host code (compiled per target)
+│   ├── core/               #   shared driver: ecm_driver, params, checkpoint, save, gpu_common
+│   ├── cuda/               #   CUDA backend glue (ecm_cuda_backend.cu)
+│   ├── opencl_backend_glue.cpp   # OpenCL backend glue (ecm_backend_* hooks)
+│   ├── opencl_ecm_stage1.cpp     # OpenCL stage-1 host
+│   └── ...                 #   micro-benchmarks, cl_probe, logging, registry
+├── include/                # public headers (ecm_backend.h, cgbn_stage1.h, ...)
+├── kernels/opencl/         # OpenCL kernel sources
+│   ├── common/             #   shared helpers, operator interface, mp primitives
+│   ├── mont_mul/           #   Montgomery multiply kernels
+│   ├── add_mod/            #   modular addition kernels
+│   ├── sub_mod/            #   modular subtraction kernels
+│   ├── bench/              #   micro-benchmark kernels (addsub, mont, asm selftest)
+│   ├── impl_opencl.cpp     #   OpenCL backend runtime (context, build, binary cache)
+│   └── ecm_stage1*.cl      #   stage-1 ladder entry points
+├── kernels/cuda/           # CUDA/CGBN stage-1 (cgbn_stage1.cu) + port shims
+├── cgbn/                   # CGBN header-only library (include/, samples/, ...)
+├── docs/                   # principles, debug, upstream README copies
+├── bench/                  # performance records and tuning notes
+├── tools/                  # generators and disassembly
+├── Android/ECM/            # Android App
+├── RyzenAI/                # NPU micro-benchmarks
+└── test/                   # CUDA/OpenCL correctness & bench suite (Makefile)
+```
+
+---
+
+## References and acknowledgements
+
+This repository builds on and thanks upstream **[ZIMMERMANN Paul / ecm · GitLab](https://gitlab.inria.fr/zimmerma/ecm)** (GMP-ECM) for algorithms, interfaces, and GPU design direction.
+
+Upstream documentation is kept under [`docs/`](docs/) in this repo (synced for offline reading):
+
+| File | Contents |
+|------|------|
+| [docs/README](docs/README) | GMP-ECM basics, B1/B2, expression syntax, `-param` / `-sigma`, etc. |
+| [docs/README.gpu](docs/README.gpu) | Upstream CUDA/CGBN GPU notes |
+| [docs/README.lib](docs/README.lib) | `libecm` API and `ecm_params` |
+| [docs/README.dev](docs/README.dev) | Upstream autotools development build |
+| [docs/README.dev.asm](docs/README.dev.asm) | Upstream architecture-specific assembly notes |
+
+
+
+## Other documentation index
+
+Markdown / notes in the repo that are **not expanded above** (excluding `.refactor/`, `.github/`, `build/`, `docs/ecm/`, etc. from `.gitignore`):
+
+| Path | Description |
+|------|------|
+| [README.md](README.md) | Chinese project documentation |
+| [docs/README.dev](docs/README.dev) | Upstream autotools development notes |
+
+Makefile-driven CUDA/OpenCL test sources under `test/` (no separate `.md` index) are for kernel correctness; CUDA bench headers are in `test/bench_cgbn_*.h`.
