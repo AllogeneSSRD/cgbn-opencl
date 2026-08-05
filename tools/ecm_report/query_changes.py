@@ -228,15 +228,27 @@ def main() -> None:
     print()
 
     print(f"Changed (as-of {start} -> {end})")
-    print("exponent\tfactored\tt_level_from\tcurves_from\tt_level_to\tcurves_to\tdelta_curves")
+    print("\t".join(["exp", "f", "t", "c", "t", "c", "+ curves"]))
     for exp, factored, t0, c0, t1, c1 in changed:
-        if c0 is not None and c1 is not None and t0 == t1:
-            delta = str(c1 - c0)
+        factored_str  = " " if factored else "No"
+        if c0 is not None and c1 is not None:
+            dt = t1 - t0
+            if dt == 0:
+                delta = str(c1 - c0)
+            else:
+                delta = f"t + {dt}, {c1 - c0}"
         else:
             delta = "N/A"
-        print(
-            f"{exp}\t{factored}\t{t0}\t{fmt_curves(c0)}\t{t1}\t{fmt_curves(c1)}\t{delta}"
-        )
+        row = [
+            str(exp),
+            factored_str,
+            str(t0),
+            fmt_curves(c0),
+            str(t1),
+            fmt_curves(c1),
+            delta
+        ]
+        print("\t".join(row))
     if not changed:
         print("(none)")
     print()
@@ -249,13 +261,13 @@ def main() -> None:
         print("(none)")
     print()
 
-    print(f"History events ({start} < report_date <= {end})")
-    print("exponent\treport_date\tfactored\tt_level\tcurves")
-    for exp, rdate, t, c, factored in events:
-        print(f"{exp}\t{rdate}\t{factored}\t{t}\t{fmt_curves(c)}")
-    if not events:
-        print("(none)")
-    print()
+    # print(f"History events ({start} < report_date <= {end})")
+    # print("exponent\treport_date\tfactored\tt_level\tcurves")
+    # for exp, rdate, t, c, factored in events:
+    #     print(f"{exp}\t{rdate}\t{factored}\t{t}\t{fmt_curves(c)}")
+    # if not events:
+    #     print("(none)")
+    # print()
 
     if args.all:
         print(f"Unchanged (as-of {start} == as-of {end})")
